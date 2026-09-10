@@ -46,15 +46,23 @@ def load_model(model_id: str, dtype: str):
 def run_one(stage: str, model_id: str, cfg) -> None:
     set_seed(cfg.seed)
     model, tok = load_model(model_id, cfg.dtype)
-    refusal_toks = [tok.encode(cfg.refusal_onset_str, add_special_tokens=False)[-1]]
-    n_eoi = eoi_len(tok, cfg.template)
+    ids = tok.encode(cfg.refusal_onset_str, add_special_tokens=False)
+    assert len(ids) == 1, (
+        f"[{stage}] refusal_onset_str {cfg.refusal_onset_str!r} must be ONE token, got {ids}. "
+        f"Use bare 'I' (=315 for Mistral/Zephyr), not ' I'.")
+    refusal_toks = ids
+    # PINNED (not tokenizer-derived): eoi_len differs 9 (base) vs 10 (SFT/DPO) because the
+    # Zephyr tokenizers insert a phantom '' token. A stage-varying window would invalidate
+    # the cross-stage comparison. See config.N_EOI_FIXED.
+    n_eoi = cfg.n_eoi
+    logger.info("[%s] refusal_tok=%s (%r) | pinned n_eoi=%d | tokenizer-derived would be %d",
+                stage, refusal_toks, tok.decode(refusal_toks), n_eoi, eoi_len(tok, cfg.template))
 
     harmful_tr = load_instructions("harmful_train")[: cfg.n_train]
     harmless_tr = load_instructions("harmless_train")[: cfg.n_train]
     harmful_val = load_instructions("harmful_val")[: cfg.n_val]
 
-    logger.info("[%s] extracting directions (%d eoi positions, refusal_tok=%s)",
-                stage, n_eoi, refusal_toks)
+    logger.info("[%s] extracting directions (%d eoi positions)", stage, n_eoi)
     directions = get_mean_diff(model, tok, harmful_tr, harmless_tr, cfg.template, n_eoi, cfg.batch_size)
     res = refusal_strength_curve(model, tok, directions, harmful_val, cfg.template,
                                  refusal_toks, cfg.prune_layer_pct, cfg.batch_size)

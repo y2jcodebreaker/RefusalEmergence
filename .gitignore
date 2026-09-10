@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+results/*.npz
+results/figures/*.pdf
+results/figures/*.png
+.venv/

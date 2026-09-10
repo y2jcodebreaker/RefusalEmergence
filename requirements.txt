@@ -1,0 +1,8 @@
+# Install the CUDA build of torch matching your GPU FIRST, e.g.:
+#   uv pip install torch --index-url https://download.pytorch.org/whl/cu124
+# Then: uv pip install -r requirements.txt
+transformers>=4.44
+accelerate>=0.33
+numpy>=1.26,<2.0
+scipy>=1.11
+matplotlib>=3.8

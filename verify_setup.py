@@ -34,6 +34,26 @@ def check_torch_backend() -> bool:
         return False
     print(f"OK  torch {torch.__version__} | transformers torch backend enabled | "
           f"cuda={torch.cuda.is_available()}")
+
+    # Force the LAZY import of the model class run_stage.py actually uses. transformers
+    # resolves these on first access, so a broken optional dep (classically a torchvision
+    # built against a different torch -> "operator torchvision::nms does not exist", reached
+    # via modeling_utils -> loss utils -> image_utils -> torchvision.io) stays invisible to
+    # any tokenizer-only check and only explodes at from_pretrained().
+    try:
+        from transformers import MistralForCausalLM  # noqa: F401
+    except Exception as e:  # noqa: BLE001 - report whatever the import chain raised
+        root = e
+        while root.__cause__ is not None:   # transformers buries the real error
+            root = root.__cause__
+        print(f"FAIL: cannot import MistralForCausalLM -> run_stage.py will die at load.\n"
+              f"      {type(e).__name__}: {e}\n"
+              f"      root cause: {type(root).__name__}: {root}")
+        if "torchvision" in str(root) or "torchaudio" in str(root):
+            print("      -> torchvision/torchaudio are built against a DIFFERENT torch.\n"
+                  "         This repo needs neither: pip uninstall -y torchvision torchaudio")
+        return False
+    print("OK  MistralForCausalLM imports (model-loading path is intact)")
     return True
 
 

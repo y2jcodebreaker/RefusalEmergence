@@ -56,6 +56,10 @@ class Config:
     n_train: int = 128       # samples for the mean-diff direction (Arditi default)
     n_val: int = 32          # samples for the per-layer causal sweep
     prune_layer_pct: float = 0.20   # O-40: mark last 20% of layers as excluded for l* (report full curve)
+    # Negative control: K norm-matched RANDOM directions through the identical sweep.
+    # Rules out "later-stage models are just more perturbable" as the reason peak strength
+    # rises across stages. If the control curve climbs too, the headline finding is dead.
+    n_control: int = 3
     batch_size: int = 16
     seed: int = 42
     results_dir: str = "results"

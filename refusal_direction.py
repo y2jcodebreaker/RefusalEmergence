@@ -51,6 +51,17 @@ def _tokenize(tok, instructions: List[str], template: str):
     return tok(prompts, padding=True, truncation=False, return_tensors="pt")
 
 
+def norm_matched_random(directions: torch.Tensor, generator: torch.Generator) -> torch.Tensor:
+    """Random directions with the per-(pos, layer) L2 norm matched to `directions`.
+
+    Ported from E01 probe 7. Matching the norm is the point: it isolates ORIENTATION, so a
+    difference cannot be explained by the control simply perturbing less hard."""
+    norms = directions.norm(dim=-1, keepdim=True)                       # (pos, layer, 1)
+    rand = torch.randn(directions.shape, generator=generator, dtype=torch.float32)
+    rand = rand / (rand.norm(dim=-1, keepdim=True) + 1e-8)              # unit rows
+    return (rand.to(directions.device) * norms).to(directions.dtype)
+
+
 def resolve_refusal_token(tok, piece: str, expected_id: int | None = None) -> int:
     """Resolve a SentencePiece PIECE to its vocab id.
 

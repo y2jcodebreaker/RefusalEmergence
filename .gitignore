@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
-results/*.npz
-results/figures/*.pdf
-results/figures/*.png
 .venv/
+
+# Raw sweep arrays are large and regenerable from the scripts; the FIGURES are committed
+# so the result is visible without a GPU (see results/figures/ and RESULTS.md).
+results/*.npz

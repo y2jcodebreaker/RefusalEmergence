@@ -1,60 +1,110 @@
 # Refusal Emergence Across the Alignment Pipeline
 
-**When does a language model learn to refuse — and where?** Is refusal already in the
-**base** model, does **SFT** create it, or does the **preference-optimization step (DPO/RLHF)**
-install it, and in which layers?
+**When does a language model acquire the machinery to refuse — and where in the network?**
+Is a refusal direction already present in the **base** model, does **SFT** create it, or does
+the **preference-optimization step (DPO)** install it?
 
-Prior work (Arditi, NeurIPS 2024) shows refusal is a single direction in *finished* chat
-models. "How Post-Training Reshapes LLMs" (COLM 2025) compared base-vs-final (2 points).
-**This maps the full developmental trajectory — base → SFT → DPO, per layer.**
+## Result
 
-Method reuses a **validated** Arditi refusal-direction implementation (reproduced Arditi's
-`(pos=-5, layer=12)` exactly in a prior project).
+**Alignment does not create refusal behavior — it creates refusal machinery.**
+
+Base Mistral refuses **29× more often than its SFT descendant** in generated text (0.235 vs
+0.008), while possessing **no steerable refusal direction at any layer**. SFT installs one in a
+narrow middle-layer band (L15–20); DPO sharpens it (+1.01 → +1.76) without moving its peak
+(L16). Behavioral refusal and refusal geometry are **dissociated** across the pipeline.
+
+Full numbers, controls, limitations, and the four methodological errors caught along the way:
+**[RESULTS.md](RESULTS.md)**.
+
+Prior work: Arditi et al. (NeurIPS 2024) showed refusal is a single direction in *finished*
+chat models. "How Post-Training Reshapes LLMs" (COLM 2025) compared base vs final — two
+points. This maps the **full developmental trajectory, per layer**, on two independent axes
+(causal ablation and constructive induction) with a norm-matched random control.
+
+## Method
+
+Three checkpoints of one lineage, so the **weights are the only variable**:
+`mistralai/Mistral-7B-v0.1` → `alignment-handbook/zephyr-7b-sft-full` →
+`HuggingFaceH4/zephyr-7b-beta`. Same tokenizer, same 32000-token vocab, one fixed chat
+template imposed on all three.
+
+Per checkpoint, `run_stage.py`:
+
+1. **Extract** the refusal direction at every layer (mean-diff harmful − harmless at
+   end-of-instruction positions), following Arditi's `generate_directions`.
+2. **Ablate** (`x −= (x·r̂)r̂` at resid_pre + attn_out + mlp_out, all layers) → per-layer
+   causal bypass strength on harmful prompts.
+3. **Induce** (add the raw vector at the source layer, coeff 1.0) → does refusal *appear* on
+   harmless prompts? This is the constructive axis, and it cannot be satisfied by merely
+   damaging the model — breaking a network does not make it refuse.
+4. **KL** on harmless prompts after ablation → did the intervention preserve the model?
+5. **Select** `(pos*, l*)` under all three of Arditi's criteria (bypass, induce ≥ 0, KL ≤ 0.1,
+   last 20% of layers pruned). Reports `l* = -1` when nothing passes — a real answer, not an
+   error. Base returns `-1`.
+
+Optional axes: `--control` runs the identical sweep with K=3 norm-matched random directions;
+`--behavioral` measures the substring refusal rate (Arditi's JailbreakBench prefixes) on 132
+held-out prompts, baseline vs ablated.
+
+The core is ported from a **validated** Arditi implementation that reproduced their
+`(pos=-5, layer=12)` exactly in a prior project.
 
 ## Run
 
 ```bash
 uv venv && source .venv/bin/activate
-uv pip install torch --index-url https://download.pytorch.org/whl/cu124
+uv pip install --upgrade torch --index-url https://download.pytorch.org/whl/cu124
 uv pip install -r requirements.txt
-export ARDITI_REPO=/path/to/refusal_direction     # cloned Arditi repo (for harmful/harmless splits)
+pip uninstall -y torchvision torchaudio     # see Gotchas
 
-python verify_setup.py               # tokenizer sanity checks (no GPU, ~30s)
-python run_stage.py --stage all      # base, then sft, then dpo (one 7B at a time)
-python aggregate.py                  # -> results/figures/refusal_emergence_{heatmap,peak}.pdf
+git clone https://github.com/andyrdt/refusal_direction.git
+export ARDITI_REPO=$PWD/refusal_direction   # harmful/harmless splits only
+
+python verify_setup.py                            # preflight, no GPU, ~30s
+python run_stage.py --stage all --control --behavioral   # ~30 min on an L40S
+python aggregate.py                               # -> results/figures/*.pdf
 ```
 
-## What each stage does
-`run_stage.py` per checkpoint: extract the refusal direction at every layer (mean-diff
-harmful−harmless at end-of-instruction tokens), then measure **causal** strength per layer
-= how much ablating that layer's direction reduces refusal on harmful prompts.
-`aggregate.py` stacks the three curves into a **stage × layer heatmap** + a per-stage peak panel.
+**24 GB VRAM** is enough (one 7B in bf16 at a time). **100 GB disk** for the HF cache — set
+`HF_HOME` to a persistent volume. Accept the Mistral-7B-v0.1 license on HF before starting.
 
-## Models (one lineage)
-`Mistral-7B-v0.1` (base) → `zephyr-7b-sft-full` (SFT) → `zephyr-7b-beta` (DPO). Same vocab,
-so the fixed chat template tokenizes identically across all three (controlled comparison).
+### Inspecting and auditing
 
-## Setup verification (`python verify_setup.py` — no GPU needed)
+```bash
+python show_completions.py --stage base   # generations + per-hit judge verdicts
+python show_filters.py --stage base       # the KL / induce surfaces, and WHICH criterion failed
+python diagnose_refusal_token.py --stage dpo   # what token does the model actually emit?
+python smoke_test.py                      # CPU-only unit tests
+```
 
-Run this **before** burning GPU time. It checks the tokenizer-level assumptions across all
-three checkpoints. Verified 2026-09-10 — and it caught two real bugs:
+## Gotchas (all of these cost us a run)
 
-1. **Refusal token must be bare `"I"` (= id 315), not `" I"`.** With a leading space, base
-   gives `[315]` but SFT/DPO give `[28705, 315]` (the Zephyr tokenizers insert a phantom
-   `''` token) — inconsistent across stages. `verify_setup.py` now asserts the refusal
-   string is exactly one token *and* the same id everywhere.
-2. **`n_eoi` is PINNED (=5), not tokenizer-derived.** The derived end-of-instruction length
-   differs by stage — **base=9, SFT/DPO=10** (same phantom token). Extracting directions
-   over a different-sized position window per stage would have **silently invalidated the
-   whole cross-stage comparison**. Pinning it keeps the window identical.
+- **`torch>=2.5` is required.** Recent `transformers` silently *disables* its PyTorch backend
+  below that, so tokenizer-only code keeps working while `from_pretrained` fails. Many GPU pod
+  images ship torch 2.4.x, and plain `pip install torch` treats that as satisfied — use
+  `--upgrade`. `verify_setup.py` checks this.
+- **Uninstall `torchvision`/`torchaudio`** if they were built against a different torch:
+  `transformers` imports torchvision opportunistically and you get
+  `operator torchvision::nms does not exist`, which looks nothing like the real cause. This
+  repo needs neither. `verify_setup.py` checks this too, and names the cause.
+- **`n_eoi` is pinned, not derived.** The tokenizer-derived end-of-instruction length is
+  **9 for base but 10 for SFT/DPO** (the Zephyr tokenizers insert a phantom `''` token). A
+  stage-varying position window would have silently invalidated the entire cross-stage
+  comparison.
+- **The refusal token is `28737`, not `315`.** Both decode to `"I"`. See O-42 in RESULTS.md.
+- **Re-running one stage preserves the other flags' results.** `np.savez` rewrites whole
+  files, so keys not recomputed are carried forward from the previous run.
 
-Also confirmed: all three share the 32000-token Mistral vocab, and base Mistral has **no**
-native chat template — so imposing the Zephyr format on all three is the correct controlled
-choice (weights are the only variable).
+## Files
 
-**O-40:** the last 20% of layers are excluded for `l*` selection; the FULL curve is reported.
-
-## Predicted result
-Refusal weak/non-causal in **base**, emerging at **SFT** and/or sharpened by **DPO**,
-localized to **early-middle layers** (a prior project found L11–14 on Llama-3.1).
-Either way, the figure is the finding.
+| file | role |
+|---|---|
+| `config.py` | frozen config; every non-obvious value carries the measurement that justifies it |
+| `refusal_direction.py` | extraction, ablation, induction, KL, Arditi's 3-criterion selection |
+| `refusal_substring.py` | behavioral judge — Arditi verbatim + a strict variant for base models |
+| `run_stage.py` | one checkpoint end to end |
+| `aggregate.py` | the five figures |
+| `verify_setup.py` | preflight: no GPU, catches the environment traps above |
+| `diagnose_refusal_token.py` | what the model actually emits at position 0 |
+| `show_completions.py` / `show_filters.py` | audit the judge / the selection surfaces |
+| `smoke_test.py` | CPU unit tests for the pure logic |

@@ -71,13 +71,13 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
                                  refusal_toks, cfg.prune_layer_pct, cfg.batch_size,
                                  harmless_val=harmless_val, kl_threshold=cfg.kl_threshold,
                                  induce_threshold=cfg.induce_threshold, filtered=True)
-    if res["l_star"] < 0:
-        raise SystemExit(
-            f"[{stage}] no direction passes Arditi's filters — nothing valid to report. "
-            f"Inspect results before loosening kl_threshold.")
+    valid_direction = res["l_star"] >= 0
+    if not valid_direction:
+        logger.warning("[%s] no valid direction — saving kl/steer/valid anyway so the failure "
+                       "can be diagnosed; skipping the behavioral check.", stage)
 
     extra = {}
-    if behavioral:
+    if behavioral and valid_direction:
         # Second, independent axis: does the model's TEXT actually refuse, and does ablating
         # the direction stop it? Uses the best (pos, layer) direction for this checkpoint.
         p = int(res["pos_star"])       # Arditi-filtered position, not the raw argmin
@@ -123,10 +123,11 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
              excluded_layers=res["excluded_layers"], kl=res["kl"], steer=res["steer"],
              valid=res["valid"], pos_star=np.array(res["pos_star"]),
              naive_l_star=np.array(res["naive_l_star"]), **extra)
+    kl_at = (float(res["kl"][res["pos_star"], res["l_star"]]) if valid_direction
+             else float("nan"))
     logger.info("[%s] saved %s | l*=%d (naive %d) baseline_refusal=%.3f peak_strength=%.3f "
                 "KL@l*=%.4f", stage, path, res["l_star"], res["naive_l_star"],
-                res["baseline_refusal"], float(np.nanmax(res["bypass"])),
-                float(res["kl"][res["pos_star"], res["l_star"]]))
+                res["baseline_refusal"], float(np.nanmax(res["bypass"])), kl_at)
     del model
     torch.cuda.empty_cache()
 

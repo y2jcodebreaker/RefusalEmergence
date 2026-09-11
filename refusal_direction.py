@@ -265,10 +265,25 @@ def refusal_strength_curve(model, tok, directions: torch.Tensor, harmful_val, te
             abl, steer, kl, baseline, kl_threshold, induce_threshold, prune_pct)
         naive_l, _ = select_l_star(bypass, prune_pct)
         if l_star < 0:
-            logger.warning("NO (pos, layer) passes Arditi's filters (KL<=%.2f, induce>=%.2f). "
-                           "Every direction either breaks the model or fails to induce. "
-                           "The unfiltered argmax would have picked layer %d.",
-                           kl_threshold, induce_threshold, naive_l)
+            # WHICH criterion killed it, and by how much. Never just report "none passed":
+            # "no direction survives the KL bound" and "no direction induces refusal" are
+            # completely different claims about the model.
+            unpruned = np.ones_like(kl, dtype=bool)
+            if pruned:
+                unpruned[:, list(pruned)] = False
+            kl_ok = (kl <= kl_threshold) & unpruned
+            ind_ok = (steer >= induce_threshold) & unpruned
+            logger.warning(
+                "NO (pos, layer) passes Arditi's filters. Breakdown over %d unpruned cells:\n"
+                "    KL <= %.2f      : %d pass  (min KL observed %.4f, median %.4f)\n"
+                "    induce >= %.2f  : %d pass  (max steer observed %.4f, median %.4f)\n"
+                "    BOTH            : %d pass\n"
+                "  The unfiltered argmax would have picked layer %d.",
+                int(unpruned.sum()), kl_threshold, int(kl_ok.sum()),
+                float(np.nanmin(kl[unpruned])), float(np.nanmedian(kl[unpruned])),
+                induce_threshold, int(ind_ok.sum()),
+                float(np.nanmax(steer[unpruned])), float(np.nanmedian(steer[unpruned])),
+                int((kl_ok & ind_ok).sum()), naive_l)
         else:
             logger.info("l*=%d pos*=%d (Arditi-filtered) | unfiltered argmax would be %d | "
                         "%d/%d (pos,layer) cells pass", l_star, pos_star - n_pos, naive_l,

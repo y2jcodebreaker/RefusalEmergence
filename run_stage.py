@@ -102,6 +102,8 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
         extra["n_behavioral"] = np.array(len(beh_prompts))
         extra["substring_baseline_rate"] = np.array(b_rate)
         extra["substring_ablated_rate"] = np.array(a_rate)
+        extra["substring_baseline_rate_strict"] = np.array(samples["strict_baseline"])
+        extra["substring_ablated_rate_strict"] = np.array(samples["strict_ablated"])
         extra["sample_completions"] = np.array(json.dumps(samples))
 
     if control:

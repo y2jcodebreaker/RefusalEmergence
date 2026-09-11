@@ -18,7 +18,8 @@ import json
 import numpy as np
 
 from config import DEFAULT
-from refusal_substring import REFUSAL_SUBSTRINGS, is_refusal
+from refusal_substring import (REFUSAL_SUBSTRINGS, is_refusal, is_refusal_strict,
+                               truncate_at_turn)
 
 
 def which_substring(text: str) -> str | None:
@@ -55,7 +56,14 @@ def main() -> None:
             print(f"\n-- {kind} --")
             for i, c in enumerate(samples.get(kind, [])):
                 hit = which_substring(c)
-                verdict = f"REFUSAL (matched {hit!r})" if is_refusal(c) else "comply"
+                v, vs = is_refusal(c), is_refusal_strict(c)
+                verdict = (f"REFUSAL (matched {hit!r})" if v else "comply")
+                if v and not vs:
+                    leak = truncate_at_turn(c) != c
+                    verdict += "  <- FALSE POSITIVE (" + ("turn leakage" if leak
+                                                          else "confusion, not refusal") + ")"
+                elif v:
+                    verdict += "  [strict: confirmed]"
                 print(f"  [{i}] {verdict}\n      {c.strip()[:300]!r}")
 
 

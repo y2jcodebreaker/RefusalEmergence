@@ -33,8 +33,9 @@ def refusal_score(last_logits: torch.Tensor, refusal_toks: List[int], eps: float
 
 
 def select_l_star(bypass_curve: np.ndarray, prune_pct: float) -> Tuple[int, Tuple[int, ...]]:
-    """l* = argmax causal refusal strength among non-pruned layers (O-40: prune last 20%).
-    Returns (l_star, pruned_layers). Full curve is reported regardless."""
+    """UNFILTERED argmax — kept only for the smoke test and for reporting what a naive
+    selection would have picked. DO NOT use for real selection: it happily chooses the
+    direction that destroys the model (see select_direction_arditi)."""
     n = bypass_curve.shape[0]
     pruned = tuple(range(int(np.ceil(n * (1.0 - prune_pct))), n))
     masked = bypass_curve.copy()
@@ -42,6 +43,49 @@ def select_l_star(bypass_curve: np.ndarray, prune_pct: float) -> Tuple[int, Tupl
         masked[list(pruned)] = -np.inf
     l_star = int(np.nanargmax(masked))
     return l_star, pruned
+
+
+def select_direction_arditi(ablation_refusal: np.ndarray, steering_refusal: np.ndarray,
+                            kl_harmless: np.ndarray, baseline_harmful: float,
+                            kl_threshold: float, induce_threshold: float, prune_pct: float):
+    """Arditi's FULL selection — three criteria, not one (select_direction.py).
+
+    Ported from E01 probe 4 (which reproduced Arditi's (pos=-5, layer=12) exactly).
+      1. bypass  — ablation lowers refusal on harmful             (minimise ablation_refusal)
+      2. induce  — ADDING the direction raises refusal on harmless (>= induce_threshold)
+      3. KL      — ablation barely perturbs harmless behaviour     (<= kl_threshold)
+
+    Criterion 3 is the one that matters here. Without it the argmax picks whatever direction
+    damages the network most, because a broken model also stops emitting the refusal token.
+    Observed symptom of its absence: ablated generations came back as EMPTY STRINGS, which a
+    substring judge scores as "complied" — a fake jailbreak.
+
+    Returns (bypass_strength, l_star, pos_star, pruned, valid_mask). l_star = -1 when NO
+    (pos, layer) passes the filters: that is a real answer, not an error."""
+    n_pos, n_layers = ablation_refusal.shape
+    best_pos = np.nanargmin(ablation_refusal, axis=0)
+    bypass_strength = baseline_harmful - ablation_refusal[best_pos, np.arange(n_layers)]
+
+    pruned = tuple(range(int(np.ceil(n_layers * (1.0 - prune_pct))), n_layers))
+
+    valid = ~np.isnan(ablation_refusal)
+    valid &= kl_harmless <= kl_threshold
+    valid &= steering_refusal >= induce_threshold
+    if pruned:
+        valid[:, list(pruned)] = False
+    if not valid.any():
+        return bypass_strength, -1, -1, pruned, valid
+
+    masked = np.where(valid, ablation_refusal, np.inf)
+    pos_star, l_star = (int(v) for v in np.unravel_index(np.argmin(masked), masked.shape))
+    return bypass_strength, l_star, pos_star, pruned, valid
+
+
+def kl_last(baseline: torch.Tensor, intervention: torch.Tensor, eps: float = 1e-6) -> float:
+    """KL(baseline || intervention) over last-position logits, float64. Arditi kl_div_fn."""
+    a = baseline.to(torch.float64).softmax(dim=-1)
+    b = intervention.to(torch.float64).softmax(dim=-1)
+    return float((a * (torch.log(a + eps) - torch.log(b + eps))).sum(dim=-1).mean())
 
 
 # ------------------------------------------------------- model-dependent (GPU)
@@ -142,6 +186,19 @@ def _ablation_handles(model, direction: torch.Tensor):
     return handles
 
 
+def _addition_handles(model, vector: torch.Tensor, coeff: float, layer: int):
+    """Activation addition: add coeff*vector to the source layer's block INPUT only.
+    RAW (un-normalised) mean-diff vector with coeff=1.0, per Arditi select_direction.py."""
+    v = vector.detach()
+
+    def add_pre(module, inp):
+        a = inp[0] if isinstance(inp, tuple) else inp
+        a = a + coeff * v.to(a)
+        return (a, *inp[1:]) if isinstance(inp, tuple) else a
+
+    return [model.model.layers[layer].register_forward_pre_hook(add_pre)]
+
+
 def _last_logits(model, tok, instructions, template, batch_size=16) -> torch.Tensor:
     out = []
     for i in range(0, len(instructions), batch_size):
@@ -157,27 +214,70 @@ def _mean_refusal(logits, refusal_toks) -> float:
 
 
 def refusal_strength_curve(model, tok, directions: torch.Tensor, harmful_val, template,
-                           refusal_toks, prune_pct, batch_size=16):
-    """Per-layer CAUSAL refusal strength for ONE checkpoint:
-       strength[layer] = baseline_harmful_refusal - min_pos refusal_after_ablating(pos,layer).
-    Higher = ablating that layer's direction kills refusal more = refusal concentrated there.
-    Returns dict(bypass, l_star, baseline_refusal, excluded_layers)."""
+                           refusal_toks, prune_pct, batch_size=16, harmless_val=None,
+                           kl_threshold=0.1, induce_threshold=0.0, filtered=True):
+    """Per-layer CAUSAL refusal strength for ONE checkpoint, with Arditi's full selection.
+
+    strength[layer] = baseline_harmful_refusal - min_pos refusal_after_ablating(pos, layer).
+
+    When `harmless_val` is given (filtered=True), also measures the KL side-effect of each
+    ablation and the induce effect of each addition, and selects (pos*, l*) under all three
+    of Arditi's criteria. Without the KL filter the argmax picks model-destroying directions.
+    Pass filtered=False (the control path) to skip the two extra sweeps."""
     n_pos, n_layers, _ = directions.shape
     baseline = _mean_refusal(_last_logits(model, tok, harmful_val, template, batch_size), refusal_toks)
 
+    do_filter = filtered and harmless_val is not None
+    base_harmless = (_last_logits(model, tok, harmless_val, template, batch_size)
+                     if do_filter else None)
+
     abl = np.full((n_pos, n_layers), np.nan)
+    steer = np.full((n_pos, n_layers), np.nan)
+    kl = np.full((n_pos, n_layers), np.nan)
     for pos in range(n_pos):
         for layer in range(n_layers):
-            h = _ablation_handles(model, directions[pos, layer])
+            d = directions[pos, layer]
+            h = _ablation_handles(model, d)
             try:
                 abl[pos, layer] = _mean_refusal(
                     _last_logits(model, tok, harmful_val, template, batch_size), refusal_toks)
+                if do_filter:
+                    kl[pos, layer] = kl_last(
+                        base_harmless,
+                        _last_logits(model, tok, harmless_val, template, batch_size))
             finally:
                 for x in h:
                     x.remove()
+            if do_filter:
+                h = _addition_handles(model, d, coeff=1.0, layer=layer)
+                try:
+                    steer[pos, layer] = _mean_refusal(
+                        _last_logits(model, tok, harmless_val, template, batch_size), refusal_toks)
+                finally:
+                    for x in h:
+                        x.remove()
 
     bypass = baseline - np.nanmin(abl, axis=0)     # (n_layers,)
     best_pos = np.nanargmin(abl, axis=0)           # (n_layers,) winning position per layer
+
+    if do_filter:
+        bypass, l_star, pos_star, pruned, valid = select_direction_arditi(
+            abl, steer, kl, baseline, kl_threshold, induce_threshold, prune_pct)
+        naive_l, _ = select_l_star(bypass, prune_pct)
+        if l_star < 0:
+            logger.warning("NO (pos, layer) passes Arditi's filters (KL<=%.2f, induce>=%.2f). "
+                           "Every direction either breaks the model or fails to induce. "
+                           "The unfiltered argmax would have picked layer %d.",
+                           kl_threshold, induce_threshold, naive_l)
+        else:
+            logger.info("l*=%d pos*=%d (Arditi-filtered) | unfiltered argmax would be %d | "
+                        "%d/%d (pos,layer) cells pass", l_star, pos_star - n_pos, naive_l,
+                        int(valid.sum()), valid.size)
+        return {"bypass": bypass, "l_star": l_star, "baseline_refusal": baseline,
+                "excluded_layers": np.array(pruned), "best_pos": best_pos,
+                "pos_star": pos_star, "kl": kl, "steer": steer, "valid": valid,
+                "naive_l_star": naive_l}
+
     l_star, pruned = select_l_star(bypass, prune_pct)
     return {"bypass": bypass, "l_star": l_star, "baseline_refusal": baseline,
             "excluded_layers": np.array(pruned), "best_pos": best_pos}

@@ -63,17 +63,24 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
     harmful_tr = load_instructions("harmful_train")[: cfg.n_train]
     harmless_tr = load_instructions("harmless_train")[: cfg.n_train]
     harmful_val = load_instructions("harmful_val")[: cfg.n_val]
+    harmless_val = load_instructions("harmless_val")[: cfg.n_val]   # KL side-effect check
 
     logger.info("[%s] extracting directions (%d eoi positions)", stage, n_eoi)
     directions = get_mean_diff(model, tok, harmful_tr, harmless_tr, cfg.template, n_eoi, cfg.batch_size)
     res = refusal_strength_curve(model, tok, directions, harmful_val, cfg.template,
-                                 refusal_toks, cfg.prune_layer_pct, cfg.batch_size)
+                                 refusal_toks, cfg.prune_layer_pct, cfg.batch_size,
+                                 harmless_val=harmless_val, kl_threshold=cfg.kl_threshold,
+                                 induce_threshold=cfg.induce_threshold, filtered=True)
+    if res["l_star"] < 0:
+        raise SystemExit(
+            f"[{stage}] no direction passes Arditi's filters — nothing valid to report. "
+            f"Inspect results before loosening kl_threshold.")
 
     extra = {}
     if behavioral:
         # Second, independent axis: does the model's TEXT actually refuse, and does ablating
         # the direction stop it? Uses the best (pos, layer) direction for this checkpoint.
-        p = int(res["best_pos"][res["l_star"]])
+        p = int(res["pos_star"])       # Arditi-filtered position, not the raw argmin
         # Decoupled from n_val: a rate needs n, the causal sweep does not (see config).
         # Source is the UNUSED TAIL of harmful_train (260 total, only the first n_train=128
         # fit the direction) -> 132 prompts touched by nothing: not by direction fitting,
@@ -101,7 +108,7 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
             rand_dirs = norm_matched_random(directions, gen)
             curves.append(refusal_strength_curve(model, tok, rand_dirs, harmful_val, cfg.template,
                                                  refusal_toks, cfg.prune_layer_pct,
-                                                 cfg.batch_size)["bypass"])
+                                                 cfg.batch_size, filtered=False)["bypass"])
         extra["control_bypass"] = np.mean(curves, axis=0)
         extra["control_curves"] = np.asarray(curves)
         logger.info("[%s] control peak=%.3f  vs  refusal peak=%.3f",
@@ -113,9 +120,13 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
     np.savez(path, stage=np.array(stage), model_id=np.array(model_id),
              bypass=res["bypass"], l_star=np.array(res["l_star"]),
              baseline_refusal=np.array(res["baseline_refusal"]),
-             excluded_layers=res["excluded_layers"], **extra)
-    logger.info("[%s] saved %s | l*=%d baseline_refusal=%.3f peak_strength=%.3f",
-                stage, path, res["l_star"], res["baseline_refusal"], float(np.nanmax(res["bypass"])))
+             excluded_layers=res["excluded_layers"], kl=res["kl"], steer=res["steer"],
+             valid=res["valid"], pos_star=np.array(res["pos_star"]),
+             naive_l_star=np.array(res["naive_l_star"]), **extra)
+    logger.info("[%s] saved %s | l*=%d (naive %d) baseline_refusal=%.3f peak_strength=%.3f "
+                "KL@l*=%.4f", stage, path, res["l_star"], res["naive_l_star"],
+                res["baseline_refusal"], float(np.nanmax(res["bypass"])),
+                float(res["kl"][res["pos_star"], res["l_star"]]))
     del model
     torch.cuda.empty_cache()
 

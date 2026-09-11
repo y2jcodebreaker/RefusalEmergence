@@ -56,6 +56,15 @@ class Config:
     n_train: int = 128       # samples for the mean-diff direction (Arditi default)
     n_val: int = 32          # samples for the per-layer causal sweep
     prune_layer_pct: float = 0.20   # O-40: mark last 20% of layers as excluded for l* (report full curve)
+    # Arditi's OTHER TWO selection criteria (select_direction.py; values verified in E01,
+    # which reproduced Arditi's (pos=-5, layer=12) exactly).
+    # kl_threshold is the load-bearing one: without it, l* selection is a pure argmax over
+    # "how much does ablating this destroy refusal", which happily picks the direction that
+    # destroys the MODEL -- a lobotomised model emits no refusal token either. The first
+    # behavioral run exposed this: ablated generations came back as EMPTY STRINGS, which the
+    # substring judge scored as "complied", i.e. a fake 100% jailbreak.
+    kl_threshold: float = 0.1        # max KL on harmless prompts after ablation
+    induce_threshold: float = 0.0    # min refusal on harmless after ADDING the direction
     # Negative control: K norm-matched RANDOM directions through the identical sweep.
     # Rules out "later-stage models are just more perturbable" as the reason peak strength
     # rises across stages. If the control curve climbs too, the headline finding is dead.

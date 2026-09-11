@@ -122,6 +122,20 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
 
     os.makedirs(cfg.results_dir, exist_ok=True)
     path = f"{cfg.results_dir}/{stage}_refusal.npz"
+
+    # np.savez rewrites the WHOLE file, so re-running one stage with fewer flags would
+    # silently delete results from an earlier run (e.g. `--stage base` without --control
+    # destroyed base's control_bypass). Carry forward any key this run did not recompute.
+    # Safe because everything here is deterministic given (checkpoint, config, seed).
+    if os.path.exists(path):
+        old = np.load(path, allow_pickle=True)
+        carried = [k for k in old.files
+                   if k.startswith(("control_", "substring_", "sample_", "n_behavioral"))
+                   and k not in extra]
+        for k in carried:
+            extra[k] = old[k]
+        if carried:
+            logger.info("[%s] carried forward from previous run: %s", stage, ", ".join(carried))
     np.savez(path, stage=np.array(stage), model_id=np.array(model_id),
              bypass=res["bypass"], l_star=np.array(res["l_star"]),
              baseline_refusal=np.array(res["baseline_refusal"]),

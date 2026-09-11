@@ -1,6 +1,13 @@
 # Install the CUDA build of torch matching your GPU FIRST, e.g.:
-#   uv pip install torch --index-url https://download.pytorch.org/whl/cu124
+#   uv pip install --upgrade torch --index-url https://download.pytorch.org/whl/cu124
 # Then: uv pip install -r requirements.txt
+#
+# torch>=2.5 is REQUIRED. Recent transformers silently DISABLES its PyTorch backend on
+# older torch ("Disabling PyTorch because PyTorch >= 2.5 is required but found 2.4.1"),
+# so tokenizer-only scripts still pass while from_pretrained() fails. Many GPU pod images
+# ship torch 2.4.x, and a plain `pip install torch` treats that as already satisfied --
+# use --upgrade. Verify: python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+torch>=2.5
 transformers>=4.44
 accelerate>=0.33
 numpy>=1.26,<2.0

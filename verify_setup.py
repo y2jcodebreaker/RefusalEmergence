@@ -20,9 +20,26 @@ from config import DEFAULT
 from refusal_direction import eoi_len
 
 
+def check_torch_backend() -> bool:
+    """Recent transformers DISABLES its PyTorch backend on torch<2.5 with only a log line.
+    Tokenizer-only code still works, so this stays silent until from_pretrained() fails --
+    after the model downloads have already been paid for. Catch it here instead."""
+    import torch
+    from transformers.utils import is_torch_available
+
+    if not is_torch_available():
+        print(f"FAIL: transformers has DISABLED its PyTorch backend (torch=={torch.__version__}).\n"
+              f"      run_stage.py will fail at from_pretrained(). Fix:\n"
+              f"      pip install --upgrade torch --index-url https://download.pytorch.org/whl/cu124")
+        return False
+    print(f"OK  torch {torch.__version__} | transformers torch backend enabled | "
+          f"cuda={torch.cuda.is_available()}")
+    return True
+
+
 def main() -> int:
     cfg = DEFAULT
-    ok = True
+    ok = check_torch_backend()
     ref_ids, vocabs, eois = {}, {}, {}
 
     for stage, mid in cfg.checkpoints:

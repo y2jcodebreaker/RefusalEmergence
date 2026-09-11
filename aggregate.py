@@ -51,8 +51,11 @@ def main() -> None:
     ax.set_yticks(range(len(stages))); ax.set_yticklabels(stages)
     ax.set_xticks(range(n_layers)); ax.set_xticklabels(range(n_layers), fontsize=6)
     ax.set_xlabel("layer"); ax.set_title("Causal refusal strength across the alignment pipeline")
-    for i, s in enumerate(stages):  # mark l* per stage
-        ax.plot(int(found[s]["l_star"]), i, "c*", ms=9)
+    for i, s in enumerate(stages):  # mark l* per stage (skip: -1 = no valid direction)
+        if int(found[s]["l_star"]) >= 0:
+            ax.plot(int(found[s]["l_star"]), i, "c*", ms=9)
+        else:
+            ax.text(0.5, i, "no valid direction", color="c", fontsize=7, va="center")
     fig.colorbar(im, ax=ax, label="baseline − ablated refusal")
     fig.tight_layout(); fig.savefig(f"{cfg.figures_dir}/refusal_emergence_heatmap.pdf")
 
@@ -71,7 +74,8 @@ def main() -> None:
     axb.set_xlabel("layer (direction READ from — ablation is global, all layers)")
     axb.set_title("Where within each stage (row-normalised — magnitude discarded)")
     for i, s in enumerate(stages):
-        axb.plot(int(found[s]["l_star"]), i, "c*", ms=9)
+        if int(found[s]["l_star"]) >= 0:
+            axb.plot(int(found[s]["l_star"]), i, "c*", ms=9)
     excl = found[stages[0]]["excluded_layers"]
     if excl.size:                      # O-40: shade the band l* may not be chosen from
         axb.axvspan(int(excl.min()) - 0.5, n_layers - 0.5, color="c", alpha=0.18)
@@ -100,6 +104,46 @@ def main() -> None:
     ax2.set_xticks(x); ax2.set_xticklabels(stages)
     ax2.set_ylabel("peak causal refusal strength"); ax2.set_title("How installed is refusal?")
     fig2.tight_layout(); fig2.savefig(f"{cfg.figures_dir}/refusal_emergence_peak.pdf")
+
+    # (0) THE HEADLINE: the induce curve. Add the direction to HARMLESS prompts -> does
+    # refusal appear? This is the constructive axis, and unlike the ablation axis it cannot
+    # be satisfied by merely damaging the model: breaking a model does not make it refuse.
+    # Base never crosses zero at any layer; SFT opens a middle-layer window; DPO sharpens it.
+    if all("steer" in found[s] for s in stages):
+        fig0, ax0 = plt.subplots(figsize=(7.5, 3.4))
+        colors = {"base": "#888", "sft": "#e8a", "dpo": "#c22"}
+        for s in stages:
+            st = found[s]["steer"]
+            excl = found[s]["excluded_layers"]
+            keep = np.ones(st.shape[1], dtype=bool)
+            if excl.size:
+                keep[excl.astype(int)] = False
+            best = np.full(st.shape[1], np.nan)
+            best[keep] = np.nanmax(st[:, keep], axis=0)   # best over positions, per layer
+            ax0.plot(np.arange(st.shape[1]), best, marker="o", ms=3,
+                     color=colors.get(s, None), label=s)
+        ax0.axhline(0.0, color="k", lw=1, ls="--")
+        ax0.text(0.4, 0.02, "induce threshold (refusal appears above this line)",
+                 fontsize=7, va="bottom")
+        ax0.set_xlabel("layer"); ax0.set_ylabel("induced refusal score on harmless")
+        ax0.set_title("Can refusal be STEERED IN? (direction added to harmless prompts)")
+        ax0.legend(fontsize=8)
+        fig0.tight_layout(); fig0.savefig(f"{cfg.figures_dir}/refusal_emergence_induce.pdf")
+
+        for s in stages:
+            st, excl = found[s]["steer"], found[s]["excluded_layers"]
+            keep = np.ones(st.shape[1], dtype=bool)
+            if excl.size:
+                keep[excl.astype(int)] = False
+            best = np.nanmax(st[:, keep], axis=0)
+            above = np.where(best >= 0)[0]
+            # span vs count: they differ iff the above-zero layers are not contiguous,
+            # which would mean "band" is the wrong word for it.
+            band = (f"L{above.min()}-L{above.max()} ({above.size} layers"
+                    f"{'' if above.size == above.max() - above.min() + 1 else ', NOT contiguous'})"
+                    ) if above.size else "NONE — never crosses zero"
+            logger.info("induce [%s]: max=%+.3f @ L%d | above threshold: %s",
+                        s, np.nanmax(best), int(np.nanargmax(best)), band)
 
     # (3) behavioral panel: substring refusal rate, baseline vs ablated, per stage.
     # The independent axis. If ablation drops the rate, the causal claim is behavioral,

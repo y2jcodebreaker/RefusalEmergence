@@ -77,10 +77,14 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
                        "can be diagnosed; skipping the behavioral check.", stage)
 
     extra = {}
-    if behavioral and valid_direction:
+    if behavioral:
         # Second, independent axis: does the model's TEXT actually refuse, and does ablating
         # the direction stop it? Uses the best (pos, layer) direction for this checkpoint.
-        p = int(res["pos_star"])       # Arditi-filtered position, not the raw argmin
+        # The BASELINE rate needs no direction, so it is measured even when l* = -1;
+        # only the ablated half is skipped. Losing base's behavioural baseline to a failed
+        # direction search would throw away a data point the search has nothing to do with.
+        p = int(res["pos_star"]) if valid_direction else -1
+        abl_dir = directions[p, res["l_star"]] if valid_direction else None
         # Decoupled from n_val: a rate needs n, the causal sweep does not (see config).
         # Source is the UNUSED TAIL of harmful_train (260 total, only the first n_train=128
         # fit the direction) -> 132 prompts touched by nothing: not by direction fitting,
@@ -89,10 +93,11 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
         beh_prompts = load_instructions("harmful_train")[cfg.n_train:]
         if cfg.n_behavioral:
             beh_prompts = beh_prompts[: cfg.n_behavioral]
-        logger.info("[%s] behavioral check @ (pos=%d, layer=%d) on n=%d prompts",
-                    stage, p - n_eoi, res["l_star"], len(beh_prompts))
+        logger.info("[%s] behavioral check @ %s on n=%d prompts", stage,
+                    f"(pos={p - n_eoi}, layer={res['l_star']})" if valid_direction
+                    else "BASELINE ONLY (no valid direction)", len(beh_prompts))
         b_rate, a_rate, samples = behavioral_rates(
-            model, tok, beh_prompts, cfg.template, directions[p, res["l_star"]],
+            model, tok, beh_prompts, cfg.template, abl_dir,
             cfg.gen_max_new_tokens, cfg.batch_size, cfg.n_sample_completions)
         extra["n_behavioral"] = np.array(len(beh_prompts))
         extra["substring_baseline_rate"] = np.array(b_rate)

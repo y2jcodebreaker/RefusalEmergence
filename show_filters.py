@@ -79,7 +79,9 @@ def main() -> None:
 
         # per-layer best steer, to see whether induce fails everywhere or just late
         print("\n  best steer per layer (max over positions):")
-        best = np.nanmax(np.where(unpruned, steer, np.nan), axis=0)
+        keep = unpruned.any(axis=0)
+        best = np.full(steer.shape[1], np.nan)
+        best[keep] = np.nanmax(steer[:, keep], axis=0)
         for i in range(0, len(best), 8):
             chunk = " ".join(f"L{j}:{best[j]:+.2f}" for j in range(i, min(i + 8, len(best)))
                              if not np.isnan(best[j]))

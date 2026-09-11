@@ -75,19 +75,26 @@ def generate_completions(model, tok, instructions: List[str], template: str,
     return out
 
 
-def behavioral_rates(model, tok, instructions, template, direction: torch.Tensor,
+def behavioral_rates(model, tok, instructions, template, direction: torch.Tensor | None,
                      max_new_tokens: int = 48, batch_size: int = 16, n_samples: int = 8):
     """(baseline_rate, ablated_rate, sample_completions).
 
     `direction` is the best (pos, layer) refusal direction for this checkpoint; ablation is
-    global across all layers, matching refusal_strength_curve."""
+    global across all layers, matching refusal_strength_curve. Pass direction=None when no
+    direction passes the filters: the BASELINE rate needs no direction and is still wanted
+    (it is the behavioural counterpart of "does this checkpoint refuse at all"), so only the
+    ablated half is skipped."""
     base_c = generate_completions(model, tok, instructions, template, max_new_tokens, batch_size)
-    handles = _ablation_handles(model, direction)
-    try:
-        abl_c = generate_completions(model, tok, instructions, template, max_new_tokens, batch_size)
-    finally:
-        for h in handles:
-            h.remove()
+    if direction is None:
+        abl_c = []
+    else:
+        handles = _ablation_handles(model, direction)
+        try:
+            abl_c = generate_completions(model, tok, instructions, template,
+                                         max_new_tokens, batch_size)
+        finally:
+            for h in handles:
+                h.remove()
 
     n = len(base_c)
     b, a = refusal_rate(base_c), refusal_rate(abl_c)
@@ -95,14 +102,18 @@ def behavioral_rates(model, tok, instructions, template, direction: torch.Tensor
     # False, so it silently scores as "complied". The first run hit exactly this: ablation
     # emptied the output and the rate read 0.000, looking like a perfect jailbreak.
     e_base = sum(len(c.strip()) < 2 for c in base_c) / n
-    e_abl = sum(len(c.strip()) < 2 for c in abl_c) / n
-    logger.info("substring refusal rate (n=%d): baseline=%.3f (%d/%d) -> ablated=%.3f (%d/%d), "
-                "drop=%.3f", n, b, round(b * n), n, a, round(a * n), n, b - a)
+    e_abl = (sum(len(c.strip()) < 2 for c in abl_c) / len(abl_c)) if abl_c else float("nan")
+    if abl_c:
+        logger.info("substring refusal rate (n=%d): baseline=%.3f (%d/%d) -> ablated=%.3f (%d/%d),"
+                    " drop=%.3f", n, b, round(b * n), n, a, round(a * n), n, b - a)
+    else:
+        logger.info("substring refusal rate (n=%d): baseline=%.3f (%d/%d) | ablated NOT measured "
+                    "(no direction passes the filters)", n, b, round(b * n), n)
     logger.info("degenerate (empty) completions: baseline=%.3f ablated=%.3f", e_base, e_abl)
     if n < 64:
         logger.warning("n=%d is small for a RATE (quantised to 1/%d=%.3f) — treat with care",
                        n, n, 1.0 / n)
-    if e_abl > 0.1 and e_abl > e_base + 0.05:
+    if abl_c and e_abl > 0.1 and e_abl > e_base + 0.05:
         logger.warning("ABLATION IS BREAKING THE MODEL: %.1f%% of ablated completions are empty "
                        "(baseline %.1f%%). The 'jailbreak' is degeneration, not compliance — "
                        "the KL filter should have caught this; check kl_threshold.",

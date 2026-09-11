@@ -36,15 +36,21 @@ class Config:
     # Refusal score = logP(refusal_tok) - logP(not), at the first generated position.
     #
     # MEASURED 2026-09-11 (diagnose_refusal_token.py, zephyr-7b-beta, harmful prompts):
-    #   id=28737 '_I'  p=0.3675  <- rank 1, the word-initial SentencePiece form
-    #   id=315   'I'   p=0.000175 <- rank 60, the bare continuation form
+    #   id=28737 piece 'I'   p=0.3675   <- rank 1, what the model ACTUALLY emits
+    #   id=315   piece '_I'  p=0.000175 <- rank 60
     # Control on harmless prompts: p(28737)=0.0027 -> a 135x harmful/harmless contrast.
     #
-    # Resolve the piece with convert_tokens_to_ids, NOT encode(): tok.encode("I") returns
-    # [315] because it tokenizes a STANDALONE string, which is not what the model emits
-    # after "<|assistant|>\n". An earlier version scored 315 and produced baseline_refusal
-    # ~= -11.65 (p ~= 1e-5) with a clean-looking but meaningless monotone trend across stages.
-    refusal_token_piece: str = "▁I"   # SentencePiece "_I"
+    # The two pieces both DECODE to "I", which is what made this hard to see:
+    #   315   = "_I" (word-initial, space-prefixed)
+    #   28737 = "I"  (bare, no space prefix)   <- correct after "<|assistant|>\n"
+    # Resolve with convert_tokens_to_ids, NOT encode(): tok.encode("I") returns [315]
+    # because SentencePiece prepends a dummy prefix space, silently turning "I" into "_I".
+    # Scoring 315 gave baseline_refusal ~= -11.65 (p ~= 1e-5) and a clean-looking but
+    # meaningless monotone trend across stages.
+    refusal_token_piece: str = "I"
+    # Cross-check: the piece must resolve to this id. Guards against a tokenizer swap
+    # silently changing which token is scored. Update only with a fresh diagnostic run.
+    expected_refusal_id: int = 28737
     # Pinned so every stage uses the SAME end-of-instruction position window (see N_EOI_FIXED).
     n_eoi: int = N_EOI_FIXED
     n_train: int = 128       # samples for the mean-diff direction (Arditi default)

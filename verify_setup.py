@@ -72,7 +72,7 @@ def main() -> int:
     for stage, mid in cfg.checkpoints:
         tok = AutoTokenizer.from_pretrained(mid)
         try:
-            tid = resolve_refusal_token(tok, cfg.refusal_token_piece)
+            tid = resolve_refusal_token(tok, cfg.refusal_token_piece, cfg.expected_refusal_id)
         except ValueError as e:
             print(f"  FAIL [{stage}]: {e}")
             ok = False

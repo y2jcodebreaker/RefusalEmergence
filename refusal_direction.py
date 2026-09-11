@@ -51,19 +51,26 @@ def _tokenize(tok, instructions: List[str], template: str):
     return tok(prompts, padding=True, truncation=False, return_tensors="pt")
 
 
-def resolve_refusal_token(tok, piece: str) -> int:
-    """Resolve a SentencePiece PIECE (e.g. '_I') to its id via the vocab.
+def resolve_refusal_token(tok, piece: str, expected_id: int | None = None) -> int:
+    """Resolve a SentencePiece PIECE to its vocab id.
 
-    Deliberately NOT tok.encode(): encode() tokenizes a standalone string, so "I" -> 315
-    (the bare continuation form), while the token a model actually emits at the start of a
-    reply is the word-initial '_I' -> 28737. Measured on zephyr-7b-beta over harmful
-    prompts: p(28737)=0.3675 (rank 1) vs p(315)=0.000175 (rank 60)."""
+    Deliberately NOT tok.encode(): encode() prepends SentencePiece's dummy prefix space,
+    so "I" silently becomes "_I" -> 315. The token a model actually emits right after
+    "<|assistant|>\\n" has no preceding space, so it is the BARE piece "I" -> 28737.
+    Both decode to "I", which is exactly what makes the mix-up invisible.
+    Measured on zephyr-7b-beta, harmful prompts: p(28737)=0.3675 vs p(315)=0.000175."""
     tid = tok.convert_tokens_to_ids(piece)
     if tid is None or tid == tok.unk_token_id:
         raise ValueError(
             f"refusal piece {piece!r} is not in this tokenizer's vocab (got id={tid}). "
             f"Run diagnose_refusal_token.py to see what the model actually emits.")
-    return int(tid)
+    tid = int(tid)
+    if expected_id is not None and tid != expected_id:
+        raise ValueError(
+            f"refusal piece {piece!r} -> id {tid}, but config expects {expected_id}. "
+            f"The tokenizer changed; re-run diagnose_refusal_token.py before trusting "
+            f"any result, and update Config.expected_refusal_id from its output.")
+    return tid
 
 
 def eoi_len(tok, template: str) -> int:

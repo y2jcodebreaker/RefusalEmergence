@@ -47,7 +47,7 @@ def load_model(model_id: str, dtype: str):
 def run_one(stage: str, model_id: str, cfg) -> None:
     set_seed(cfg.seed)
     model, tok = load_model(model_id, cfg.dtype)
-    refusal_toks = [resolve_refusal_token(tok, cfg.refusal_token_piece)]
+    refusal_toks = [resolve_refusal_token(tok, cfg.refusal_token_piece, cfg.expected_refusal_id)]
     # PINNED (not tokenizer-derived): eoi_len differs 9 (base) vs 10 (SFT/DPO) because the
     # Zephyr tokenizers insert a phantom '' token. A stage-varying window would invalidate
     # the cross-stage comparison. See config.N_EOI_FIXED.

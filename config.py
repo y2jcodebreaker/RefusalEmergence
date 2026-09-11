@@ -60,6 +60,9 @@ class Config:
     # Rules out "later-stage models are just more perturbable" as the reason peak strength
     # rises across stages. If the control curve climbs too, the headline finding is dead.
     n_control: int = 3
+    # Behavioral axis (--behavioral): greedy generation length for substring refusal matching.
+    # 48 comfortably covers Arditi's refusal prefixes without paying for long completions.
+    gen_max_new_tokens: int = 48
     batch_size: int = 16
     seed: int = 42
     results_dir: str = "results"

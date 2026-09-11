@@ -2,7 +2,7 @@
 
     python run_stage.py --stage base            # or sft / dpo (names from config.checkpoints)
     python run_stage.py --stage all             # run every checkpoint sequentially
-    python run_stage.py --stage all --control   # + norm-matched random-direction control
+    python run_stage.py --stage all --control --behavioral   # + control + substring rates
 
 Output: results/{stage}_refusal.npz  (bypass curve, l_star, baseline, excluded_layers,
 and with --control: control_bypass, control_curves)
@@ -11,6 +11,7 @@ and with --control: control_bypass, control_curves)
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import random
@@ -22,6 +23,7 @@ from config import DEFAULT
 from data import load_instructions
 from refusal_direction import (eoi_len, get_mean_diff, norm_matched_random,
                                refusal_strength_curve, resolve_refusal_token)
+from refusal_substring import behavioral_rates
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("run_stage")
@@ -46,7 +48,8 @@ def load_model(model_id: str, dtype: str):
     return model, tok
 
 
-def run_one(stage: str, model_id: str, cfg, control: bool = False) -> None:
+def run_one(stage: str, model_id: str, cfg, control: bool = False,
+            behavioral: bool = False) -> None:
     set_seed(cfg.seed)
     model, tok = load_model(model_id, cfg.dtype)
     refusal_toks = [resolve_refusal_token(tok, cfg.refusal_token_piece, cfg.expected_refusal_id)]
@@ -67,6 +70,18 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False) -> None:
                                  refusal_toks, cfg.prune_layer_pct, cfg.batch_size)
 
     extra = {}
+    if behavioral:
+        # Second, independent axis: does the model's TEXT actually refuse, and does ablating
+        # the direction stop it? Uses the best (pos, layer) direction for this checkpoint.
+        p = int(res["best_pos"][res["l_star"]])
+        logger.info("[%s] behavioral check @ (pos=%d, layer=%d)", stage, p - n_eoi, res["l_star"])
+        b_rate, a_rate, samples = behavioral_rates(
+            model, tok, harmful_val, cfg.template, directions[p, res["l_star"]],
+            cfg.gen_max_new_tokens, cfg.batch_size)
+        extra["substring_baseline_rate"] = np.array(b_rate)
+        extra["substring_ablated_rate"] = np.array(a_rate)
+        extra["sample_completions"] = np.array(json.dumps(samples))
+
     if control:
         # IDENTICAL sweep, only the directions differ -> any gap is about orientation.
         gen = torch.Generator().manual_seed(cfg.seed)
@@ -100,6 +115,8 @@ def main() -> None:
     ap.add_argument("--stage", required=True, help="stage name (base/sft/dpo) or 'all'")
     ap.add_argument("--control", action="store_true",
                     help="also run the norm-matched random-direction negative control")
+    ap.add_argument("--behavioral", action="store_true",
+                    help="also measure substring refusal rate, baseline vs ablated")
     args = ap.parse_args()
     cfg = DEFAULT
     ckpts = dict(cfg.checkpoints)
@@ -108,7 +125,7 @@ def main() -> None:
         if s not in ckpts:
             raise SystemExit(f"unknown stage '{s}'. known: {list(ckpts)}")
     for s in stages:
-        run_one(s, ckpts[s], cfg, control=args.control)
+        run_one(s, ckpts[s], cfg, control=args.control, behavioral=args.behavioral)
 
 
 if __name__ == "__main__":

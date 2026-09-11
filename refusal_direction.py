@@ -177,6 +177,7 @@ def refusal_strength_curve(model, tok, directions: torch.Tensor, harmful_val, te
                     x.remove()
 
     bypass = baseline - np.nanmin(abl, axis=0)     # (n_layers,)
+    best_pos = np.nanargmin(abl, axis=0)           # (n_layers,) winning position per layer
     l_star, pruned = select_l_star(bypass, prune_pct)
     return {"bypass": bypass, "l_star": l_star, "baseline_refusal": baseline,
-            "excluded_layers": np.array(pruned)}
+            "excluded_layers": np.array(pruned), "best_pos": best_pos}

@@ -56,6 +56,29 @@ def main() -> None:
     fig.colorbar(im, ax=ax, label="baseline − ablated refusal")
     fig.tight_layout(); fig.savefig(f"{cfg.figures_dir}/refusal_emergence_heatmap.pdf")
 
+    # (1b) ROW-NORMALISED companion. The raw scale above is honest about magnitude but the
+    # base row (peak ~1) renders near-black against a dpo peak of ~7.6, hiding WHERE within
+    # base the strength sits. Per-row min-max answers "does the band shift across stages?",
+    # which the raw panel cannot. Always read the two together: this one deliberately
+    # discards magnitude, so on its own it would make base look as strong as dpo.
+    rmin = mat.min(axis=1, keepdims=True)
+    rmax = mat.max(axis=1, keepdims=True)
+    rown = (mat - rmin) / np.where((rmax - rmin) > 0, rmax - rmin, 1.0)
+    figb, axb = plt.subplots(figsize=(11, 2.2))
+    imb = axb.imshow(rown, aspect="auto", cmap="magma", vmin=0, vmax=1, interpolation="nearest")
+    axb.set_yticks(range(len(stages))); axb.set_yticklabels(stages)
+    axb.set_xticks(range(n_layers)); axb.set_xticklabels(range(n_layers), fontsize=6)
+    axb.set_xlabel("layer (direction READ from — ablation is global, all layers)")
+    axb.set_title("Where within each stage (row-normalised — magnitude discarded)")
+    for i, s in enumerate(stages):
+        axb.plot(int(found[s]["l_star"]), i, "c*", ms=9)
+    excl = found[stages[0]]["excluded_layers"]
+    if excl.size:                      # O-40: shade the band l* may not be chosen from
+        axb.axvspan(int(excl.min()) - 0.5, n_layers - 0.5, color="c", alpha=0.18)
+        axb.text(n_layers - 0.6, -0.65, "pruned for l*", ha="right", fontsize=7, color="c")
+    figb.colorbar(imb, ax=axb, label="within-stage relative strength")
+    figb.tight_layout(); figb.savefig(f"{cfg.figures_dir}/refusal_emergence_heatmap_rownorm.pdf")
+
     # (2) causal panel: peak strength per stage, WITH the random-direction control.
     # Without the control this panel is uninterpretable: a rising bar could just mean
     # later-stage models are more perturbable. The control is the load-bearing comparison.
@@ -77,6 +100,27 @@ def main() -> None:
     ax2.set_xticks(x); ax2.set_xticklabels(stages)
     ax2.set_ylabel("peak causal refusal strength"); ax2.set_title("How installed is refusal?")
     fig2.tight_layout(); fig2.savefig(f"{cfg.figures_dir}/refusal_emergence_peak.pdf")
+
+    # (3) behavioral panel: substring refusal rate, baseline vs ablated, per stage.
+    # The independent axis. If ablation drops the rate, the causal claim is behavioral,
+    # not just a logit-ratio statement.
+    if all("substring_baseline_rate" in found[s] for s in stages):
+        b = [float(found[s]["substring_baseline_rate"]) for s in stages]
+        a = [float(found[s]["substring_ablated_rate"]) for s in stages]
+        fig3, ax3 = plt.subplots(figsize=(5, 3.2))
+        ax3.bar(x - 0.2, b, 0.4, label="baseline", color="#26c")
+        ax3.bar(x + 0.2, a, 0.4, label="direction ablated", color="#9bd")
+        ax3.set_xticks(x); ax3.set_xticklabels(stages)
+        ax3.set_ylim(0, 1); ax3.set_ylabel("substring refusal rate")
+        ax3.set_title("Behavioral refusal (Arditi/JailbreakBench prefixes)")
+        ax3.legend(fontsize=8)
+        fig3.tight_layout(); fig3.savefig(f"{cfg.figures_dir}/refusal_emergence_behavioral.pdf")
+        logger.info("substring refusal rate baseline=%s -> ablated=%s (drop=%s)",
+                    [round(v, 3) for v in b], [round(v, 3) for v in a],
+                    [round(p - q, 3) for p, q in zip(b, a)])
+    else:
+        logger.warning("no behavioral rates in results — run with --behavioral for the "
+                       "second, independent axis (the dissociation claim needs it)")
 
     logger.info("stages=%s | peak strength=%s | l*=%s",
                 stages, [round(p, 3) for p in peaks], [int(found[s]["l_star"]) for s in stages])

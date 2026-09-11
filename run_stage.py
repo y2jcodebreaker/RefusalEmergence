@@ -74,10 +74,20 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
         # Second, independent axis: does the model's TEXT actually refuse, and does ablating
         # the direction stop it? Uses the best (pos, layer) direction for this checkpoint.
         p = int(res["best_pos"][res["l_star"]])
-        logger.info("[%s] behavioral check @ (pos=%d, layer=%d)", stage, p - n_eoi, res["l_star"])
+        # Decoupled from n_val: a rate needs n, the causal sweep does not (see config).
+        # Source is the UNUSED TAIL of harmful_train (260 total, only the first n_train=128
+        # fit the direction) -> 132 prompts touched by nothing: not by direction fitting,
+        # not by l* selection. harmful_val is only 39 and its head drives l*, so it is both
+        # too small and not fully clean for this.
+        beh_prompts = load_instructions("harmful_train")[cfg.n_train:]
+        if cfg.n_behavioral:
+            beh_prompts = beh_prompts[: cfg.n_behavioral]
+        logger.info("[%s] behavioral check @ (pos=%d, layer=%d) on n=%d prompts",
+                    stage, p - n_eoi, res["l_star"], len(beh_prompts))
         b_rate, a_rate, samples = behavioral_rates(
-            model, tok, harmful_val, cfg.template, directions[p, res["l_star"]],
-            cfg.gen_max_new_tokens, cfg.batch_size)
+            model, tok, beh_prompts, cfg.template, directions[p, res["l_star"]],
+            cfg.gen_max_new_tokens, cfg.batch_size, cfg.n_sample_completions)
+        extra["n_behavioral"] = np.array(len(beh_prompts))
         extra["substring_baseline_rate"] = np.array(b_rate)
         extra["substring_ablated_rate"] = np.array(a_rate)
         extra["sample_completions"] = np.array(json.dumps(samples))

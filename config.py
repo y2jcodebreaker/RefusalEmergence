@@ -63,6 +63,15 @@ class Config:
     # Behavioral axis (--behavioral): greedy generation length for substring refusal matching.
     # 48 comfortably covers Arditi's refusal prefixes without paying for long completions.
     gen_max_new_tokens: int = 48
+    # Behavioral n is DECOUPLED from n_val. The causal sweep costs n_pos*n_layers forward
+    # passes so n_val stays small, but a RATE at n=32 is quantised to 1/32=0.031 -- the first
+    # run put SFT's entire refusal rate on a single completion. Generation is cheap by
+    # comparison (2 passes), so use every harmful_val example available.
+    # 0 = use the whole held-out tail harmful_train[n_train:] (132 prompts, touched by
+    # neither direction fitting nor l* selection). harmful_val has only 39 and its head
+    # drives l*, so it is both too small and not fully clean for a behavioral rate.
+    n_behavioral: int = 0
+    n_sample_completions: int = 8    # how many to store per condition for eyeballing
     batch_size: int = 16
     seed: int = 42
     results_dir: str = "results"

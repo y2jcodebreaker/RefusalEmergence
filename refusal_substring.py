@@ -76,7 +76,7 @@ def generate_completions(model, tok, instructions: List[str], template: str,
 
 
 def behavioral_rates(model, tok, instructions, template, direction: torch.Tensor,
-                     max_new_tokens: int = 48, batch_size: int = 16):
+                     max_new_tokens: int = 48, batch_size: int = 16, n_samples: int = 8):
     """(baseline_rate, ablated_rate, sample_completions).
 
     `direction` is the best (pos, layer) refusal direction for this checkpoint; ablation is
@@ -89,6 +89,11 @@ def behavioral_rates(model, tok, instructions, template, direction: torch.Tensor
         for h in handles:
             h.remove()
 
+    n = len(base_c)
     b, a = refusal_rate(base_c), refusal_rate(abl_c)
-    logger.info("substring refusal rate: baseline=%.3f -> ablated=%.3f (drop=%.3f)", b, a, b - a)
-    return b, a, {"baseline": base_c[:3], "ablated": abl_c[:3]}
+    logger.info("substring refusal rate (n=%d): baseline=%.3f (%d/%d) -> ablated=%.3f (%d/%d), "
+                "drop=%.3f", n, b, round(b * n), n, a, round(a * n), n, b - a)
+    if n < 64:
+        logger.warning("n=%d is small for a RATE (quantised to 1/%d=%.3f) — treat with care",
+                       n, n, 1.0 / n)
+    return b, a, {"baseline": base_c[:n_samples], "ablated": abl_c[:n_samples]}

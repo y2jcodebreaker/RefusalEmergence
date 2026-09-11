@@ -34,11 +34,17 @@ class Config:
     dtype: str = "bfloat16"
     template: str = ZEPHYR_TEMPLATE
     # Refusal score = logP(refusal_tok) - logP(not), at the first generated position.
-    # Refusals commonly start with "I" (Arditi used [40]='I' for Llama-3).
-    # VERIFIED 2026-09-10: bare "I" -> [315] in ALL THREE tokenizers (base/SFT/DPO).
-    # Do NOT use " I" (leading space): base -> [315] but SFT/DPO -> [28705, 315]
-    # (phantom '' token), which is inconsistent across stages.
-    refusal_onset_str: str = "I"
+    #
+    # MEASURED 2026-09-11 (diagnose_refusal_token.py, zephyr-7b-beta, harmful prompts):
+    #   id=28737 '_I'  p=0.3675  <- rank 1, the word-initial SentencePiece form
+    #   id=315   'I'   p=0.000175 <- rank 60, the bare continuation form
+    # Control on harmless prompts: p(28737)=0.0027 -> a 135x harmful/harmless contrast.
+    #
+    # Resolve the piece with convert_tokens_to_ids, NOT encode(): tok.encode("I") returns
+    # [315] because it tokenizes a STANDALONE string, which is not what the model emits
+    # after "<|assistant|>\n". An earlier version scored 315 and produced baseline_refusal
+    # ~= -11.65 (p ~= 1e-5) with a clean-looking but meaningless monotone trend across stages.
+    refusal_token_piece: str = "▁I"   # SentencePiece "_I"
     # Pinned so every stage uses the SAME end-of-instruction position window (see N_EOI_FIXED).
     n_eoi: int = N_EOI_FIXED
     n_train: int = 128       # samples for the mean-diff direction (Arditi default)

@@ -18,7 +18,8 @@ import torch
 
 from config import DEFAULT
 from data import load_instructions
-from refusal_direction import eoi_len, get_mean_diff, refusal_strength_curve
+from refusal_direction import (eoi_len, get_mean_diff, refusal_strength_curve,
+                               resolve_refusal_token)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("run_stage")
@@ -46,11 +47,7 @@ def load_model(model_id: str, dtype: str):
 def run_one(stage: str, model_id: str, cfg) -> None:
     set_seed(cfg.seed)
     model, tok = load_model(model_id, cfg.dtype)
-    ids = tok.encode(cfg.refusal_onset_str, add_special_tokens=False)
-    assert len(ids) == 1, (
-        f"[{stage}] refusal_onset_str {cfg.refusal_onset_str!r} must be ONE token, got {ids}. "
-        f"Use bare 'I' (=315 for Mistral/Zephyr), not ' I'.")
-    refusal_toks = ids
+    refusal_toks = [resolve_refusal_token(tok, cfg.refusal_token_piece)]
     # PINNED (not tokenizer-derived): eoi_len differs 9 (base) vs 10 (SFT/DPO) because the
     # Zephyr tokenizers insert a phantom '' token. A stage-varying window would invalidate
     # the cross-stage comparison. See config.N_EOI_FIXED.

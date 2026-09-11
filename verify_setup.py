@@ -3,11 +3,18 @@
     python verify_setup.py
 
 Checks, across every checkpoint in config.checkpoints:
-  1. refusal_onset_str is exactly ONE token, and the SAME id in every stage.
-  2. the pinned n_eoi window is safe (<= the shortest tokenizer-derived eoi_len).
-  3. reports tokenizer-derived eoi_len per stage (these legitimately DIFFER — that is
+  1. the torch/transformers model-loading path actually imports (not just tokenizers).
+  2. refusal_token_piece resolves to the SAME id in every stage.
+  3. the pinned n_eoi window is safe (<= the shortest tokenizer-derived eoi_len).
+  4. reports tokenizer-derived eoi_len per stage (these legitimately DIFFER — that is
      exactly why n_eoi is pinned rather than derived).
-  4. vocab sizes match (a shared vocab is what makes the cross-stage comparison valid).
+  5. vocab sizes match (a shared vocab is what makes the cross-stage comparison valid).
+
+SCOPE, honestly stated: this file only proves the tokenizers AGREE with each other. It
+cannot prove the chosen token is the one the models actually EMIT — an earlier version
+happily passed while scoring id 315, which the models emit with p ~= 1e-5. Only
+diagnose_refusal_token.py (which needs weights) can establish that. Re-run it whenever
+refusal_token_piece, the template, or the checkpoint list changes.
 """
 
 from __future__ import annotations
@@ -17,7 +24,7 @@ import sys
 from transformers import AutoTokenizer
 
 from config import DEFAULT
-from refusal_direction import eoi_len
+from refusal_direction import eoi_len, resolve_refusal_token
 
 
 def check_torch_backend() -> bool:
@@ -64,15 +71,17 @@ def main() -> int:
 
     for stage, mid in cfg.checkpoints:
         tok = AutoTokenizer.from_pretrained(mid)
-        ids = tok.encode(cfg.refusal_onset_str, add_special_tokens=False)
-        ref_ids[stage] = ids
+        try:
+            tid = resolve_refusal_token(tok, cfg.refusal_token_piece)
+        except ValueError as e:
+            print(f"  FAIL [{stage}]: {e}")
+            ok = False
+            continue
+        ref_ids[stage] = [tid]
         vocabs[stage] = len(tok)
         eois[stage] = eoi_len(tok, cfg.template)
-        print(f"{stage:5s} vocab={len(tok)} refusal{cfg.refusal_onset_str!r}={ids} "
-              f"decoded={[tok.decode([i]) for i in ids]} eoi_len(derived)={eois[stage]}")
-        if len(ids) != 1:
-            print(f"  FAIL: refusal_onset_str must be ONE token in {stage}, got {ids}")
-            ok = False
+        print(f"{stage:5s} vocab={len(tok)} refusal{cfg.refusal_token_piece!r}=[{tid}] "
+              f"decoded={tok.decode([tid])!r} eoi_len(derived)={eois[stage]}")
 
     uniq = {tuple(v) for v in ref_ids.values()}
     if len(uniq) != 1:

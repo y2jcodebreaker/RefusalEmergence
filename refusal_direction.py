@@ -51,6 +51,21 @@ def _tokenize(tok, instructions: List[str], template: str):
     return tok(prompts, padding=True, truncation=False, return_tensors="pt")
 
 
+def resolve_refusal_token(tok, piece: str) -> int:
+    """Resolve a SentencePiece PIECE (e.g. '_I') to its id via the vocab.
+
+    Deliberately NOT tok.encode(): encode() tokenizes a standalone string, so "I" -> 315
+    (the bare continuation form), while the token a model actually emits at the start of a
+    reply is the word-initial '_I' -> 28737. Measured on zephyr-7b-beta over harmful
+    prompts: p(28737)=0.3675 (rank 1) vs p(315)=0.000175 (rank 60)."""
+    tid = tok.convert_tokens_to_ids(piece)
+    if tid is None or tid == tok.unk_token_id:
+        raise ValueError(
+            f"refusal piece {piece!r} is not in this tokenizer's vocab (got id={tid}). "
+            f"Run diagnose_refusal_token.py to see what the model actually emits.")
+    return int(tid)
+
+
 def eoi_len(tok, template: str) -> int:
     """# tokens after {instruction} in the template = the end-of-instruction positions."""
     return len(tok.encode(template.split("{instruction}")[-1], add_special_tokens=False))

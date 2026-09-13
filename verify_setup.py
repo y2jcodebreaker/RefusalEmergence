@@ -102,6 +102,15 @@ def main() -> int:
     ok = check_torch_backend()
     ref_ids, vocabs, eois = {}, {}, {}
 
+    from data import splits_dir
+    sd = splits_dir()
+    if sd is None:
+        print("FAIL: Arditi harmful/harmless splits not found — set ARDITI_REPO "
+              "(see data.py SEARCH for the paths tried)")
+        ok = False
+    else:
+        print(f"OK  data splits at {sd}")
+
     for stage, mid in cfg.checkpoints:
         tok = AutoTokenizer.from_pretrained(mid)
         try:

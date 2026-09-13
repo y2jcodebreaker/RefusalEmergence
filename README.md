@@ -59,6 +59,9 @@ pip uninstall -y torchvision torchaudio     # see Gotchas
 
 git clone https://github.com/andyrdt/refusal_direction.git
 export ARDITI_REPO=$PWD/refusal_direction   # harmful/harmless splits only
+# ^ NOT persisted across pod restarts. data.py also auto-finds ./refusal_direction,
+#   ../refusal_direction and /workspace/refusal_direction, so cloning into one of those
+#   locations means you never have to remember the export.
 
 python verify_setup.py                            # preflight, no GPU, ~30s
 python run_stage.py --stage all --control --behavioral   # ~30 min on an L40S
@@ -94,6 +97,9 @@ python smoke_test.py                      # CPU-only unit tests
 - **The refusal token is `28737`, not `315`.** Both decode to `"I"`. See O-42 in RESULTS.md.
 - **Re-running one stage preserves the other flags' results.** `np.savez` rewrites whole
   files, so keys not recomputed are carried forward from the previous run.
+- **`ARDITI_REPO` does not survive a pod restart**, and neither does the Python env. Both
+  scripts now check the data *before* loading any weights, so a missing clone costs seconds
+  rather than a 45 GB download.
 
 ## Experiments
 

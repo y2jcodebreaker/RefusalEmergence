@@ -35,7 +35,7 @@ import numpy as np
 import torch
 
 from config import DEFAULT
-from data import load_instructions
+from data import assert_available, load_instructions
 from probes import (cache_activations, length_baseline, logistic_accuracy,
                     mass_mean_accuracy, mass_mean_direction, null_directions)
 from run_stage import load_model, set_seed
@@ -125,6 +125,9 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage", required=True, help="stage name (base/sft/dpo) or 'all'")
     args = ap.parse_args()
+    # Cheap checks first: a missing clone costs nothing to detect and a full weight
+    # download to discover late (hit on a pod, 2026-09-13).
+    logger.info("data: %s", assert_available())
     cfg = DEFAULT
     ckpts = dict(cfg.checkpoints)
     stages = list(ckpts) if args.stage == "all" else [args.stage]

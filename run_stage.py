@@ -20,7 +20,7 @@ import numpy as np
 import torch
 
 from config import DEFAULT
-from data import load_instructions
+from data import assert_available, load_instructions
 from refusal_direction import (eoi_len, get_mean_diff, norm_matched_random,
                                refusal_strength_curve, resolve_refusal_token)
 from refusal_substring import behavioral_rates
@@ -178,6 +178,9 @@ def main() -> None:
     ap.add_argument("--behavioral", action="store_true",
                     help="also measure substring refusal rate, baseline vs ablated")
     args = ap.parse_args()
+    # Cheap checks first: a missing clone costs nothing to detect and a full weight
+    # download to discover late (hit on a pod, 2026-09-13).
+    logger.info("data: %s", assert_available())
     cfg = DEFAULT
     ckpts = dict(cfg.checkpoints)
     stages = list(ckpts) if args.stage == "all" else [args.stage]

@@ -200,9 +200,70 @@ def main() -> int:
     check("git state resolves", git_state()["commit"] != "unknown", git_state()["short"])
     check("env state captures torch", env_state()["torch"] is not None, env_state()["torch"])
 
+    test_transplant()
+
     print("\n" + ("ALL PASSED" if not FAIL else f"{len(FAIL)} FAILED: {FAIL}"))
     return 1 if FAIL else 0
 
+
+
+def test_transplant() -> None:
+    """P1-E1b: direction loading, norm matching, and the sweep bookkeeping."""
+    import numpy as np
+    import torch
+    import transplant as T
+
+    print("\n[transplant — P1-E1b]")
+    check("sources are the E02-selected layers",
+          dict(T.SOURCES) == {"sft": 20, "dpo": 17, "base": 15}, str(dict(T.SOURCES)))
+    check("pos index matches E02 pos*=-1 with n_eoi=5", T.POS_IDX == 4)
+    check("coefficient sweep includes Arditi's default 1.0 and goes well past it",
+          1.0 in T.COEFFS and max(T.COEFFS) >= 8, str(T.COEFFS))
+
+    g = torch.Generator().manual_seed(0)
+    d = torch.randn(64) * 3.3
+    r = T._norm_matched(d, g)
+    check("norm-matched random preserves the norm",
+          abs(float(r.norm()) - float(d.norm())) < 1e-3,
+          f"{float(r.norm()):.4f} vs {float(d.norm()):.4f}")
+    check("norm-matched random is a different direction",
+          abs(float((r / r.norm()) @ (d / d.norm()))) < 0.5)
+
+    # sweep_cell must return one row per coefficient, with KL == 0 when nothing changes.
+    class Z(torch.nn.Module):
+        def forward(self, x, *a, **k):
+            return (x,)
+
+    class Inner(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.layers = torch.nn.ModuleList([Z() for _ in range(3)])
+
+    class M(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.model = Inner()
+            self.device = torch.device("cpu")
+        def forward(self, input_ids=None, attention_mask=None):
+            n, t = input_ids.shape
+            return type("O", (), {"logits": torch.zeros(n, t, 7)})()
+
+    class Tk:
+        pad_token_id = 0
+        def __call__(self, prompts, padding=True, truncation=False, return_tensors="pt"):
+            t = torch.ones(len(prompts), 4, dtype=torch.long)
+            return type("E", (), {"input_ids": t, "attention_mask": t})()
+
+    m, tk = M(), Tk()
+    base_lg = torch.zeros(2, 7)
+    rows = T.sweep_cell(m, tk, torch.zeros(5), 0, ["a", "b"], "{instruction}", [1],
+                        base_lg, batch_size=2)
+    check("sweep_cell returns one row per coefficient", len(rows) == len(T.COEFFS),
+          f"{len(rows)} rows")
+    check("sweep_cell coefficients are in order",
+          [r[0] for r in rows] == list(T.COEFFS))
+    check("KL is ~0 when the intervention changes nothing",
+          all(abs(r[2]) < 1e-6 for r in rows), f"max|KL|={max(abs(r[2]) for r in rows):.2e}")
 
 if __name__ == "__main__":
     sys.exit(main())

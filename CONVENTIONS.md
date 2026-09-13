@@ -18,6 +18,7 @@ mean different things. Never write a bare `E1`.
 |---|---|---|
 | `E02` | `run_stage.py` | when does an actionable refusal direction appear, and where? |
 | `P1-E1` | `probe_representation.py`, `aggregate_probe.py` | is the distinction *readable* in base, and on the *same axis* the aligned model uses? |
+| `P1-E1b` | `transplant.py` | does the aligned model's refusal direction induce refusal when transplanted into **base**? (folds in P1-E2's coefficient sweep) |
 
 ## Every experiment script must
 

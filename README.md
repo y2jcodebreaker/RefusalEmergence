@@ -106,14 +106,16 @@ python smoke_test.py                      # CPU-only unit tests
 | id | scripts | question |
 |---|---|---|
 | `E02` | `run_stage.py` → `aggregate.py` | when does an actionable refusal direction appear, and where? **(done — see RESULTS.md)** |
-| `P1-E1` | `probe_representation.py` → `aggregate_probe.py` | is the distinction *readable* in base, and on the *same axis* the aligned model uses? |
+| `P1-E1` | `probe_representation.py` → `aggregate_probe.py` | is the distinction *readable* in base? **readable at ~0.99 from L1 — yes.** Same-axis half was inconclusive: cosine is saturated by residual-stream anisotropy |
+| `P1-E1b` | `transplant.py` | does the aligned model's refusal direction induce refusal in **base**? Answers the same-axis question behaviourally, so anisotropy cannot touch it. Sweeps coefficients, retiring the "only tried coeff=1" objection |
 
 Every run is logged to `results/RUNLOG.md` with its git commit, config, environment and
 results — including failed runs. Conventions: **[CONVENTIONS.md](CONVENTIONS.md)**.
 
 ```bash
-python probe_representation.py --stage all   # P1-E1, ~8 min
+python probe_representation.py --stage all   # P1-E1, ~3 min
 python aggregate_probe.py                    # prints an explicit verdict
+python transplant.py --stage all             # P1-E1b, ~5 min
 ```
 
 ## Files
@@ -130,5 +132,6 @@ python aggregate_probe.py                    # prints an explicit verdict
 | `show_completions.py` / `show_filters.py` | audit the judge / the selection surfaces |
 | `probes.py` | P1-E1: probe math, cosine nulls, activation caching |
 | `probe_representation.py` | P1-E1 driver; `aggregate_probe.py` renders it and states the verdict |
+| `transplant.py` | P1-E1b: cross-checkpoint direction transplant + coefficient sweep |
 | `runlog.py` | provenance ledger — every run, with git commit and environment |
 | `smoke_test.py` / `smoke_test_probes.py` | CPU unit tests; every check has a known answer |

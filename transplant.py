@@ -19,9 +19,17 @@ A transplant answers the question behaviourally, so anisotropy cannot touch it:
                              circuitry; alignment built the COUPLING (H, coupling form)
 
 Folds in P1-E2: every cell is swept over coefficients, which retires the standing objection
-that E02 only tested induction at Arditi's default coeff=1.0. KL on harmless prompts is
-tracked alongside, so "it induced refusal" is always qualified by "and the model still
-worked" -- a lobotomised model's refusal score is not evidence of anything (see O-43).
+that E02 only tested induction at Arditi's default coeff=1.0. KL on harmless prompts is tracked
+and REPORTED, but deliberately NOT used as a gate on induction.
+
+That last point cost a run (2026-09-13). Arditi's KL <= 0.1 bound belongs to ABLATION: a
+small subtractive perturbation that must leave harmless behaviour untouched. ADDITION is the
+opposite -- its whole purpose is to change behaviour on harmless prompts. Gating induction on
+"the model barely changed" is self-contradictory, and it reported "no induction" for every
+cell including the sanity check (dpo's own direction in dpo, which E02 measured at +1.08).
+E02 had this right: its KL filter gated ablation only. Coherence is instead judged from the
+sweep SHAPE -- induced refusal rises, peaks, then collapses negative as the model breaks --
+and from generations at the best coefficient.
 
 Transplanting across checkpoints is legitimate HERE only because they share one architecture
 and lineage; fine-tuning barely rotates the residual basis. A norm-matched random direction
@@ -109,11 +117,12 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
                                          refusal_toks, base_lg, cfg.batch_size):
                 records.append((src, layer, kind, c, ref, kl))
             last = records[-len(COEFFS):]      # exactly this cell's coefficient sweep
-            ok = [(c, r) for _, _, _, c, r, kl in last
-                  if kl <= cfg.kl_threshold and r >= cfg.induce_threshold]
-            logger.info("[%s] src=%-4s L%-2d %-9s | induced@KL<=%.2f: %s", stage, src, layer,
-                        kind, cfg.kl_threshold,
-                        f"YES at coeff {min(c for c, _ in ok)}" if ok else "no (any coeff)")
+            best = max(last, key=lambda r: r[4])
+            ok = [c for _, _, _, c, r, _ in last if r >= cfg.induce_threshold]
+            logger.info("[%s] src=%-4s L%-2d %-9s | max induced %+.3f @coeff %.1f (KL %.2f) | %s",
+                        stage, src, layer, kind, best[4], best[3], best[5],
+                        f"INDUCES (first at coeff {min(ok)})" if ok
+                        else "never crosses threshold")
 
     arr = np.array([(r[3], r[4], r[5]) for r in records], dtype=np.float32)
     meta = np.array([f"{r[0]}|{r[1]}|{r[2]}" for r in records])
@@ -127,15 +136,14 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
     for (src, layer) in srcs:
         for kind in ("direction", "random"):
             sel = [r for r in records if r[0] == src and r[2] == kind]
-            viable = [(r[3], r[4]) for r in sel if r[5] <= cfg.kl_threshold
-                      and r[4] >= cfg.induce_threshold]
+            best = max(sel, key=lambda r: r[4])
+            crossing = [r[3] for r in sel if r[4] >= cfg.induce_threshold]
             rec.result(target=stage, source=src, layer=layer, kind=kind,
-                       induces=bool(viable),
-                       min_coeff=(min(c for c, _ in viable) if viable else None),
-                       max_induced_at_kl_ok=(round(max(r[4] for r in sel
-                                                       if r[5] <= cfg.kl_threshold), 4)
-                                             if any(r[5] <= cfg.kl_threshold for r in sel)
-                                             else None),
+                       induces=bool(crossing),
+                       first_coeff=(min(crossing) if crossing else None),
+                       max_induced=round(best[4], 4), coeff_at_max=best[3],
+                       kl_at_max=round(best[5], 3),
+                       dir_norm=round(float(np.linalg.norm(srcs[(src, layer)])), 2),
                        baseline_harmless=round(baseline, 4))
     del model
     torch.cuda.empty_cache()
@@ -153,7 +161,10 @@ def main() -> None:
     logger.info("data: %s", assert_available())
     cfg = DEFAULT
     srcs = load_source_directions(cfg)
-    logger.info("source directions: %s", [f"{s}@L{l}" for s, l in srcs])
+    logger.info("source directions: %s",
+                [f"{s}@L{l} norm={np.linalg.norm(v):.1f}" for (s, l), v in srcs.items()])
+    logger.info("NOTE: norms differ across checkpoints, so a given coefficient is NOT "
+                "comparable across sources — read the sweep, not a single coeff.")
     ckpts = dict(cfg.checkpoints)
     stages = list(ckpts) if args.stage == "all" else [args.stage]
     for s in stages:

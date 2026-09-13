@@ -21,10 +21,32 @@ from __future__ import annotations
 
 import sys
 
-from transformers import AutoTokenizer
+# Imported defensively: this script exists to make environment problems legible, so it
+# must not itself die with a bare ModuleNotFoundError on a fresh pod. (It did, 2026-09-13.)
+_MISSING: list[str] = []
+try:
+    from transformers import AutoTokenizer
+except ImportError:
+    AutoTokenizer = None
+    _MISSING.append("transformers")
 
 from config import DEFAULT
-from refusal_direction import eoi_len, resolve_refusal_token
+
+try:
+    from refusal_direction import eoi_len, resolve_refusal_token
+except ImportError:
+    eoi_len = resolve_refusal_token = None
+    _MISSING.append("torch")
+
+
+def _report_missing() -> int:
+    print("CHECKS CANNOT RUN — missing packages: " + ", ".join(sorted(set(_MISSING))))
+    print("\nThis is a fresh environment. Install, in this order:\n"
+          "  pip install --upgrade torch --index-url https://download.pytorch.org/whl/cu124\n"
+          "  pip install -r requirements.txt\n"
+          "  pip uninstall -y torchvision torchaudio\n"
+          "then re-run: python verify_setup.py")
+    return 1
 
 
 def check_torch_backend() -> bool:
@@ -74,6 +96,8 @@ def check_torch_backend() -> bool:
 
 
 def main() -> int:
+    if _MISSING:
+        return _report_missing()
     cfg = DEFAULT
     ok = check_torch_backend()
     ref_ids, vocabs, eois = {}, {}, {}

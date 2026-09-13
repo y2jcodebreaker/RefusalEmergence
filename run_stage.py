@@ -103,7 +103,7 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
                     else "BASELINE ONLY (no valid direction)", len(beh_prompts))
         b_rate, a_rate, samples = behavioral_rates(
             model, tok, beh_prompts, cfg.template, abl_dir,
-            cfg.gen_max_new_tokens, cfg.batch_size, cfg.n_sample_completions)
+            cfg.gen_max_new_tokens, cfg.batch_size, n_samples=None)
         extra["n_behavioral"] = np.array(len(beh_prompts))
         extra["substring_baseline_rate"] = np.array(b_rate)
         extra["substring_ablated_rate"] = np.array(a_rate)

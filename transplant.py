@@ -106,12 +106,12 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
     set_seed(cfg.seed)
     model, tok = load_model(model_id, cfg.dtype)
     refusal_toks = [resolve_refusal_token(tok, cfg.refusal_token_piece, cfg.expected_refusal_id)]
-    harmless = load_instructions("harmless_val")[: cfg.n_val]
+    harmless = load_instructions("harmless_val")[: cfg.n_transplant]
 
     base_lg = _last_logits(model, tok, harmless, cfg.template, cfg.batch_size)
     baseline = _mean_refusal(base_lg, refusal_toks)
-    logger.info("[%s] baseline refusal on HARMLESS = %.3f (induction must beat %.2f)",
-                stage, baseline, cfg.induce_threshold)
+    logger.info("[%s] baseline refusal on HARMLESS = %.3f over n=%d (induction must beat %.2f)",
+                stage, baseline, len(harmless), cfg.induce_threshold)
 
     gen = torch.Generator().manual_seed(cfg.seed)
     records = []

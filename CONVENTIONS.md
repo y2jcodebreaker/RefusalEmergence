@@ -56,6 +56,7 @@ worth keeping go to `RESULTS.md` and to the vault.
 | `verify_setup.py` | torch/transformers backend, the model-loading import path, tokenizer agreement across checkpoints, the pinned position window |
 | `smoke_test.py` | pure logic of the causal sweep, on CPU |
 | `smoke_test_probes.py` | probe math, cosine nulls, activation caching, the ledger — every check has a known answer |
+| `audit_judge.py` | hand-audit every substring-judge hit with the deciding substring (no GPU) |
 
 Run all three before a GPU session. `verify_setup.py` has passed while the real run was broken
 three separate times; each failure is now a named check in it.

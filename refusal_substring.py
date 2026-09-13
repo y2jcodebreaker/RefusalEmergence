@@ -124,7 +124,7 @@ def generate_completions(model, tok, instructions: List[str], template: str,
 
 
 def behavioral_rates(model, tok, instructions, template, direction: torch.Tensor | None,
-                     max_new_tokens: int = 48, batch_size: int = 16, n_samples: int = 8):
+                     max_new_tokens: int = 48, batch_size: int = 16, n_samples: int | None = 8):
     """(baseline_rate, ablated_rate, sample_completions).
 
     `direction` is the best (pos, layer) refusal direction for this checkpoint; ablation is
@@ -174,6 +174,10 @@ def behavioral_rates(model, tok, instructions, template, direction: torch.Tensor
                        "(baseline %.1f%%). The 'jailbreak' is degeneration, not compliance — "
                        "the KL filter should have caught this; check kl_threshold.",
                        100 * e_abl, 100 * e_base)
-    return b, a, {"baseline": base_c[:n_samples], "ablated": abl_c[:n_samples],
+    # n_samples=None stores EVERY completion. The text is tiny (~70 KB for 132x2) and
+    # without it a hand-audit of the judge's hits is impossible after the fact -- which is
+    # how base's 56%-false-positive rate nearly went unnoticed (O-44).
+    keep = slice(None) if n_samples is None else slice(None, n_samples)
+    return b, a, {"baseline": base_c[keep], "ablated": abl_c[keep],
                   "empty_baseline": e_base, "empty_ablated": e_abl,
                   "strict_baseline": bs, "strict_ablated": as_}

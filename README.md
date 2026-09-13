@@ -75,6 +75,7 @@ python aggregate.py                               # -> results/figures/*.pdf
 
 ```bash
 python show_completions.py --stage base   # generations + per-hit judge verdicts
+python audit_judge.py --stage base       # EVERY judge hit, for hand-classification
 python show_filters.py --stage base       # the KL / induce surfaces, and WHICH criterion failed
 python diagnose_refusal_token.py --stage dpo   # what token does the model actually emit?
 python smoke_test.py                      # CPU-only unit tests

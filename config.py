@@ -86,6 +86,12 @@ class Config:
     # An analytic 1/sqrt(d) null would be far too narrow: activations occupy a much lower
     # effective dimension than d=4096, so directions fit on noise are already correlated.
     n_null: int = 16
+    # --- P1-E1b (transplant.py) ---
+    # Decoupled from n_val. The E02 causal sweep costs n_pos*n_layers forward passes so
+    # n_val stays at 32, but the transplant is only n_cells*n_coeffs passes, so it can
+    # afford a much larger harmless set -- and an induced-refusal MEAN over 32 prompts is
+    # noisier than the effect sizes being compared (base 1.4 vs random 1.2).
+    n_transplant: int = 256
     batch_size: int = 16
     seed: int = 42
     results_dir: str = "results"

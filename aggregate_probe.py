@@ -113,8 +113,15 @@ def _verdict(acc, acc_mm, cos, nullhi, found, stages) -> None:
     surface = lr[0] >= lr.max() - 0.02
     lenb = float(found["base"]["length_baseline"])
     aligned = [s for s in stages if s != "base"]
-    same_axis = any(np.abs(cos[s]).max() > nullhi[s][int(np.abs(cos[s]).argmax())] * 2
-                    for s in aligned) if cos else False
+    # A null p95 near 1.0 means ANY two mean-diff-like vectors in this space are highly
+    # cosine-similar, so "signal < null" says nothing about axes. Residual streams are
+    # strongly anisotropic (a few massive dimensions dominate), which inflates every
+    # cosine. Detect that and report UNRESOLVED rather than a confident non-result.
+    # Observed 2026-09-13: null p95 = 0.94 at L1, tracking the signal curve at every layer.
+    saturated = bool(cos) and max(float(np.nanmedian(nullhi[s])) for s in aligned) > 0.25
+    same_axis = (bool(cos) and not saturated
+                 and any(np.abs(cos[s]).max() > nullhi[s][int(np.abs(cos[s]).argmax())] * 2
+                         for s in aligned))
 
     print("\n" + "=" * 78 + "\nP1-E1 VERDICT\n" + "=" * 78)
     print(f"  base readable (logistic peak {lr.max():.3f} >= 0.90)   : {readable}")
@@ -122,7 +129,10 @@ def _verdict(acc, acc_mm, cos, nullhi, found, stages) -> None:
           f"   [L0={lr[0]:.3f}, peak={lr.max():.3f}]")
     print(f"  token-length-only floor                               : {lenb:.3f}")
     if cos:
+        med = {s: round(float(np.nanmedian(nullhi[s])), 3) for s in aligned}
         print(f"  same axis as aligned (max|cos| > 2x null p95)          : {same_axis}")
+        print(f"  null band median (a usable null is << 0.25)            : {med}"
+              f"{'   <-- SATURATED' if saturated else ''}")
     print()
     if not readable:
         print("  -> REPRESENTATION ABSENT in base. The hypothesis is dead: alignment BUILDS\n"
@@ -132,6 +142,14 @@ def _verdict(acc, acc_mm, cos, nullhi, found, stages) -> None:
         print("  -> INCONCLUSIVE. Layer 0 separates as well as the best layer, so the probe\n"
               "     is reading surface lexicon, not a harmfulness representation. Harder\n"
               "     controls needed (lexically matched prompts) before claiming anything.")
+    elif saturated:
+        print("  -> CLAUSE 1 CONFIRMED, CLAUSE 2 UNRESOLVED. The distinction IS readable in\n"
+              "     base. But the cosine test is UNINFORMATIVE here: the shuffled-label null\n"
+              "     is as large as the signal, so raw cosine cannot tell 'same axis' from\n"
+              "     'different axis'. Residual-stream anisotropy inflates every cosine.\n"
+              "     Do NOT report an axis conclusion from this run. A transplant test\n"
+              "     (does the aligned model's refusal direction induce refusal in BASE?)\n"
+              "     answers the question without depending on cosine at all.")
     elif cos and same_axis:
         print("  -> HYPOTHESIS CONFIRMED, STRONG FORM. The distinction is readable in base\n"
               "     AND lies on the same axis the aligned model refuses along. The direction\n"

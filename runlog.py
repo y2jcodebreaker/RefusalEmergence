@@ -52,7 +52,11 @@ def git_state() -> Dict[str, Any]:
         "commit": sha or "unknown",
         "short": sha[:7] if sha else "unknown",
         "branch": _sh(["git", "rev-parse", "--abbrev-ref", "HEAD"]) or "unknown",
-        "dirty": bool(_sh(["git", "status", "--porcelain"])),
+        # Only TRACKED modifications mean the commit fails to identify the code. A new
+        # untracked figure or result file does not, and a flag that cries wolf gets ignored.
+        "dirty": bool(_sh(["git", "status", "--porcelain", "--untracked-files=no"])),
+        "untracked": len([l for l in _sh(["git", "status", "--porcelain"]).splitlines()
+                          if l.startswith("??")]),
     }
 
 

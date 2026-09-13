@@ -68,7 +68,7 @@ POS_IDX = 4          # pos* = -1 for both sft and dpo in E02; index 4 of n_eoi=5
 COEFFS = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0)
 
 
-def load_source_directions(cfg) -> dict[tuple[str, int], np.ndarray]:
+def load_source_directions(cfg, unit_norm: bool = False) -> dict[tuple[str, int], np.ndarray]:
     """Reuse the P1-E1 probe directions: identical estimator, data and hook point as E02's
     refusal directions (mean-diff harmful-harmless at resid_pre over eoi positions)."""
     out = {}
@@ -77,7 +77,13 @@ def load_source_directions(cfg) -> dict[tuple[str, int], np.ndarray]:
         if not os.path.exists(path):
             raise SystemExit(f"missing {path} — run probe_representation.py --stage all first")
         d = np.load(path, allow_pickle=True)["directions"]
-        out[(stage, layer)] = d[POS_IDX, layer].astype(np.float32)
+        v = d[POS_IDX, layer].astype(np.float32)
+        if unit_norm:
+            # Norms differ 1.1 / 7.4 / 4.4 across base/sft/dpo, so a raw coefficient is not
+            # comparable across sources. Unit-normalising makes the coefficient the INJECTED
+            # NORM, which is. Changes what the numbers mean -- report which mode was used.
+            v = v / (np.linalg.norm(v) + 1e-8)
+        out[(stage, layer)] = v
     return out
 
 
@@ -157,10 +163,15 @@ def _norm_matched(d: torch.Tensor, gen: torch.Generator) -> torch.Tensor:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage", required=True, help="target model (base/sft/dpo) or 'all'")
+    ap.add_argument("--unit-norm", action="store_true",
+                    help="unit-normalise source directions so the coefficient IS the injected "
+                         "norm, making the sweep comparable across sources (see O-47)")
     args = ap.parse_args()
     logger.info("data: %s", assert_available())
     cfg = DEFAULT
-    srcs = load_source_directions(cfg)
+    srcs = load_source_directions(cfg, unit_norm=args.unit_norm)
+    logger.info("direction scaling: %s", "UNIT-NORM (coeff = injected norm)" if args.unit_norm
+                else "RAW (Arditi default; coeff not comparable across sources)")
     logger.info("source directions: %s",
                 [f"{s}@L{l} norm={np.linalg.norm(v):.1f}" for (s, l), v in srcs.items()])
     logger.info("NOTE: norms differ across checkpoints, so a given coefficient is NOT "
@@ -170,7 +181,8 @@ def main() -> None:
     for s in stages:
         if s not in ckpts:
             raise SystemExit(f"unknown stage '{s}'. known: {list(ckpts)}")
-    with RunRecord(EXPERIMENT, "transplant.py", cfg, question=QUESTION,
+    with RunRecord(EXPERIMENT, "transplant.py", cfg, question=QUESTION + (
+                       "  [unit-norm]" if args.unit_norm else "  [raw norms]"),
                    notes="The decisive cell is target=base, source=dpo: if DPO's refusal "
                          "direction induces refusal in base at acceptable KL, base already "
                          "had the machinery. Sweeping coefficients also retires the 'you only "

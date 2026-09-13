@@ -3,6 +3,67 @@
 Zephyr lineage, one 7B family, three checkpoints. Run 2026-09-11 on an L40S-class GPU,
 ~30 min total. All numbers below are reproducible with the commands in the README.
 
+## P1-E1 + P1-E1b — alignment installs the COUPLING (2026-09-13)
+
+### Is the representation there? (P1-E1, `probe_representation.py`)
+
+| stage | logistic peak | mass-mean peak | L0 | token-length floor |
+|---|---|---|---|---|
+| base | **0.989** @L4 | 0.970 @L6 | **0.500** | 0.598 |
+| sft | 1.000 @L12 | 0.973 @L12 | 0.500 | 0.598 |
+| dpo | 1.000 @L12 | 0.977 @L15 | 0.500 | 0.598 |
+
+Harmful-vs-harmless is **fully readable in base** — ~0.99 from layer 1, indistinguishable
+from the aligned models. `L0 = 0.500` exactly in all three is the control, not a failure:
+`resid_pre` at layer 0 at the end-of-instruction positions holds only *template*-token
+embeddings, byte-identical across prompts. By L1 attention has moved instruction content
+there. So the surface-lexicon confound is ruled out on evidence.
+
+⚠️ The same-axis half of P1-E1 **failed as designed**. Cosine between base and aligned
+directions cannot answer it: SFT and DPO are fine-tunes of base, their activation geometries
+are nearly identical, and any two *shuffled-label* directions already align (null p95 median
+0.42–0.45, and 0.94 at L1). The true cosine sits only ~20% above that null. Low power, not a
+negative — do not read an axis conclusion from it.
+
+### Does the direction WORK there? (P1-E1b, `transplant.py`)
+
+Take each checkpoint's refusal direction, **add it to a different checkpoint** at the same
+layer, sweep coefficients 0.5–16, and ask whether the receiving model starts refusing
+*harmless* prompts. Behavioural, so anisotropy cannot touch it.
+
+| target ↓ / source → | baseline | base @L15 | sft @L20 | dpo @L17 |
+|---|---|---|---|---|
+| **base** | −3.124 | **no** | **no** | **no** |
+| **sft** | −4.050 | **YES** +0.486 | YES +0.538 | YES +0.932 |
+| **dpo** | −8.964 | no | YES +0.275 | YES +1.077 |
+
+Controlled against a norm-matched random direction swept in every cell:
+
+| target | real Δ | random Δ | ratio |
+|---|---|---|---|
+| base | 1.43 | 1.22 | **1.17× — indistinguishable from noise** |
+| sft | 4.98 | 2.52 | 1.98× |
+| dpo | 10.04 | 5.31 | 1.89× |
+
+**The decisive cell:** base's own direction induces refusal in SFT (+0.486) but not in base
+(−1.900). The direction base cannot use works once transplanted into an aligned model.
+
+> **Alignment installs the COUPLING, not the capability.** The harmful/harmless
+> representation is present in base at 99% accuracy *and is sufficient to drive refusal* —
+> just not there. What alignment adds is the downstream machinery that converts that
+> representation into refusal behaviour.
+
+Base also starts *closest* to threshold (−3.12 vs −4.05 and −8.96), so it needed the
+smallest push and still never crossed. Sanity check passes: dpo's own direction in dpo gives
++1.077 at L17, matching E02's independently measured +1.08. Random controls never cross in
+any of the nine cells.
+
+**Limitations specific to P1-E1b.** (i) Direction norms differ 1.1 / 7.4 / 4.4 across
+base/sft/dpo, so a given *coefficient* is not comparable across sources — the sweep mitigates
+this but the clean fix is to unit-normalise and sweep injected norm directly. (ii) n=32
+harmless prompts. (iii) Base's direction fails in dpo while working in sft, partly because
+dpo's baseline sits 5.8 further from threshold; do not over-read that asymmetry.
+
 ## Headline
 
 | | base | SFT | DPO |

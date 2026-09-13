@@ -58,11 +58,33 @@ smallest push and still never crossed. Sanity check passes: dpo's own direction 
 +1.077 at L17, matching E02's independently measured +1.08. Random controls never cross in
 any of the nine cells.
 
-**Limitations specific to P1-E1b.** (i) Direction norms differ 1.1 / 7.4 / 4.4 across
-base/sft/dpo, so a given *coefficient* is not comparable across sources — the sweep mitigates
-this but the clean fix is to unit-normalise and sweep injected norm directly. (ii) n=32
-harmless prompts. (iii) Base's direction fails in dpo while working in sft, partly because
-dpo's baseline sits 5.8 further from threshold; do not over-read that asymmetry.
+### Robustness: the matrix is identical under matched injection
+
+Direction norms differ 1.1 / 7.4 / 4.4 across base/sft/dpo, so a raw *coefficient* is not
+comparable across sources. Re-running with `--unit-norm` (coefficient = injected norm) gives
+**all nine crossing decisions identical**:
+
+| target | raw-norm crossings | unit-norm crossings | |
+|---|---|---|---|
+| base | none | none | identical |
+| sft | base, sft, dpo | base, sft, dpo | identical |
+| dpo | sft, dpo | sft, dpo | identical |
+
+| target | real Δ | random Δ | ratio (raw) | ratio (unit-norm) |
+|---|---|---|---|---|
+| base | 1.45 | 1.16 | 1.17× | **1.25×** |
+| sft | 4.87 | 2.56 | 1.98× | 1.90× |
+| dpo | 10.14 | 6.29 | 1.89× | 1.61× |
+
+So base's failure is not an artifact of its direction being smaller. Under unit-norm the
+crossings simply need larger coefficients (first crossing at 4–8 rather than 1–2), because
+unit norm is well below the raw norms.
+
+**Limitations specific to P1-E1b.** (i) n=32 harmless prompts. (ii) Base's direction fails in
+dpo while working in sft, partly because dpo's baseline sits 5.8 further from threshold; do
+not over-read that asymmetry. (iii) Transplanting across checkpoints is legitimate here only
+because they share one architecture and lineage — fine-tuning barely rotates the residual
+basis. This does not license cross-family transplants.
 
 ## Headline
 

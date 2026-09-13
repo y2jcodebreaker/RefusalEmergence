@@ -174,8 +174,10 @@ def main() -> None:
                 else "RAW (Arditi default; coeff not comparable across sources)")
     logger.info("source directions: %s",
                 [f"{s}@L{l} norm={np.linalg.norm(v):.1f}" for (s, l), v in srcs.items()])
-    logger.info("NOTE: norms differ across checkpoints, so a given coefficient is NOT "
-                "comparable across sources — read the sweep, not a single coeff.")
+    if not args.unit_norm:
+        logger.info("NOTE: norms differ across checkpoints, so a given coefficient is NOT "
+                    "comparable across sources — read the sweep, not a single coeff. "
+                    "Re-run with --unit-norm for a matched-injection comparison.")
     ckpts = dict(cfg.checkpoints)
     stages = list(ckpts) if args.stage == "all" else [args.stage]
     for s in stages:

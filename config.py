@@ -81,6 +81,11 @@ class Config:
     # drives l*, so it is both too small and not fully clean for a behavioral rate.
     n_behavioral: int = 0
     n_sample_completions: int = 8    # how many to store per condition for eyeballing
+    # --- P1-E1 (probe_representation.py) ---
+    # Shuffled-label mean-diff directions used as the null band for cross-stage cosines.
+    # An analytic 1/sqrt(d) null would be far too narrow: activations occupy a much lower
+    # effective dimension than d=4096, so directions fit on noise are already correlated.
+    n_null: int = 16
     batch_size: int = 16
     seed: int = 42
     results_dir: str = "results"

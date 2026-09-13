@@ -95,6 +95,21 @@ python smoke_test.py                      # CPU-only unit tests
 - **Re-running one stage preserves the other flags' results.** `np.savez` rewrites whole
   files, so keys not recomputed are carried forward from the previous run.
 
+## Experiments
+
+| id | scripts | question |
+|---|---|---|
+| `E02` | `run_stage.py` → `aggregate.py` | when does an actionable refusal direction appear, and where? **(done — see RESULTS.md)** |
+| `P1-E1` | `probe_representation.py` → `aggregate_probe.py` | is the distinction *readable* in base, and on the *same axis* the aligned model uses? |
+
+Every run is logged to `results/RUNLOG.md` with its git commit, config, environment and
+results — including failed runs. Conventions: **[CONVENTIONS.md](CONVENTIONS.md)**.
+
+```bash
+python probe_representation.py --stage all   # P1-E1, ~8 min
+python aggregate_probe.py                    # prints an explicit verdict
+```
+
 ## Files
 
 | file | role |
@@ -107,4 +122,7 @@ python smoke_test.py                      # CPU-only unit tests
 | `verify_setup.py` | preflight: no GPU, catches the environment traps above |
 | `diagnose_refusal_token.py` | what the model actually emits at position 0 |
 | `show_completions.py` / `show_filters.py` | audit the judge / the selection surfaces |
-| `smoke_test.py` | CPU unit tests for the pure logic |
+| `probes.py` | P1-E1: probe math, cosine nulls, activation caching |
+| `probe_representation.py` | P1-E1 driver; `aggregate_probe.py` renders it and states the verdict |
+| `runlog.py` | provenance ledger — every run, with git commit and environment |
+| `smoke_test.py` / `smoke_test_probes.py` | CPU unit tests; every check has a known answer |

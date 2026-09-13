@@ -24,9 +24,14 @@ from data import load_instructions
 from refusal_direction import (eoi_len, get_mean_diff, norm_matched_random,
                                refusal_strength_curve, resolve_refusal_token)
 from refusal_substring import behavioral_rates
+from runlog import RunRecord
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("run_stage")
+
+EXPERIMENT = "E02"   # the pilot. P1-E1..P1-E7 are the paper's experiments; see CONVENTIONS.md
+QUESTION = ("When across base -> SFT -> DPO does a causally actionable refusal direction "
+            "appear, and in which layers?")
 
 
 def set_seed(seed: int) -> None:
@@ -49,7 +54,7 @@ def load_model(model_id: str, dtype: str):
 
 
 def run_one(stage: str, model_id: str, cfg, control: bool = False,
-            behavioral: bool = False) -> None:
+            behavioral: bool = False, rec=None) -> None:
     set_seed(cfg.seed)
     model, tok = load_model(model_id, cfg.dtype)
     refusal_toks = [resolve_refusal_token(tok, cfg.refusal_token_piece, cfg.expected_refusal_id)]
@@ -149,6 +154,18 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
     logger.info("[%s] saved %s | l*=%d (naive %d) baseline_refusal=%.3f peak_strength=%.3f "
                 "KL@l*=%.4f", stage, path, res["l_star"], res["naive_l_star"],
                 res["baseline_refusal"], float(np.nanmax(res["bypass"])), kl_at)
+    if rec is not None:
+        rec.result(stage=stage, l_star=int(res["l_star"]), naive_l_star=int(res["naive_l_star"]),
+                   pos_star=int(res["pos_star"]),
+                   baseline_refusal=round(float(res["baseline_refusal"]), 4),
+                   peak_strength=round(float(np.nanmax(res["bypass"])), 4),
+                   kl_at_l_star=round(kl_at, 4) if valid_direction else None,
+                   control_peak=(round(float(np.nanmax(extra["control_bypass"])), 4)
+                                 if "control_bypass" in extra else None),
+                   substring_baseline=(round(float(extra["substring_baseline_rate"]), 4)
+                                       if "substring_baseline_rate" in extra else None),
+                   substring_ablated=(round(float(extra["substring_ablated_rate"]), 4)
+                                      if "substring_ablated_rate" in extra else None))
     del model
     torch.cuda.empty_cache()
 
@@ -167,8 +184,9 @@ def main() -> None:
     for s in stages:
         if s not in ckpts:
             raise SystemExit(f"unknown stage '{s}'. known: {list(ckpts)}")
-    for s in stages:
-        run_one(s, ckpts[s], cfg, control=args.control, behavioral=args.behavioral)
+    with RunRecord(EXPERIMENT, "run_stage.py", cfg, question=QUESTION) as rec:
+        for s in stages:
+            run_one(s, ckpts[s], cfg, control=args.control, behavioral=args.behavioral, rec=rec)
 
 
 if __name__ == "__main__":

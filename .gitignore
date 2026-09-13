@@ -5,3 +5,7 @@ __pycache__/
 # Raw sweep arrays are large and regenerable from the scripts; the FIGURES are committed
 # so the result is visible without a GPU (see results/figures/ and RESULTS.md).
 results/*.npz
+
+# Local execution history — see CONVENTIONS.md. Findings live in RESULTS.md.
+results/runs.jsonl
+results/RUNLOG.md

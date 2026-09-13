@@ -42,6 +42,15 @@ def check_torch_backend() -> bool:
     print(f"OK  torch {torch.__version__} | transformers torch backend enabled | "
           f"cuda={torch.cuda.is_available()}")
 
+    # P1-E1 imports sklearn lazily inside the probe functions, so a missing install would
+    # only surface AFTER the activation caches were built. Fail here instead.
+    try:
+        import sklearn  # noqa: F401
+        print(f"OK  scikit-learn {sklearn.__version__} (needed by P1-E1 probes)")
+    except ImportError:
+        print("WARN scikit-learn missing — run_stage.py is fine, but probe_representation.py\n"
+              "      (P1-E1) will fail after caching activations. Fix: pip install scikit-learn")
+
     # Force the LAZY import of the model class run_stage.py actually uses. transformers
     # resolves these on first access, so a broken optional dep (classically a torchvision
     # built against a different torch -> "operator torchvision::nms does not exist", reached

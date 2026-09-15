@@ -13,8 +13,9 @@ Base Mistral refuses **29× more often than its SFT descendant** in generated te
 narrow middle-layer band (L15–20); DPO sharpens it (+1.01 → +1.76) without moving its peak
 (L16). Behavioral refusal and refusal geometry are **dissociated** across the pipeline.
 
-Full numbers, controls, limitations, and the four methodological errors caught along the way:
-**[RESULTS.md](RESULTS.md)**.
+Full numbers, controls, limitations, and the methodological errors caught along the way:
+**[RESULTS.md](RESULTS.md)**. A readable write-up for sharing:
+**[report/refusal-machinery.html](report/refusal-machinery.html)** (open in a browser).
 
 Prior work: Arditi et al. (NeurIPS 2024) showed refusal is a single direction in *finished*
 chat models. "How Post-Training Reshapes LLMs" (COLM 2025) compared base vs final — two

@@ -32,7 +32,7 @@ except ImportError:
     AutoTokenizer = None
     _MISSING.append("transformers")
 
-from config import DEFAULT, config_for
+from config import DEFAULT, LINEAGES, config_for
 
 try:
     from refusal_direction import eoi_len, resolve_refusal_token
@@ -97,6 +97,29 @@ def check_torch_backend() -> bool:
     return True
 
 
+def derive_template(cfg) -> str:
+    """Render the aligned checkpoint's own chat_template for a one-turn prompt, and show it
+    as the `template` string this repo wants (with {instruction} where the user text goes)."""
+    if AutoTokenizer is None:
+        return "  (cannot derive a template: transformers is missing)"
+    stage, mid = cfg.checkpoints[-1]          # the most-aligned checkpoint has the template
+    tok = AutoTokenizer.from_pretrained(mid)
+    if not getattr(tok, "chat_template", None):
+        return (f"  NOTE {mid} ships no chat_template; pick the format from its model card "
+                f"and paste it into the Lineage.")
+    rendered = tok.apply_chat_template([{"role": "user", "content": "\x00"}],
+                                       tokenize=False, add_generation_prompt=True)
+    as_template = rendered.replace("\x00", "{instruction}")
+    # Strip a leading BOS if the tokenizer will add one again at encode time.
+    bos = getattr(tok, "bos_token", None)
+    warn = ""
+    if bos and as_template.startswith(bos):
+        warn = (f"\n  ⚠️ starts with bos {bos!r}; tokenizers usually re-add it, so strip it "
+                f"from the template or it appears twice")
+    return ("\n  DERIVED TEMPLATE (from %s, stage '%s') — paste into config.LINEAGES:\n"
+            "    template=%r,%s\n" % (mid, stage, as_template, warn))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lineage", default="zephyr",
@@ -107,6 +130,12 @@ def main() -> int:
     cfg = config_for(args.lineage)
     ok = check_torch_backend()
     ref_ids, vocabs, eois = {}, {}, {}
+
+    # Derive the chat template from the ALIGNED checkpoint's own tokenizer rather than
+    # transcribing special tokens by hand — hand-copied tokens are the same class of silent,
+    # plausible error as O-42. Printed for pasting into the Lineage.
+    if LINEAGES[cfg.lineage].template is None:
+        print(derive_template(cfg))
 
     from data import splits_dir
     sd = splits_dir()

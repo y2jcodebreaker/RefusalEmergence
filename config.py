@@ -28,10 +28,9 @@ __all__ = ["Config", "Lineage", "LINEAGES", "DEFAULT", "config_for"]
 # all three checkpoints is the correct controlled choice (weights are the only variable).
 ZEPHYR_TEMPLATE = "<|user|>\n{instruction}</s>\n<|assistant|>\n"
 
-# OLMo 2 / Tulu. ⚠️ UNVERIFIED — confirm against the checkpoint's own tokenizer_config
-# chat_template before trusting any number from these lineages.
-OLMO2_TEMPLATE = "<|user|>\n{instruction}\n<|assistant|>\n"
-TULU_TEMPLATE = "<|user|>\n{instruction}\n<|assistant|>\n"
+# For every other lineage the template is DERIVED from the aligned checkpoint's own
+# tokenizer chat_template (verify_setup.py prints it), never transcribed by hand. Hand-copied
+# special tokens are the same class of error as O-42: wrong, plausible, and silent.
 
 
 @dataclass(frozen=True)
@@ -39,7 +38,11 @@ class Lineage:
     """One alignment chain. `stages` order IS the developmental order."""
     name: str
     checkpoints: tuple[tuple[str, str], ...]     # (stage_name, hf_model_id), in order
-    template: str
+    # None => derive it from the ALIGNED checkpoint's tokenizer chat_template and paste it
+    # here (verify_setup.py prints it). Applied to every stage, base included: the base model
+    # has no template of its own, and holding the prompt format constant is what makes the
+    # weights the only variable.
+    template: str | None
     refusal_token_piece: str
     # None => NOT YET MEASURED on this family. Run diagnose_refusal_token.py; the drivers
     # refuse to proceed rather than silently score whatever the piece happens to resolve to.
@@ -51,7 +54,8 @@ class Lineage:
 
     @property
     def verified(self) -> bool:
-        return self.expected_refusal_id is not None and self.n_eoi is not None
+        return (self.expected_refusal_id is not None and self.n_eoi is not None
+                and self.template is not None)
 
 
 LINEAGES: dict[str, Lineage] = {
@@ -82,6 +86,8 @@ LINEAGES: dict[str, Lineage] = {
               "procedure, not the safety dataset.",
     ),
     # ------------------------------------------------------- UNVERIFIED (will not run)
+    # PRIMARY cross-lineage target. Ids CONFIRMED against the HF API 2026-09-14 (all four
+    # resolve; base is Olmo2ForCausalLM, 84k downloads, pretrained-only tags).
     "olmo2": Lineage(
         name="olmo2",
         checkpoints=(
@@ -90,13 +96,43 @@ LINEAGES: dict[str, Lineage] = {
             ("dpo",  "allenai/OLMo-2-1124-7B-DPO"),
             ("rlvr", "allenai/OLMo-2-1124-7B-Instruct"),
         ),
-        template=OLMO2_TEMPLATE,
+        # DERIVED 2026-09-14 from allenai/OLMo-2-1124-7B-Instruct's own chat_template, not
+        # hand-written. The raw render begins with the BOS '<|endoftext|>', which the
+        # tokenizer re-adds at encode time -- stripped here so it does not appear twice.
+        template="<|user|>\n{instruction}\n<|assistant|>\n",
         refusal_token_piece="I",
-        expected_refusal_id=None,   # run diagnose_refusal_token.py --lineage olmo2
-        n_eoi=None,                 # run verify_setup.py --lineage olmo2
-        notes="PRIMARY cross-lineage target: the only fully public 4-point pipeline "
-              "(base -> SFT -> DPO -> RLVR) with genuine safety training. ⚠️ model ids, "
-              "template and refusal token all UNVERIFIED.",
+        expected_refusal_id=None,   # diagnose_refusal_token.py --lineage olmo2 --stage rlvr
+        n_eoi=None,                 # verify_setup.py --lineage olmo2
+        notes="The fully public 4-point pipeline (base -> SFT -> DPO -> RLVR) with GENUINE "
+              "safety training — post-trained on an OLMo variant of Tulu 3. Preferred over "
+              "Olmo 3 as the first cross-lineage run because Olmo2ForCausalLM has been "
+              "supported in transformers far longer, so it is the lower-risk replication.",
+    ),
+    # Newer, same 4-point structure. Ids CONFIRMED 2026-09-14. Note the capitalisation change
+    # (OLMo -> Olmo) and that the base is date-stamped while the rest are not: guessing any of
+    # these would have 404'd.
+    "olmo3": Lineage(
+        name="olmo3",
+        checkpoints=(
+            ("base", "allenai/Olmo-3-1025-7B"),
+            ("sft",  "allenai/Olmo-3-7B-Instruct-SFT"),
+            ("dpo",  "allenai/Olmo-3-7B-Instruct-DPO"),
+            ("rlvr", "allenai/Olmo-3-7B-Instruct"),
+        ),
+        # DERIVED 2026-09-14, with the default system turn REMOVED. Olmo-3-7B-Instruct's
+        # own template injects "You are a helpful function-calling AI assistant..." — text
+        # about function calling is irrelevant to refusal, and the base model has no system
+        # prompt at all, so including it would add a variable the comparison does not want.
+        # diagnose_refusal_token.py prints a with-system-turn panel; check both before
+        # committing to this choice.
+        template="<|im_start|>user\n{instruction}<|im_end|>\n<|im_start|>assistant\n",
+        refusal_token_piece="I",
+        expected_refusal_id=None,
+        n_eoi=None,
+        notes="Olmo3ForCausalLM — needs a transformers new enough to know the architecture. "
+              "Uses a ChatML-style template (<|im_start|>/<|im_end|>), unlike OLMo 2's "
+              "<|user|>/<|assistant|>, so the derived template will differ. More current for "
+              "a 2027 submission; run it after olmo2 succeeds.",
     ),
     "tulu2": Lineage(
         name="tulu2",
@@ -105,12 +141,12 @@ LINEAGES: dict[str, Lineage] = {
             ("sft",  "allenai/tulu-2-7b"),
             ("dpo",  "allenai/tulu-2-dpo-7b"),
         ),
-        template=TULU_TEMPLATE,
+        template=None,
         refusal_token_piece="I",
         expected_refusal_id=None,
         n_eoi=None,
-        notes="Second family (Llama-2), clean SFT/DPO split. ⚠️ UNVERIFIED. Llama-2-7b-hf "
-              "is gated on HF — accept the licence first.",
+        notes="Third family (Llama-2), clean SFT/DPO split. ⚠️ ids NOT yet confirmed against "
+              "the HF API. Llama-2-7b-hf is gated — accept the licence first.",
     ),
 }
 
@@ -120,7 +156,7 @@ class Config:
     """A lineage plus the knobs that are held constant across lineages."""
     lineage: str = "zephyr"
     checkpoints: tuple[tuple[str, str], ...] = ()
-    template: str = ""
+    template: str | None = None
     refusal_token_piece: str = "I"
     expected_refusal_id: int | None = None
     n_eoi: int | None = None
@@ -162,7 +198,8 @@ class Config:
         lin = LINEAGES[self.lineage]
         if lin.verified:
             return
-        missing = [n for n, v in (("expected_refusal_id", lin.expected_refusal_id),
+        missing = [n for n, v in (("template", lin.template),
+                                  ("expected_refusal_id", lin.expected_refusal_id),
                                   ("n_eoi", lin.n_eoi)) if v is None]
         raise SystemExit(
             f"lineage '{self.lineage}' is UNVERIFIED (missing: {', '.join(missing)}).\n"
@@ -175,7 +212,8 @@ class Config:
             f"       -> read the top-1 token id, set Lineage.expected_refusal_id in config.py\n"
             f"    2. python verify_setup.py --lineage {self.lineage}\n"
             f"       -> it reports the safe pinned n_eoi; set Lineage.n_eoi in config.py\n"
-            f"    3. confirm the chat template against the checkpoint's own tokenizer_config")
+            f"    3. paste the template verify_setup.py derives from the aligned\n"
+            f"       checkpoint's own tokenizer chat_template — do NOT hand-write it")
 
 
 def config_for(name: str, **overrides) -> Config:

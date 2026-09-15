@@ -8,6 +8,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
+from config import DEFAULT
 from data import load_instructions, splits_dir
 from refusal_direction import refusal_score, select_l_star
 
@@ -50,7 +51,7 @@ def test_aggregate_shapes():
     os.makedirs("results", exist_ok=True)
     for st, peak_layer, peak in [("base", 12, 0.2), ("sft", 12, 1.5), ("dpo", 13, 3.0)]:
         c = np.zeros(32); c[peak_layer] = peak
-        np.savez(f"results/{st}_refusal.npz", stage=np.array(st), model_id=np.array("x"),
+        np.savez(DEFAULT.path(st, "refusal"), stage=np.array(st), model_id=np.array("x"),
                  bypass=c, l_star=np.array(peak_layer),
                  baseline_refusal=np.array(1.0), excluded_layers=np.array(range(26, 32)))
     import aggregate

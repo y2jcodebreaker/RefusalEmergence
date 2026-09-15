@@ -23,14 +23,16 @@ import logging
 
 import torch
 
-from config import DEFAULT, ZEPHYR_TEMPLATE
-from data import load_instructions
+from config import DEFAULT, config_for
+from data import assert_available, load_instructions
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("diagnose")
 
-# Zephyr's official template includes an (often empty) system turn before the user turn.
-ZEPHYR_TEMPLATE_WITH_SYSTEM = "<|system|>\n</s>\n<|user|>\n{instruction}</s>\n<|assistant|>\n"
+def with_system_turn(template: str) -> str:
+    """The same template with an (often empty) system turn prepended. Several chat formats
+    expect one, and omitting it can degrade the model — worth testing as a second panel."""
+    return "<|system|>\n</s>\n" + template
 
 # Candidate refusal-onset strings. Refusals overwhelmingly open with one of these.
 CANDIDATES = ["I", " I", "I'm", "As", "Sorry", "Unfortunately", "It"]
@@ -78,12 +80,16 @@ def report(model, tok, instructions, template, label: str, topk: int = 12) -> No
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--lineage", default="zephyr",
+                    help="model family from config.LINEAGES "
+                         "(zephyr | olmo2 | tulu2)")
     ap.add_argument("--stage", default="sft", help="stage name from config.checkpoints")
     ap.add_argument("--n", type=int, default=8, help="# harmful prompts to average over")
     args = ap.parse_args()
 
-    cfg = DEFAULT
-    ckpts = dict(cfg.checkpoints)
+    assert_available()               # before loading 15GB of weights
+    cfg = config_for(args.lineage)   # deliberately NOT require_verified():
+    ckpts = dict(cfg.checkpoints)    # this script is what makes a lineage verifiable
     if args.stage not in ckpts:
         raise SystemExit(f"unknown stage '{args.stage}'. known: {list(ckpts)}")
 
@@ -99,13 +105,18 @@ def main() -> None:
         tok.pad_token = tok.eos_token
 
     harmful = load_instructions("harmful_val")[: args.n]
-    report(model, tok, harmful, ZEPHYR_TEMPLATE, f"[{args.stage}] HARMFUL / current template")
-    report(model, tok, harmful, ZEPHYR_TEMPLATE_WITH_SYSTEM,
-           f"[{args.stage}] HARMFUL / template WITH <|system|> turn")
+    report(model, tok, harmful, cfg.template,
+           f"[{cfg.lineage}/{args.stage}] HARMFUL / lineage template")
+    report(model, tok, harmful, with_system_turn(cfg.template),
+           f"[{cfg.lineage}/{args.stage}] HARMFUL / template WITH <|system|> turn")
 
     harmless = load_instructions("harmless_val")[: args.n]
-    report(model, tok, harmless, ZEPHYR_TEMPLATE,
-           f"[{args.stage}] HARMLESS / current template (contrast: should NOT refuse)")
+    report(model, tok, harmless, cfg.template,
+           f"[{cfg.lineage}/{args.stage}] HARMLESS / lineage template (should NOT refuse)")
+
+    print(f"\n{'=' * 78}\nNEXT: set Lineage.expected_refusal_id for '{cfg.lineage}' in "
+          f"config.py to the TOP-1 id above\n(on HARMFUL prompts), then run "
+          f"verify_setup.py --lineage {cfg.lineage} for the pinned n_eoi.\n{'=' * 78}")
 
 
 if __name__ == "__main__":

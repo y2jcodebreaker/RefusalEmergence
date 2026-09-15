@@ -34,7 +34,7 @@ import os
 import numpy as np
 import torch
 
-from config import DEFAULT
+from config import DEFAULT, config_for
 from data import assert_available, load_instructions
 from probes import (cache_activations, length_baseline, logistic_accuracy,
                     mass_mean_accuracy, mass_mean_direction, null_directions)
@@ -101,7 +101,7 @@ def run_one(stage: str, model_id: str, cfg, rec: RunRecord) -> None:
     best_mm = np.nanmax(acc_mm, axis=0)
     best_lr = np.nanmax(acc_lr, axis=0)
     os.makedirs(cfg.results_dir, exist_ok=True)
-    path = f"{cfg.results_dir}/{stage}_probe.npz"
+    path = cfg.path(stage, "probe")
     np.savez(path, stage=np.array(stage), model_id=np.array(model_id),
              acc_mass_mean=acc_mm, acc_logistic=acc_lr, directions=dirs, null_directions=nulls,
              length_baseline=np.array(len_acc), n_fit=np.array(len(fit_pos)),
@@ -123,12 +123,16 @@ def run_one(stage: str, model_id: str, cfg, rec: RunRecord) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--lineage", default="zephyr",
+                    help="model family from config.LINEAGES "
+                         "(zephyr | olmo2 | tulu2)")
     ap.add_argument("--stage", required=True, help="stage name (base/sft/dpo) or 'all'")
     args = ap.parse_args()
     # Cheap checks first: a missing clone costs nothing to detect and a full weight
     # download to discover late (hit on a pod, 2026-09-13).
-    logger.info("data: %s", assert_available())
-    cfg = DEFAULT
+    cfg = config_for(args.lineage)
+    cfg.require_verified()          # conceptual blocker first ...
+    logger.info("data: %s", assert_available())   # ... then the cheap file check
     ckpts = dict(cfg.checkpoints)
     stages = list(ckpts) if args.stage == "all" else [args.stage]
     for s in stages:

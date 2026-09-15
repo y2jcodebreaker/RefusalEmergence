@@ -20,16 +20,19 @@ import glob
 
 import numpy as np
 
-from config import DEFAULT
+from config import DEFAULT, config_for
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--lineage", default="zephyr",
+                    help="model family from config.LINEAGES "
+                         "(zephyr | olmo2 | tulu2)")
     ap.add_argument("--stage", default=None)
     args = ap.parse_args()
 
-    cfg = DEFAULT
-    paths = sorted(glob.glob(f"{cfg.results_dir}/*_refusal.npz"))
+    cfg = config_for(args.lineage)
+    paths = sorted(glob.glob(f"{cfg.results_dir}/{cfg.lineage}_*_refusal.npz"))
     if not paths:
         raise SystemExit("no results — run run_stage.py first")
 

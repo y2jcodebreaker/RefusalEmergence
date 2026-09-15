@@ -20,6 +20,42 @@ mean different things. Never write a bare `E1`.
 | `P1-E1` | `probe_representation.py`, `aggregate_probe.py` | is the distinction *readable* in base, and on the *same axis* the aligned model uses? |
 | `P1-E1b` | `transplant.py` | does the aligned model's refusal direction induce refusal when transplanted into **base**? (folds in P1-E2's coefficient sweep) |
 
+## Lineages
+
+A **lineage** is one model family's alignment chain. `config.LINEAGES` holds them; every
+driver takes `--lineage` (default `zephyr`). Results are written to
+`results/{lineage}_{stage}_{axis}.npz`, so families never collide.
+
+| lineage | chain | status |
+|---|---|---|
+| `zephyr` | Mistral-7B → zephyr-sft-full → zephyr-7b-beta | ✅ verified |
+| `olmo2` | OLMo-2-7B → SFT → DPO → RLVR-Instruct | ⚠️ unverified |
+| `tulu2` | Llama-2-7b → tulu-2-7b → tulu-2-dpo-7b | ⚠️ unverified |
+
+**Three things do NOT transfer between families** — the chat template, the refusal token id,
+and the end-of-instruction window length. `expected_refusal_id` and `n_eoi` are therefore
+**required** per lineage, and `cfg.require_verified()` makes every driver refuse to run until
+both are measured. This is O-42 made structural: scoring the wrong token produced a
+clean-looking monotone trend that was pure noise, and no check in the code caught it.
+
+To add or verify a lineage:
+
+```bash
+python diagnose_refusal_token.py --lineage NAME --stage <last stage>   # top-1 id on harmful
+#   -> set Lineage.expected_refusal_id in config.py
+python verify_setup.py --lineage NAME                                  # reports safe n_eoi
+#   -> set Lineage.n_eoi in config.py
+#   -> confirm the template against the checkpoint's own tokenizer_config chat_template
+python run_stage.py --lineage NAME --stage all --control --behavioral
+python audit_judge.py --lineage NAME --stage <base>   # MANDATORY: the judge is a proxy (O-51)
+```
+
+`diagnose_refusal_token.py` is deliberately **not** gated — it is what makes a lineage
+verifiable. Everything else is.
+
+`transplant.py` reads each stage's `l*` from the saved sweep rather than hardcoding layers,
+so a new lineage cannot silently inherit Zephyr's.
+
 ## Every experiment script must
 
 1. Declare `EXPERIMENT` and `QUESTION` module constants.

@@ -7,32 +7,37 @@
 
 from __future__ import annotations
 
+import argparse
+
 import glob
 import logging
 import os
 
 import numpy as np
 
-from config import DEFAULT
+from config import DEFAULT, config_for
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("aggregate")
 
-STAGE_ORDER = ["base", "sft", "dpo"]  # developmental order
 
 
-def _load():
+def _load(cfg):
     found = {}
-    for p in glob.glob(f"{DEFAULT.results_dir}/*_refusal.npz"):
+    for p in glob.glob(f"{cfg.results_dir}/{cfg.lineage}_*_refusal.npz"):
         d = np.load(p, allow_pickle=True)
         found[str(d["stage"])] = d
     return found
 
 
 def main() -> None:
-    cfg = DEFAULT
-    found = _load()
-    stages = [s for s in STAGE_ORDER if s in found]
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--lineage", default="zephyr",
+                    help="model family from config.LINEAGES")
+    args = ap.parse_args()
+    cfg = config_for(args.lineage)
+    found = _load(cfg)
+    stages = [s for s in cfg.stages if s in found]   # lineage's own order
     if not stages:
         raise SystemExit("no results — run run_stage.py first")
 

@@ -17,7 +17,7 @@ import json
 
 import numpy as np
 
-from config import DEFAULT
+from config import DEFAULT, config_for
 from refusal_substring import (REFUSAL_SUBSTRINGS, is_refusal, is_refusal_strict,
                                truncate_at_turn)
 
@@ -32,10 +32,14 @@ def which_substring(text: str) -> str | None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--lineage", default="zephyr",
+                    help="model family from config.LINEAGES "
+                         "(zephyr | olmo2 | tulu2)")
     ap.add_argument("--stage", default=None, help="only this stage")
     args = ap.parse_args()
+    cfg = config_for(args.lineage)
 
-    paths = sorted(glob.glob(f"{DEFAULT.results_dir}/*_refusal.npz"))
+    paths = sorted(glob.glob(f"{cfg.results_dir}/{cfg.lineage}_*_refusal.npz"))
     if not paths:
         raise SystemExit("no results — run run_stage.py --behavioral first")
 

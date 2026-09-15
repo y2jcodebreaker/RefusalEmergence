@@ -102,6 +102,12 @@ python smoke_test.py                      # CPU-only unit tests
   scripts now check the data *before* loading any weights, so a missing clone costs seconds
   rather than a 45 GB download.
 
+## Lineages
+
+Every driver takes `--lineage` (default `zephyr`). Results are lineage-scoped
+(`results/{lineage}_{stage}_{axis}.npz`). A lineage whose refusal token and eoi window have
+not been measured **refuses to run** — see [CONVENTIONS.md](CONVENTIONS.md).
+
 ## Experiments
 
 | id | scripts | question |

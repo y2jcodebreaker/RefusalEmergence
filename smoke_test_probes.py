@@ -214,11 +214,18 @@ def test_transplant() -> None:
     import transplant as T
 
     print("\n[transplant — P1-E1b]")
-    check("sources are the E02-selected layers",
-          dict(T.SOURCES) == {"sft": 20, "dpo": 17, "base": 15}, str(dict(T.SOURCES)))
-    check("pos index matches E02 pos*=-1 with n_eoi=5", T.POS_IDX == 4)
     check("coefficient sweep includes Arditi's default 1.0 and goes well past it",
           1.0 in T.COEFFS and max(T.COEFFS) >= 8, str(T.COEFFS))
+    # source layers must be READ from each stage's saved sweep, never hardcoded, or a new
+    # lineage would silently inherit Zephyr's l*.
+    import inspect
+    src = inspect.getsource(T)
+    check("no hardcoded source layers remain",
+          "SOURCES = " not in src and "POS_IDX" not in src)
+    check("source_layers reads l* from the saved results",
+          'cfg.path(stage, "refusal")' in inspect.getsource(T.source_layers))
+    check("falls back to the unfiltered argmax when l* = -1",
+          "naive_l_star" in inspect.getsource(T.source_layers))
 
     g = torch.Generator().manual_seed(0)
     d = torch.randn(64) * 3.3

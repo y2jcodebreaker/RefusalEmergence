@@ -19,6 +19,8 @@ refusal_token_piece, the template, or the checkpoint list changes.
 
 from __future__ import annotations
 
+import argparse
+
 import sys
 
 # Imported defensively: this script exists to make environment problems legible, so it
@@ -30,7 +32,7 @@ except ImportError:
     AutoTokenizer = None
     _MISSING.append("transformers")
 
-from config import DEFAULT
+from config import DEFAULT, config_for
 
 try:
     from refusal_direction import eoi_len, resolve_refusal_token
@@ -96,9 +98,13 @@ def check_torch_backend() -> bool:
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--lineage", default="zephyr",
+                    help="model family from config.LINEAGES")
+    args = ap.parse_args()
     if _MISSING:
         return _report_missing()
-    cfg = DEFAULT
+    cfg = config_for(args.lineage)
     ok = check_torch_backend()
     ref_ids, vocabs, eois = {}, {}, {}
 

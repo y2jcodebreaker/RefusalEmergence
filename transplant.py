@@ -47,7 +47,7 @@ import os
 import numpy as np
 import torch
 
-from config import DEFAULT
+from config import DEFAULT, config_for
 from data import assert_available, load_instructions
 from refusal_direction import (_addition_handles, _last_logits, _mean_refusal, kl_last,
                                resolve_refusal_token)
@@ -61,23 +61,41 @@ EXPERIMENT = "P1-E1b"
 QUESTION = ("Does the aligned model's refusal direction induce refusal when transplanted "
             "into BASE, and at what coefficient does induction appear while KL stays sane?")
 
-# (source stage, layer) — each aligned model's Arditi-selected l* from E02. base has no
-# valid l* (nothing passed the filters), so its naive argmax layer stands in, flagged.
-SOURCES = (("sft", 20), ("dpo", 17), ("base", 15))
-POS_IDX = 4          # pos* = -1 for both sft and dpo in E02; index 4 of n_eoi=5
 COEFFS = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0)
 
 
-def load_source_directions(cfg, unit_norm: bool = False) -> dict[tuple[str, int], np.ndarray]:
+def source_layers(cfg) -> list[tuple[str, int, int]]:
+    """(stage, layer, pos_idx) per source, READ FROM each stage's saved sweep — never
+    hardcoded. Uses the Arditi-filtered l*; falls back to the unfiltered argmax when no
+    direction passed the filters (base), which is flagged in the log because such a layer
+    is 'best among allowed', not a validated refusal layer."""
+    out = []
+    for stage in cfg.stages:
+        path = cfg.path(stage, "refusal")
+        if not os.path.exists(path):
+            raise SystemExit(f"missing {path} — run run_stage.py --lineage {cfg.lineage} "
+                             f"--stage all first (transplant needs each stage's l*)")
+        d = np.load(path, allow_pickle=True)
+        l_star, pos_star = int(d["l_star"]), int(d["pos_star"])
+        if l_star < 0:
+            l_star = int(d["naive_l_star"])
+            pos_star = cfg.n_eoi - 1          # last eoi position; no validated pos*
+            logger.warning("[%s] no filtered l* — falling back to the unfiltered argmax L%d. "
+                           "This is NOT a validated refusal layer.", stage, l_star)
+        out.append((stage, l_star, pos_star))
+    return out
+
+
+def load_source_directions(cfg, sources, unit_norm: bool = False) -> dict[tuple[str, int], np.ndarray]:
     """Reuse the P1-E1 probe directions: identical estimator, data and hook point as E02's
     refusal directions (mean-diff harmful-harmless at resid_pre over eoi positions)."""
     out = {}
-    for stage, layer in SOURCES:
-        path = f"{cfg.results_dir}/{stage}_probe.npz"
+    for stage, layer, pos_idx in sources:
+        path = cfg.path(stage, "probe")
         if not os.path.exists(path):
             raise SystemExit(f"missing {path} — run probe_representation.py --stage all first")
         d = np.load(path, allow_pickle=True)["directions"]
-        v = d[POS_IDX, layer].astype(np.float32)
+        v = d[pos_idx, layer].astype(np.float32)
         if unit_norm:
             # Norms differ 1.1 / 7.4 / 4.4 across base/sft/dpo, so a raw coefficient is not
             # comparable across sources. Unit-normalising makes the coefficient the INJECTED
@@ -133,10 +151,11 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
     arr = np.array([(r[3], r[4], r[5]) for r in records], dtype=np.float32)
     meta = np.array([f"{r[0]}|{r[1]}|{r[2]}" for r in records])
     os.makedirs(cfg.results_dir, exist_ok=True)
-    path = f"{cfg.results_dir}/{stage}_transplant.npz"
+    path = cfg.path(stage, "transplant")
     np.savez(path, stage=np.array(stage), model_id=np.array(model_id), cells=meta, sweep=arr,
              coeffs=np.array(COEFFS), baseline_harmless_refusal=np.array(baseline),
-             pos_idx=np.array(POS_IDX))
+             sources=np.array([f"{a}|{b}|{c}" for a, b, c in sources]),
+             lineage=np.array(cfg.lineage))
     logger.info("[%s] saved %s", stage, path)
 
     for (src, layer) in srcs:
@@ -162,14 +181,19 @@ def _norm_matched(d: torch.Tensor, gen: torch.Generator) -> torch.Tensor:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--lineage", default="zephyr",
+                    help="model family from config.LINEAGES "
+                         "(zephyr | olmo2 | tulu2)")
     ap.add_argument("--stage", required=True, help="target model (base/sft/dpo) or 'all'")
     ap.add_argument("--unit-norm", action="store_true",
                     help="unit-normalise source directions so the coefficient IS the injected "
                          "norm, making the sweep comparable across sources (see O-47)")
     args = ap.parse_args()
-    logger.info("data: %s", assert_available())
-    cfg = DEFAULT
-    srcs = load_source_directions(cfg, unit_norm=args.unit_norm)
+    cfg = config_for(args.lineage)
+    cfg.require_verified()          # conceptual blocker first ...
+    logger.info("data: %s", assert_available())   # ... then the cheap file check
+    sources = source_layers(cfg)
+    srcs = load_source_directions(cfg, sources, unit_norm=args.unit_norm)
     logger.info("direction scaling: %s", "UNIT-NORM (coeff = injected norm)" if args.unit_norm
                 else "RAW (Arditi default; coeff not comparable across sources)")
     logger.info("source directions: %s",

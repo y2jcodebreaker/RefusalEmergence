@@ -1,101 +1,191 @@
-"""Config for E02 — Refusal Emergence Across the Alignment Pipeline.
+"""Config — one frozen place per LINEAGE, plus the run knobs shared across them.
 
-Everything a run needs, in one frozen place. The per-model bits (chat template,
-refusal token) are MUST-VERIFY before trusting results — flagged inline.
+    from config import DEFAULT, config_for
+    cfg = config_for("olmo2")
+
+A "lineage" is one model family's alignment chain (base -> SFT -> DPO -> ...). Three things
+differ across families and **none of them transfers**:
+
+  * the chat template,
+  * which token id the model emits to open a refusal,
+  * how many end-of-instruction positions that template occupies.
+
+O-42 cost three runs to a wrong refusal token whose only symptom was a clean-looking trend.
+So `expected_refusal_id` and `n_eoi` are **required per lineage**: a lineage that leaves them
+None cannot be run until diagnose_refusal_token.py and verify_setup.py have been executed
+against it. That is the lesson made structural rather than a comment nobody reads.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, replace
 
-__all__ = ["Config", "DEFAULT"]
+__all__ = ["Config", "Lineage", "LINEAGES", "DEFAULT", "config_for"]
 
-# Fixed chat template applied to ALL checkpoints (controlled experiment: hold prompt
-# format constant, vary only the weights). All three share the Mistral 32000-token vocab.
-# VERIFIED 2026-09-10 (verify_setup.py): base Mistral has NO native chat template, so
-# imposing the Zephyr format on all three is the correct controlled choice.
+# ---------------------------------------------------------------- chat templates
+
+# Zephyr. VERIFIED 2026-09-10: base Mistral has NO native chat template, so imposing this on
+# all three checkpoints is the correct controlled choice (weights are the only variable).
 ZEPHYR_TEMPLATE = "<|user|>\n{instruction}</s>\n<|assistant|>\n"
 
-# VERIFIED BUG FIX: tokenizing the template suffix gives eoi_len 9 (base) vs 10 (SFT/DPO)
-# — the Zephyr tokenizers insert a phantom '' token (28705). A differing position-window
-# size across stages would invalidate the stage-to-stage comparison, so we PIN n_eoi.
-# 5 covers "<|assistant|>\n" (['|','ass','istant','|','>'] region) identically in all three.
-N_EOI_FIXED = 5
+# OLMo 2 / Tulu. ⚠️ UNVERIFIED — confirm against the checkpoint's own tokenizer_config
+# chat_template before trusting any number from these lineages.
+OLMO2_TEMPLATE = "<|user|>\n{instruction}\n<|assistant|>\n"
+TULU_TEMPLATE = "<|user|>\n{instruction}\n<|assistant|>\n"
+
+
+@dataclass(frozen=True)
+class Lineage:
+    """One alignment chain. `stages` order IS the developmental order."""
+    name: str
+    checkpoints: tuple[tuple[str, str], ...]     # (stage_name, hf_model_id), in order
+    template: str
+    refusal_token_piece: str
+    # None => NOT YET MEASURED on this family. Run diagnose_refusal_token.py; the drivers
+    # refuse to proceed rather than silently score whatever the piece happens to resolve to.
+    expected_refusal_id: int | None
+    # None => NOT YET VERIFIED. verify_setup.py reports the safe pinned value per lineage;
+    # it must be <= the shortest tokenizer-derived eoi_len across the lineage's checkpoints.
+    n_eoi: int | None
+    notes: str = ""
+
+    @property
+    def verified(self) -> bool:
+        return self.expected_refusal_id is not None and self.n_eoi is not None
+
+
+LINEAGES: dict[str, Lineage] = {
+    # ---------------------------------------------------------------- VERIFIED
+    "zephyr": Lineage(
+        name="zephyr",
+        checkpoints=(
+            ("base", "mistralai/Mistral-7B-v0.1"),
+            ("sft",  "alignment-handbook/zephyr-7b-sft-full"),
+            ("dpo",  "HuggingFaceH4/zephyr-7b-beta"),
+        ),
+        template=ZEPHYR_TEMPLATE,
+        # MEASURED 2026-09-11 (diagnose_refusal_token.py, zephyr-7b-beta, harmful prompts):
+        #   id=28737 piece 'I'  p=0.3675   <- rank 1, what the model ACTUALLY emits
+        #   id=315   piece '_I' p=0.000175 <- rank 60
+        # Harmless control p(28737)=0.0027 -> a 135x contrast. Both pieces DECODE to "I",
+        # which is what hid the error. Resolve with convert_tokens_to_ids, never encode():
+        # encode("I") returns [315] because SentencePiece prepends a dummy prefix space.
+        refusal_token_piece="I",
+        expected_refusal_id=28737,
+        # PINNED. Tokenizer-derived eoi_len is 9 (base) vs 10 (SFT/DPO) — the Zephyr
+        # tokenizers insert a phantom '' token. A stage-varying window would have silently
+        # invalidated the whole cross-stage comparison.
+        n_eoi=5,
+        notes="ADVERSARIAL CASE: zephyr-7b-beta's DPO deliberately removed safety filtering. "
+              "Weak as a sole witness, strong in company — the same coupling signature in a "
+              "lineage whose DPO dropped safety data shows the effect belongs to the training "
+              "procedure, not the safety dataset.",
+    ),
+    # ------------------------------------------------------- UNVERIFIED (will not run)
+    "olmo2": Lineage(
+        name="olmo2",
+        checkpoints=(
+            ("base", "allenai/OLMo-2-1124-7B"),
+            ("sft",  "allenai/OLMo-2-1124-7B-SFT"),
+            ("dpo",  "allenai/OLMo-2-1124-7B-DPO"),
+            ("rlvr", "allenai/OLMo-2-1124-7B-Instruct"),
+        ),
+        template=OLMO2_TEMPLATE,
+        refusal_token_piece="I",
+        expected_refusal_id=None,   # run diagnose_refusal_token.py --lineage olmo2
+        n_eoi=None,                 # run verify_setup.py --lineage olmo2
+        notes="PRIMARY cross-lineage target: the only fully public 4-point pipeline "
+              "(base -> SFT -> DPO -> RLVR) with genuine safety training. ⚠️ model ids, "
+              "template and refusal token all UNVERIFIED.",
+    ),
+    "tulu2": Lineage(
+        name="tulu2",
+        checkpoints=(
+            ("base", "meta-llama/Llama-2-7b-hf"),
+            ("sft",  "allenai/tulu-2-7b"),
+            ("dpo",  "allenai/tulu-2-dpo-7b"),
+        ),
+        template=TULU_TEMPLATE,
+        refusal_token_piece="I",
+        expected_refusal_id=None,
+        n_eoi=None,
+        notes="Second family (Llama-2), clean SFT/DPO split. ⚠️ UNVERIFIED. Llama-2-7b-hf "
+              "is gated on HF — accept the licence first.",
+    ),
+}
 
 
 @dataclass(frozen=True)
 class Config:
-    # (stage_name, hf_model_id) — a real base -> SFT -> DPO lineage.
-    checkpoints: tuple[tuple[str, str], ...] = (
-        ("base", "mistralai/Mistral-7B-v0.1"),
-        ("sft",  "alignment-handbook/zephyr-7b-sft-full"),
-        ("dpo",  "HuggingFaceH4/zephyr-7b-beta"),
-    )
-    dtype: str = "bfloat16"
-    template: str = ZEPHYR_TEMPLATE
-    # Refusal score = logP(refusal_tok) - logP(not), at the first generated position.
-    #
-    # MEASURED 2026-09-11 (diagnose_refusal_token.py, zephyr-7b-beta, harmful prompts):
-    #   id=28737 piece 'I'   p=0.3675   <- rank 1, what the model ACTUALLY emits
-    #   id=315   piece '_I'  p=0.000175 <- rank 60
-    # Control on harmless prompts: p(28737)=0.0027 -> a 135x harmful/harmless contrast.
-    #
-    # The two pieces both DECODE to "I", which is what made this hard to see:
-    #   315   = "_I" (word-initial, space-prefixed)
-    #   28737 = "I"  (bare, no space prefix)   <- correct after "<|assistant|>\n"
-    # Resolve with convert_tokens_to_ids, NOT encode(): tok.encode("I") returns [315]
-    # because SentencePiece prepends a dummy prefix space, silently turning "I" into "_I".
-    # Scoring 315 gave baseline_refusal ~= -11.65 (p ~= 1e-5) and a clean-looking but
-    # meaningless monotone trend across stages.
+    """A lineage plus the knobs that are held constant across lineages."""
+    lineage: str = "zephyr"
+    checkpoints: tuple[tuple[str, str], ...] = ()
+    template: str = ""
     refusal_token_piece: str = "I"
-    # Cross-check: the piece must resolve to this id. Guards against a tokenizer swap
-    # silently changing which token is scored. Update only with a fresh diagnostic run.
-    expected_refusal_id: int = 28737
-    # Pinned so every stage uses the SAME end-of-instruction position window (see N_EOI_FIXED).
-    n_eoi: int = N_EOI_FIXED
+    expected_refusal_id: int | None = None
+    n_eoi: int | None = None
+
+    dtype: str = "bfloat16"
     n_train: int = 128       # samples for the mean-diff direction (Arditi default)
     n_val: int = 32          # samples for the per-layer causal sweep
-    prune_layer_pct: float = 0.20   # O-40: mark last 20% of layers as excluded for l* (report full curve)
-    # Arditi's OTHER TWO selection criteria (select_direction.py; values verified in E01,
-    # which reproduced Arditi's (pos=-5, layer=12) exactly).
-    # kl_threshold is the load-bearing one: without it, l* selection is a pure argmax over
-    # "how much does ablating this destroy refusal", which happily picks the direction that
-    # destroys the MODEL -- a lobotomised model emits no refusal token either. The first
-    # behavioral run exposed this: ablated generations came back as EMPTY STRINGS, which the
-    # substring judge scored as "complied", i.e. a fake 100% jailbreak.
-    kl_threshold: float = 0.1        # max KL on harmless prompts after ablation
-    induce_threshold: float = 0.0    # min refusal on harmless after ADDING the direction
-    # Negative control: K norm-matched RANDOM directions through the identical sweep.
-    # Rules out "later-stage models are just more perturbable" as the reason peak strength
-    # rises across stages. If the control curve climbs too, the headline finding is dead.
-    n_control: int = 3
-    # Behavioral axis (--behavioral): greedy generation length for substring refusal matching.
-    # 48 comfortably covers Arditi's refusal prefixes without paying for long completions.
+    prune_layer_pct: float = 0.20   # O-40: last 20% of layers excluded from l* selection
+    # Arditi's other two selection criteria (values verified in E01, which reproduced his
+    # (pos=-5, layer=12) exactly). kl_threshold is load-bearing: without it, l* selection is
+    # an argmax over "how much does ablating this destroy refusal", which happily picks the
+    # direction that destroys the MODEL. O-50: this bound gates ABLATION only — applying it
+    # to ADDITION reported "no induction" everywhere, including the cell that had to succeed.
+    kl_threshold: float = 0.1
+    induce_threshold: float = 0.0
+    n_control: int = 3       # norm-matched random directions for the negative control
     gen_max_new_tokens: int = 48
-    # Behavioral n is DECOUPLED from n_val. The causal sweep costs n_pos*n_layers forward
-    # passes so n_val stays small, but a RATE at n=32 is quantised to 1/32=0.031 -- the first
-    # run put SFT's entire refusal rate on a single completion. Generation is cheap by
-    # comparison (2 passes), so use every harmful_val example available.
-    # 0 = use the whole held-out tail harmful_train[n_train:] (132 prompts, touched by
-    # neither direction fitting nor l* selection). harmful_val has only 39 and its head
-    # drives l*, so it is both too small and not fully clean for a behavioral rate.
-    n_behavioral: int = 0
-    n_sample_completions: int = 8    # how many to store per condition for eyeballing
-    # --- P1-E1 (probe_representation.py) ---
-    # Shuffled-label mean-diff directions used as the null band for cross-stage cosines.
-    # An analytic 1/sqrt(d) null would be far too narrow: activations occupy a much lower
-    # effective dimension than d=4096, so directions fit on noise are already correlated.
-    n_null: int = 16
-    # --- P1-E1b (transplant.py) ---
-    # Decoupled from n_val. The E02 causal sweep costs n_pos*n_layers forward passes so
-    # n_val stays at 32, but the transplant is only n_cells*n_coeffs passes, so it can
-    # afford a much larger harmless set -- and an induced-refusal MEAN over 32 prompts is
-    # noisier than the effect sizes being compared (base 1.4 vs random 1.2).
+    n_behavioral: int = 0    # 0 = the whole held-out tail harmful_train[n_train:]
+    n_sample_completions: int | None = None   # None = store every completion (O-44, O-51)
+    n_null: int = 16         # shuffled-label directions for the cosine null (see O-49)
+    # O-52: n=32 flipped a cell when raised to 256. Size n against the EFFECT being compared
+    # (base real 1.4 vs random 1.1), not against convenience.
     n_transplant: int = 256
     batch_size: int = 16
     seed: int = 42
     results_dir: str = "results"
     figures_dir: str = "results/figures"
 
+    @property
+    def stages(self) -> tuple[str, ...]:
+        return tuple(s for s, _ in self.checkpoints)
 
-DEFAULT = Config()
+    def path(self, stage: str, axis: str) -> str:
+        """results/{lineage}_{stage}_{axis}.npz — lineage-scoped so families never collide."""
+        return f"{self.results_dir}/{self.lineage}_{stage}_{axis}.npz"
+
+    def require_verified(self) -> None:
+        """Refuse to run an unverified lineage. O-42 made structural."""
+        lin = LINEAGES[self.lineage]
+        if lin.verified:
+            return
+        missing = [n for n, v in (("expected_refusal_id", lin.expected_refusal_id),
+                                  ("n_eoi", lin.n_eoi)) if v is None]
+        raise SystemExit(
+            f"lineage '{self.lineage}' is UNVERIFIED (missing: {', '.join(missing)}).\n"
+            f"  {lin.notes}\n\n"
+            f"  The refusal token and the end-of-instruction window do NOT transfer between\n"
+            f"  model families. Scoring the wrong token produces a clean-looking trend that\n"
+            f"  is pure noise (O-42). Before running anything on this lineage:\n"
+            f"    1. python diagnose_refusal_token.py --lineage {self.lineage} --stage "
+            f"{self.stages[-1]}\n"
+            f"       -> read the top-1 token id, set Lineage.expected_refusal_id in config.py\n"
+            f"    2. python verify_setup.py --lineage {self.lineage}\n"
+            f"       -> it reports the safe pinned n_eoi; set Lineage.n_eoi in config.py\n"
+            f"    3. confirm the chat template against the checkpoint's own tokenizer_config")
+
+
+def config_for(name: str, **overrides) -> Config:
+    if name not in LINEAGES:
+        raise SystemExit(f"unknown lineage {name!r}. known: {sorted(LINEAGES)}")
+    lin = LINEAGES[name]
+    return replace(Config(
+        lineage=lin.name, checkpoints=lin.checkpoints, template=lin.template,
+        refusal_token_piece=lin.refusal_token_piece,
+        expected_refusal_id=lin.expected_refusal_id, n_eoi=lin.n_eoi), **overrides)
+
+
+DEFAULT = config_for("zephyr")

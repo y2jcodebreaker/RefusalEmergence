@@ -26,7 +26,7 @@ import sys
 
 import numpy as np
 
-from config import DEFAULT
+from config import DEFAULT, config_for
 from refusal_substring import (REFUSAL_SUBSTRINGS, is_refusal, is_refusal_strict,
                                truncate_at_turn)
 
@@ -41,6 +41,9 @@ def fired(text: str) -> str | None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--lineage", default="zephyr",
+                    help="model family from config.LINEAGES "
+                         "(zephyr | olmo2 | tulu2)")
     ap.add_argument("--stage", required=True)
     ap.add_argument("--which", default="strict", choices=["strict", "fp", "all"],
                     help="strict: hits the strict judge keeps; fp: verbatim-yes/strict-no; "
@@ -48,8 +51,9 @@ def main() -> None:
     ap.add_argument("--condition", default="baseline", choices=["baseline", "ablated"])
     ap.add_argument("--out", default=None, help="write to a file instead of stdout")
     args = ap.parse_args()
+    cfg = config_for(args.lineage)
 
-    d = np.load(f"{DEFAULT.results_dir}/{args.stage}_refusal.npz", allow_pickle=True)
+    d = np.load(cfg.path(args.stage, "refusal"), allow_pickle=True)
     if "sample_completions" not in d:
         raise SystemExit(f"no completions stored for {args.stage} — "
                          f"run: python run_stage.py --stage {args.stage} --behavioral")

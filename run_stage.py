@@ -19,7 +19,7 @@ import random
 import numpy as np
 import torch
 
-from config import DEFAULT
+from config import DEFAULT, config_for
 from data import assert_available, load_instructions
 from refusal_direction import (eoi_len, get_mean_diff, norm_matched_random,
                                refusal_strength_curve, resolve_refusal_token)
@@ -128,7 +128,7 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
                     float(np.nanmax(res["bypass"])))
 
     os.makedirs(cfg.results_dir, exist_ok=True)
-    path = f"{cfg.results_dir}/{stage}_refusal.npz"
+    path = cfg.path(stage, "refusal")
 
     # np.savez rewrites the WHOLE file, so re-running one stage with fewer flags would
     # silently delete results from an earlier run (e.g. `--stage base` without --control
@@ -172,6 +172,9 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--lineage", default="zephyr",
+                    help="model family from config.LINEAGES "
+                         "(zephyr | olmo2 | tulu2)")
     ap.add_argument("--stage", required=True, help="stage name (base/sft/dpo) or 'all'")
     ap.add_argument("--control", action="store_true",
                     help="also run the norm-matched random-direction negative control")
@@ -180,8 +183,9 @@ def main() -> None:
     args = ap.parse_args()
     # Cheap checks first: a missing clone costs nothing to detect and a full weight
     # download to discover late (hit on a pod, 2026-09-13).
-    logger.info("data: %s", assert_available())
-    cfg = DEFAULT
+    cfg = config_for(args.lineage)
+    cfg.require_verified()          # conceptual blocker first ...
+    logger.info("data: %s", assert_available())   # ... then the cheap file check
     ckpts = dict(cfg.checkpoints)
     stages = list(ckpts) if args.stage == "all" else [args.stage]
     for s in stages:

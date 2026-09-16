@@ -6,6 +6,9 @@ __pycache__/
 # so the result is visible without a GPU (see results/figures/ and RESULTS.md).
 results/*.npz
 
-# Local execution history — see CONVENTIONS.md. Findings live in RESULTS.md.
-results/runs.jsonl
-results/RUNLOG.md
+# The run ledger IS the experimental record and is COMMITTED — it answers "which code
+# produced this number, when, on what hardware", and a ledger that dies with the pod
+# answers nothing. Small, append-only text; merge conflicts here are expected and are
+# resolved by keeping BOTH sides (two machines ran two experiments).
+!results/runs.jsonl
+!results/RUNLOG.md

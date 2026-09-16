@@ -82,8 +82,19 @@ it is how "which version produced this number?" becomes unanswerable.
 A `⚠️ DIRTY WORKING TREE` marker means the commit does **not** identify the code that ran.
 Treat numbers from a dirty run as provisional and re-run from a clean tree before reporting.
 
-Both files are gitignored: they are a local execution history, not shared state. Findings
-worth keeping go to `RESULTS.md` and to the vault.
+**Both files are COMMITTED.** They are the experimental record, not scratch: they answer
+"which commit produced this number, when, on what GPU". An earlier version gitignored them,
+which meant the record died with the compute instance — the opposite of the point. They are
+small append-only text; a merge conflict means two machines ran two experiments, and the
+resolution is to keep **both** sides.
+
+Raw `.npz` sweeps stay ignored (tens of MB, regenerable from the scripts). Archive them
+before destroying an instance:
+
+```bash
+tar czf results-$(date +%F).tgz results/          # ~80 MB
+# then download it — the sweeps cost GPU time to regenerate, the ledger cannot be regenerated
+```
 
 ## Verification before GPU time
 

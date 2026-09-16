@@ -21,7 +21,7 @@ shuffled-label null (is it the same axis the aligned model uses?).
 from __future__ import annotations
 
 import logging
-from typing import List, Tuple
+from typing import List
 
 import numpy as np
 import torch

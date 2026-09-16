@@ -13,6 +13,30 @@ from data import load_instructions, splits_dir
 from refusal_direction import refusal_score, select_l_star
 
 
+def test_no_undefined_names() -> None:
+    """Static check for undefined names — py_compile does NOT catch these.
+
+    transplant.py referenced `sources`, a local of main(), from inside run_one(). It
+    compiled, imported, loaded a 7B model and ran a nine-cell sweep, then died with
+    NameError on the save line — after the GPU time was spent. A two-second static pass
+    would have caught it. Skipped (not failed) when ruff is absent, so the suite still
+    runs anywhere.
+    """
+    import pathlib as _pl
+    import subprocess
+    import sys as _sys
+
+    files = sorted(str(f) for f in _pl.Path(__file__).resolve().parent.glob("*.py"))
+    r = subprocess.run([_sys.executable, "-m", "ruff", "check", "--select", "F821,F811",
+                        "--no-cache", "--quiet", *files],
+                       capture_output=True, text=True)
+    if r.returncode == 2 and "No module named" in (r.stderr or ""):
+        print("  undefined names: SKIPPED (pip install ruff to enable)")
+        return
+    assert r.returncode == 0, f"undefined/redefined names:\n{r.stdout}{r.stderr}"
+    print(f"  undefined names: none across {len(files)} modules — OK")
+
+
 def test_data_loads():
     if splits_dir() is None:
         # The other checks are pure logic and need no data, so a missing clone should not
@@ -81,6 +105,7 @@ def test_aggregate_shapes():
 
 if __name__ == "__main__":
     print("refusal-emergence smoke test (no LLM):")
+    test_no_undefined_names()
     test_data_loads()
     test_refusal_score()
     test_select_l_star()

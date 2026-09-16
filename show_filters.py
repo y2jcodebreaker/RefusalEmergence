@@ -20,7 +20,7 @@ import glob
 
 import numpy as np
 
-from config import DEFAULT, config_for
+from config import config_for
 
 
 def main() -> None:

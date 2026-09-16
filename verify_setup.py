@@ -32,7 +32,7 @@ except ImportError:
     AutoTokenizer = None
     _MISSING.append("transformers")
 
-from config import DEFAULT, LINEAGES, config_for
+from config import LINEAGES, config_for
 
 try:
     from refusal_direction import eoi_len, resolve_refusal_token
@@ -230,11 +230,11 @@ def main() -> int:
         rec = min(eois.values())
         print(f"\n  n_eoi is NOT YET PINNED for lineage '{cfg.lineage}'.")
         print(f"  RECOMMENDED: n_eoi={rec}")
-        print(f"    = min(derived) across the lineage's checkpoints, so every stage gets the\n"
-              f"      SAME position window. Where the derived length is consistent (as here),\n"
-              f"      that is the FULL window and matches Arditi's use of all eoi positions.\n"
-              f"      Where it differs, pin below the shortest -- Zephyr derives 9 (base) vs\n"
-              f"      10 (SFT/DPO), so it is pinned at 5.")
+        print("    = min(derived) across the lineage's checkpoints, so every stage gets the\n"
+              "      SAME position window. Where the derived length is consistent (as here),\n"
+              "      that is the FULL window and matches Arditi's use of all eoi positions.\n"
+              "      Where it differs, pin below the shortest -- Zephyr derives 9 (base) vs\n"
+              "      10 (SFT/DPO), so it is pinned at 5.")
         print(f"\n  Set Lineage.n_eoi={rec} for '{cfg.lineage}' in config.py, then re-run.")
         print("\nCHECKS INCOMPLETE (n_eoi unpinned)")
         return 1

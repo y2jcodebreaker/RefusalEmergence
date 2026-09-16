@@ -23,7 +23,7 @@ import logging
 
 import torch
 
-from config import DEFAULT, config_for
+from config import config_for
 from data import assert_available, load_instructions
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

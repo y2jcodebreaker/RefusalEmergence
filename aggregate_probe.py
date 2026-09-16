@@ -21,7 +21,7 @@ import logging
 
 import numpy as np
 
-from config import DEFAULT, config_for
+from config import config_for
 from probes import layer_cosines
 from runlog import RunRecord
 

@@ -283,7 +283,6 @@ def main() -> int:
 
 def test_transplant() -> None:
     """P1-E1b: direction loading, norm matching, and the sweep bookkeeping."""
-    import numpy as np
     import torch
     import transplant as T
 

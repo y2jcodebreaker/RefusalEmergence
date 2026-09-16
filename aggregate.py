@@ -15,7 +15,7 @@ import os
 
 import numpy as np
 
-from config import DEFAULT, config_for
+from config import config_for
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("aggregate")

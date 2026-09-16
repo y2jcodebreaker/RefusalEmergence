@@ -26,7 +26,7 @@ import sys
 
 import numpy as np
 
-from config import DEFAULT, config_for
+from config import config_for
 from refusal_substring import (REFUSAL_SUBSTRINGS, is_refusal, is_refusal_strict,
                                truncate_at_turn)
 

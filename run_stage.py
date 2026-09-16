@@ -19,7 +19,7 @@ import random
 import numpy as np
 import torch
 
-from config import DEFAULT, config_for
+from config import config_for
 from data import assert_available, load_instructions
 from refusal_direction import (eoi_len, get_mean_diff, norm_matched_random,
                                refusal_strength_curve, resolve_refusal_token)

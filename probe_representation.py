@@ -34,7 +34,7 @@ import os
 import numpy as np
 import torch
 
-from config import DEFAULT, config_for
+from config import config_for
 from data import assert_available, load_instructions
 from probes import (cache_activations, length_baseline, logistic_accuracy,
                     mass_mean_accuracy, mass_mean_direction, null_directions)

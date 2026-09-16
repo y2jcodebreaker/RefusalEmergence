@@ -47,7 +47,7 @@ import os
 import numpy as np
 import torch
 
-from config import DEFAULT, config_for
+from config import config_for
 from data import assert_available, load_instructions
 from refusal_direction import (_addition_handles, _last_logits, _mean_refusal, kl_last,
                                resolve_refusal_token)
@@ -110,7 +110,7 @@ def load_source_directions(cfg, sources, unit_norm: bool = False) -> dict[tuple[
             # comparable across sources. Unit-normalising makes the coefficient the INJECTED
             # NORM, which is. Changes what the numbers mean -- report which mode was used.
             v = v / (np.linalg.norm(v) + 1e-8)
-        out[(stage, layer)] = v
+        out[(stage, layer, pos_idx)] = v
     return out
 
 
@@ -150,7 +150,7 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
 
     gen = torch.Generator().manual_seed(cfg.seed)
     records = []
-    for (src, layer), vec in srcs.items():
+    for (src, layer, _pos), vec in srcs.items():
         d = torch.from_numpy(vec).to(model.device)
         for kind, direction in (("direction", d),
                                 ("random", _norm_matched(d, gen))):
@@ -171,11 +171,11 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
     path = cfg.path(stage, "transplant")
     np.savez(path, stage=np.array(stage), model_id=np.array(model_id), cells=meta, sweep=arr,
              coeffs=np.array(COEFFS), baseline_harmless_refusal=np.array(baseline),
-             sources=np.array([f"{a}|{b}|{c}" for a, b, c in sources]),
+             sources=np.array([f"{a}|{b}|{c}" for a, b, c in srcs]),
              lineage=np.array(cfg.lineage))
     logger.info("[%s] saved %s", stage, path)
 
-    for (src, layer) in srcs:
+    for (src, layer, _pos) in srcs:
         for kind in ("direction", "random"):
             sel = [r for r in records if r[0] == src and r[2] == kind]
             best = max(sel, key=lambda r: r[4])
@@ -185,7 +185,7 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
                        first_coeff=(min(crossing) if crossing else None),
                        max_induced=round(best[4], 4), coeff_at_max=best[3],
                        kl_at_max=round(best[5], 3),
-                       dir_norm=round(float(np.linalg.norm(srcs[(src, layer)])), 2),
+                       dir_norm=round(float(np.linalg.norm(srcs[(src, layer, _pos)])), 2),
                        baseline_harmless=round(baseline, 4))
     del model
     torch.cuda.empty_cache()
@@ -214,7 +214,8 @@ def main() -> None:
     logger.info("direction scaling: %s", "UNIT-NORM (coeff = injected norm)" if args.unit_norm
                 else "RAW (Arditi default; coeff not comparable across sources)")
     logger.info("source directions: %s",
-                [f"{s}@L{l} norm={np.linalg.norm(v):.1f}" for (s, l), v in srcs.items()])
+                [f"{s}@L{l}/p{p} norm={np.linalg.norm(v):.1f}"
+                 for (s, l, p), v in srcs.items()])
     if not args.unit_norm:
         logger.info("NOTE: norms differ across checkpoints, so a given coefficient is NOT "
                     "comparable across sources — read the sweep, not a single coeff. "

@@ -171,6 +171,32 @@ def main() -> int:
     check("batching is consistent (batch_size 2 vs 3 agree)",
           torch.allclose(acts, cache_activations(fm, ft, ["a", "b", "c"], "{instruction}", 3, 3)))
 
+    print("\n[unverified lineage handling]")
+    from config import LINEAGES, Lineage, config_for
+    # REGRESSION (2026-09-16): verify_setup crashed with TypeError comparing None > int on a
+    # lineage whose n_eoi was unpinned -- the exact case it exists to resolve.
+    fake = Lineage(name="t", checkpoints=(("a", "m"),), template="x{instruction}y",
+                   refusal_token_piece="I", expected_refusal_id=None, n_eoi=None)
+    check("a lineage missing everything is not 'verified'", not fake.verified)
+    check("template counts toward verification",
+          not Lineage(name="t", checkpoints=(("a", "m"),), template=None,
+                      refusal_token_piece="I", expected_refusal_id=1, n_eoi=1).verified)
+    for name in LINEAGES:
+        c = config_for(name)
+        if LINEAGES[name].verified:
+            c.require_verified()          # must not raise
+        else:
+            try:
+                c.require_verified()
+                check(f"{name} should refuse to run", False)
+            except SystemExit as e:
+                check(f"{name} refuses with actionable text",
+                      "diagnose_refusal_token" in str(e) and "verify_setup" in str(e))
+    check("zephyr and olmo2 are both verified and runnable",
+          LINEAGES["zephyr"].verified and LINEAGES["olmo2"].verified)
+    check("their windows differ by design (5 vs 6), each constant within its lineage",
+          LINEAGES["zephyr"].n_eoi == 5 and LINEAGES["olmo2"].n_eoi == 6)
+
     print("\n[run ledger]")
     from runlog import RunRecord, env_state, git_state
     cwd = os.getcwd()

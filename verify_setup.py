@@ -173,7 +173,22 @@ def main() -> int:
     else:
         print(f"OK  shared vocab size {next(iter(vocabs.values()))}")
 
-    print(f"\nNOTE tokenizer-derived eoi_len differs by stage: {eois}  <-- why n_eoi is PINNED")
+    spread = "differs by stage" if len(set(eois.values())) > 1 else "is CONSISTENT across stages"
+    print(f"\nNOTE tokenizer-derived eoi_len {spread}: {eois}")
+    if cfg.n_eoi is None:
+        # This script exists to produce this number. Crashing on the None it is meant to
+        # fill in was the one failure mode it must not have.
+        rec = min(eois.values())
+        print(f"\n  n_eoi is NOT YET PINNED for lineage '{cfg.lineage}'.")
+        print(f"  RECOMMENDED: n_eoi={rec}")
+        print(f"    = min(derived) across the lineage's checkpoints, so every stage gets the\n"
+              f"      SAME position window. Where the derived length is consistent (as here),\n"
+              f"      that is the FULL window and matches Arditi's use of all eoi positions.\n"
+              f"      Where it differs, pin below the shortest -- Zephyr derives 9 (base) vs\n"
+              f"      10 (SFT/DPO), so it is pinned at 5.")
+        print(f"\n  Set Lineage.n_eoi={rec} for '{cfg.lineage}' in config.py, then re-run.")
+        print("\nCHECKS INCOMPLETE (n_eoi unpinned)")
+        return 1
     if cfg.n_eoi > min(eois.values()):
         print(f"FAIL: pinned n_eoi={cfg.n_eoi} exceeds shortest derived {min(eois.values())}")
         ok = False

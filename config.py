@@ -107,7 +107,13 @@ LINEAGES: dict[str, Lineage] = {
         # Harmless control p(40)=0.0046 -> a 205x contrast (Zephyr's was 135x). The bare-vs-
         # space-prefixed trap recurs on a completely different tokenizer, with different ids.
         expected_refusal_id=40,
-        n_eoi=None,                 # verify_setup.py --lineage olmo2
+        # MEASURED 2026-09-16 (verify_setup.py): derived eoi_len is 6 for ALL FOUR
+        # checkpoints -- no divergence, unlike Zephyr's 9 (base) vs 10 (SFT/DPO). So 6 is
+        # the FULL window and matches Arditi's use of every eoi position; no need to pin
+        # below it. n_eoi differs from Zephyr's 5 by design: each lineage holds its own
+        # window constant across its stages, which is what the within-lineage comparison
+        # needs. Cross-lineage we compare conclusions, not raw scores.
+        n_eoi=6,
         notes="The fully public 4-point pipeline (base -> SFT -> DPO -> RLVR) with GENUINE "
               "safety training — post-trained on an OLMo variant of Tulu 3. Preferred over "
               "Olmo 3 as the first cross-lineage run because Olmo2ForCausalLM has been "

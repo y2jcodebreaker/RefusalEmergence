@@ -148,17 +148,32 @@ def main() -> int:
 
     for stage, mid in cfg.checkpoints:
         tok = AutoTokenizer.from_pretrained(mid)
+        tpl, want_id, want_neoi, is_ov = cfg.regime(stage)
+        derived = eoi_len(tok, tpl)
+        vocabs[stage] = len(tok)
+        # A stage on a regime override is deliberately NOT format-matched to the others, so
+        # it is excluded from the cross-stage token/window agreement checks below and its
+        # own window is validated against its OWN template.
+        if is_ov:
+            print(f"{stage:5s} vocab={len(tok)} OVERRIDE tok=[{want_id}] "
+                  f"decoded={tok.decode([want_id])!r} n_eoi={want_neoi} "
+                  f"derived={derived} template={tpl!r}")
+            if want_neoi > derived:
+                print(f"  FAIL [{stage}]: override n_eoi={want_neoi} exceeds this template's "
+                      f"derived length {derived} — the window would reach back into the "
+                      f"INSTRUCTION text, so positions would not be end-of-instruction at all")
+                ok = False
+            continue
         try:
-            tid = resolve_refusal_token(tok, cfg.refusal_token_piece, cfg.expected_refusal_id)
+            tid = resolve_refusal_token(tok, cfg.refusal_token_piece, want_id)
         except ValueError as e:
             print(f"  FAIL [{stage}]: {e}")
             ok = False
             continue
         ref_ids[stage] = [tid]
-        vocabs[stage] = len(tok)
-        eois[stage] = eoi_len(tok, cfg.template)
+        eois[stage] = derived
         print(f"{stage:5s} vocab={len(tok)} refusal{cfg.refusal_token_piece!r}=[{tid}] "
-              f"decoded={tok.decode([tid])!r} eoi_len(derived)={eois[stage]}")
+              f"decoded={tok.decode([tid])!r} eoi_len(derived)={derived}")
 
     uniq = {tuple(v) for v in ref_ids.values()}
     if len(uniq) != 1:

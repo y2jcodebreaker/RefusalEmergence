@@ -123,10 +123,18 @@ def sweep_cell(model, tok, direction: torch.Tensor, layer: int, harmless, templa
 def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
     set_seed(cfg.seed)
     model, tok = load_model(model_id, cfg.dtype)
-    refusal_toks = [resolve_refusal_token(tok, cfg.refusal_token_piece, cfg.expected_refusal_id)]
+    template, want_id, _n, is_ov = cfg.regime(stage)
+    if is_ov:
+        logger.warning("[%s] REGIME OVERRIDE: template=%r token=%d — this TARGET is evaluated "
+                       "in its own regime; induced-refusal values do not compare across the "
+                       "boundary, but 'does it cross threshold at all' does.",
+                       stage, template, want_id)
+        refusal_toks = [want_id]
+    else:
+        refusal_toks = [resolve_refusal_token(tok, cfg.refusal_token_piece, want_id)]
     harmless = load_instructions("harmless_val")[: cfg.n_transplant]
 
-    base_lg = _last_logits(model, tok, harmless, cfg.template, cfg.batch_size)
+    base_lg = _last_logits(model, tok, harmless, template, cfg.batch_size)
     baseline = _mean_refusal(base_lg, refusal_toks)
     logger.info("[%s] baseline refusal on HARMLESS = %.3f over n=%d (induction must beat %.2f)",
                 stage, baseline, len(harmless), cfg.induce_threshold)
@@ -137,7 +145,7 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
         d = torch.from_numpy(vec).to(model.device)
         for kind, direction in (("direction", d),
                                 ("random", _norm_matched(d, gen))):
-            for c, ref, kl in sweep_cell(model, tok, direction, layer, harmless, cfg.template,
+            for c, ref, kl in sweep_cell(model, tok, direction, layer, harmless, template,
                                          refusal_toks, base_lg, cfg.batch_size):
                 records.append((src, layer, kind, c, ref, kl))
             last = records[-len(COEFFS):]      # exactly this cell's coefficient sweep

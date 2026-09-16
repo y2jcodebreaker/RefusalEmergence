@@ -63,6 +63,12 @@ def _splits(cfg):
 def run_one(stage: str, model_id: str, cfg, rec: RunRecord) -> None:
     set_seed(cfg.seed)
     model, tok = load_model(model_id, cfg.dtype)
+    template, _want_id, n_eoi_stage, is_ov = cfg.regime(stage)
+    if is_ov:
+        logger.warning("[%s] REGIME OVERRIDE: template=%r n_eoi=%d — activations come from a "
+                       "different prompt format than the other stages (O-56/O-57), so "
+                       "cross-stage cosines against this stage are NOT format-matched.",
+                       stage, template, n_eoi_stage)
     fit_pos, fit_neg, test_pos, test_neg = _splits(cfg)
     logger.info("[%s] fit %d/%d | test %d/%d (chance=%.3f)", stage, len(fit_pos), len(fit_neg),
                 len(test_pos), len(test_neg), len(test_pos) / (len(test_pos) + len(test_neg)))
@@ -71,7 +77,7 @@ def run_one(stage: str, model_id: str, cfg, rec: RunRecord) -> None:
     for name, prompts in (("fit_pos", fit_pos), ("fit_neg", fit_neg),
                           ("test_pos", test_pos), ("test_neg", test_neg)):
         logger.info("[%s] caching activations: %s (n=%d)", stage, name, len(prompts))
-        A[name] = cache_activations(model, tok, prompts, cfg.template, cfg.n_eoi,
+        A[name] = cache_activations(model, tok, prompts, template, n_eoi_stage,
                                     cfg.batch_size).numpy()
     n_pos, n_layers = A["fit_pos"].shape[1], A["fit_pos"].shape[2]
 
@@ -95,7 +101,7 @@ def run_one(stage: str, model_id: str, cfg, rec: RunRecord) -> None:
 
     # token-length-only floor, and the layer-0 (embedding) surface-feature control
     def toklen(xs):
-        return np.array([len(tok.encode(cfg.template.format(instruction=i))) for i in xs])
+        return np.array([len(tok.encode(template.format(instruction=i))) for i in xs])
     len_acc = length_baseline(toklen(fit_pos), toklen(fit_neg), toklen(test_pos), toklen(test_neg))
 
     best_mm = np.nanmax(acc_mm, axis=0)

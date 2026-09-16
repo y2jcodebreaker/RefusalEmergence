@@ -65,13 +65,23 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
             behavioral: bool = False, rec=None) -> None:
     set_seed(cfg.seed)
     model, tok = load_model(model_id, cfg.dtype)
-    refusal_toks = [resolve_refusal_token(tok, cfg.refusal_token_piece, cfg.expected_refusal_id)]
+    template, want_id, n_eoi_stage, is_ov = cfg.regime(stage)
+    if is_ov:
+        # This stage is deliberately NOT format-matched to the rest of its lineage, because
+        # it is outside a usable operating regime under the lineage template (O-56/O-57).
+        # Raw scores do not cross that boundary; the within-stage steerability question does.
+        logger.warning("[%s] REGIME OVERRIDE: template=%r token=%d n_eoi=%d — this stage is "
+                       "NOT prompt-format-matched to the others; report it as such.",
+                       stage, template, want_id, n_eoi_stage)
+        refusal_toks = [want_id]
+    else:
+        refusal_toks = [resolve_refusal_token(tok, cfg.refusal_token_piece, want_id)]
     # PINNED (not tokenizer-derived): eoi_len differs 9 (base) vs 10 (SFT/DPO) because the
     # Zephyr tokenizers insert a phantom '' token. A stage-varying window would invalidate
     # the cross-stage comparison. See config.N_EOI_FIXED.
-    n_eoi = cfg.n_eoi
+    n_eoi = n_eoi_stage
     logger.info("[%s] refusal_tok=%s (%r) | pinned n_eoi=%d | tokenizer-derived would be %d",
-                stage, refusal_toks, tok.decode(refusal_toks), n_eoi, eoi_len(tok, cfg.template))
+                stage, refusal_toks, tok.decode(refusal_toks), n_eoi, eoi_len(tok, template))
 
     harmful_tr = load_instructions("harmful_train")[: cfg.n_train]
     harmless_tr = load_instructions("harmless_train")[: cfg.n_train]
@@ -79,8 +89,8 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
     harmless_val = load_instructions("harmless_val")[: cfg.n_val]   # KL side-effect check
 
     logger.info("[%s] extracting directions (%d eoi positions)", stage, n_eoi)
-    directions = get_mean_diff(model, tok, harmful_tr, harmless_tr, cfg.template, n_eoi, cfg.batch_size)
-    res = refusal_strength_curve(model, tok, directions, harmful_val, cfg.template,
+    directions = get_mean_diff(model, tok, harmful_tr, harmless_tr, template, n_eoi, cfg.batch_size)
+    res = refusal_strength_curve(model, tok, directions, harmful_val, template,
                                  refusal_toks, cfg.prune_layer_pct, cfg.batch_size,
                                  harmless_val=harmless_val, kl_threshold=cfg.kl_threshold,
                                  induce_threshold=cfg.induce_threshold, filtered=True)
@@ -110,7 +120,7 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
                     f"(pos={p - n_eoi}, layer={res['l_star']})" if valid_direction
                     else "BASELINE ONLY (no valid direction)", len(beh_prompts))
         b_rate, a_rate, samples = behavioral_rates(
-            model, tok, beh_prompts, cfg.template, abl_dir,
+            model, tok, beh_prompts, template, abl_dir,
             cfg.gen_max_new_tokens, cfg.batch_size, n_samples=None)
         extra["n_behavioral"] = np.array(len(beh_prompts))
         extra["substring_baseline_rate"] = np.array(b_rate)
@@ -126,7 +136,7 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
         for k in range(cfg.n_control):
             logger.info("[%s] control sweep %d/%d (norm-matched random)", stage, k + 1, cfg.n_control)
             rand_dirs = norm_matched_random(directions, gen)
-            curves.append(refusal_strength_curve(model, tok, rand_dirs, harmful_val, cfg.template,
+            curves.append(refusal_strength_curve(model, tok, rand_dirs, harmful_val, template,
                                                  refusal_toks, cfg.prune_layer_pct,
                                                  cfg.batch_size, filtered=False)["bypass"])
         extra["control_bypass"] = np.mean(curves, axis=0)

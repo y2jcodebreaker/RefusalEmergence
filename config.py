@@ -50,6 +50,24 @@ class Lineage:
     # None => NOT YET VERIFIED. verify_setup.py reports the safe pinned value per lineage;
     # it must be <= the shortest tokenizer-derived eoi_len across the lineage's checkpoints.
     n_eoi: int | None
+    # PER-STAGE REGIME OVERRIDE: {stage: (template, refusal_token_id, n_eoi)}.
+    #
+    # Needed because a checkpoint can be OUTSIDE a usable operating regime under the
+    # lineage's chat template. base OLMo 2 degenerates into verbatim prompt echo under
+    # '<|user|>...<|assistant|>' -- it produces no judge-able text at all -- but under a
+    # plain 'User:/Assistant:' format it is fully fluent and COMPLIES with harmful requests
+    # (O-56/O-57). A model that cannot be prompted cannot be asked whether it can be steered.
+    #
+    # The refusal token changes WITH the template, which is the O-42 trap inverted: after
+    # '<|assistant|>\n' the model emits bare 'I' (40); after 'Assistant:' it emits
+    # space-prefixed ' I' (358), and 40 there has p ~= 1e-6. So expected_refusal_id is a
+    # function of (family, TEMPLATE), not family alone.
+    #
+    # Cost, stated not hidden: a stage on an override is NOT prompt-format-matched to the
+    # rest of its lineage, so raw scores are not comparable across that boundary. What
+    # remains comparable is the WITHIN-STAGE question -- "can this model be steered into
+    # refusing at all?" -- which is the question the coupling claim actually rests on.
+    stage_regime: dict[str, tuple[str, int, int]] | None = None
     notes: str = ""
 
     @property
@@ -114,6 +132,14 @@ LINEAGES: dict[str, Lineage] = {
         # window constant across its stages, which is what the within-lineage comparison
         # needs. Cross-lineage we compare conclusions, not raw scores.
         n_eoi=6,
+        # base is evaluated under a PLAIN template, in its own valid regime (O-56/O-57).
+        # Verified 2026-09-16: fluent, on-task, and complies with all three sampled harmful
+        # prompts, so its 0.000 refusal rate is real rather than an artefact of echoing.
+        # Token 358 (' I', rank 5) not 40 ('I', rank >2000) -- the token follows the template.
+        # n_eoi=3: the plain suffix '\nAssistant:' is exactly 3 tokens ['Ċ','Assistant',':'].
+        # 4 would have reached back into the instruction text itself — caught by
+        # verify_setup's per-regime window check, not by reading the template.
+        stage_regime={"base": ("User: {instruction}\nAssistant:", 358, 3)},
         notes="The fully public 4-point pipeline (base -> SFT -> DPO -> RLVR) with GENUINE "
               "safety training — post-trained on an OLMo variant of Tulu 3. Preferred over "
               "Olmo 3 as the first cross-lineage run because Olmo2ForCausalLM has been "
@@ -199,6 +225,16 @@ class Config:
     @property
     def stages(self) -> tuple[str, ...]:
         return tuple(s for s, _ in self.checkpoints)
+
+    def regime(self, stage: str) -> tuple[str, int, int, bool]:
+        """(template, refusal_token_id, n_eoi, is_override) for one stage.
+
+        Returns the lineage defaults unless that stage has an explicit override, in which
+        case the caller MUST log that this stage is not format-matched to the others."""
+        ov = (LINEAGES[self.lineage].stage_regime or {}).get(stage)
+        if ov is None:
+            return self.template, self.expected_refusal_id, self.n_eoi, False
+        return ov[0], ov[1], ov[2], True
 
     def path(self, stage: str, axis: str) -> str:
         """results/{lineage}_{stage}_{axis}.npz — lineage-scoped so families never collide."""

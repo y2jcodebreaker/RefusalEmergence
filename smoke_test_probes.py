@@ -197,6 +197,25 @@ def main() -> int:
     check("their windows differ by design (5 vs 6), each constant within its lineage",
           LINEAGES["zephyr"].n_eoi == 5 and LINEAGES["olmo2"].n_eoi == 6)
 
+    print("\n[per-stage regime overrides]")
+    from transformers import AutoTokenizer as _AT
+    from refusal_direction import eoi_len as _eoi
+    for name in ("zephyr", "olmo2"):
+        c = config_for(name)
+        for st in c.stages:
+            tpl, tid, neoi, ov = c.regime(st)
+            check(f"{name}/{st}: window fits its own template",
+                  neoi <= _eoi(_AT.from_pretrained(dict(c.checkpoints)[st]), tpl),
+                  f"n_eoi={neoi} template={tpl[-18:]!r}")
+    zc = config_for("zephyr")
+    check("zephyr has NO overrides (its base is fluent under the chat template)",
+          not any(zc.regime(s)[3] for s in zc.stages))
+    oc = config_for("olmo2")
+    check("olmo2 overrides base only", [s for s in oc.stages if oc.regime(s)[3]] == ["base"])
+    check("the override token differs from the lineage token (it follows the TEMPLATE)",
+          oc.regime("base")[1] != oc.regime("sft")[1],
+          f"{oc.regime('base')[1]} vs {oc.regime('sft')[1]}")
+
     print("\n[run ledger]")
     from runlog import RunRecord, env_state, git_state
     cwd = os.getcwd()

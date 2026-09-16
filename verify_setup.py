@@ -97,6 +97,26 @@ def check_torch_backend() -> bool:
     return True
 
 
+def window_leaks(tok, template: str, n_eoi: int, prompts: list[str]) -> tuple[bool, int]:
+    """(leaks, largest_safe_n) — does the last n_eoi-token window vary with the prompt?
+
+    The window is supposed to hold only template tokens, so that positions are genuinely
+    "end of instruction" and a layer-0 probe has nothing to read. BPE breaks that silently:
+    if the suffix begins with '\n', it merges with the instruction's final character, so
+    '?\n' becomes one token and the window differs between prompts ending in '?' and not.
+    On OLMo 2 that let a layer-0 probe reach 0.644 instead of chance, because harmless
+    prompts (MMLU questions) end in '?' far more often than harmful imperatives. Reading the
+    template cannot reveal this; only tokenising real prompts can (O-58)."""
+    full = len(tok.encode(template.split("{instruction}")[-1], add_special_tokens=False))
+    safe = 0
+    for n in range(full, 0, -1):
+        if len({tuple(tok.encode(template.format(instruction=p),
+                                 add_special_tokens=False)[-n:]) for p in prompts}) == 1:
+            safe = n
+            break
+    return n_eoi > safe, safe
+
+
 def derive_template(cfg) -> str:
     """Render the aligned checkpoint's own chat_template for a one-turn prompt, and show it
     as the `template` string this repo wants (with {instruction} where the user text goes)."""
@@ -120,6 +140,9 @@ def derive_template(cfg) -> str:
             "    template=%r,%s\n" % (mid, stage, as_template, warn))
 
 
+_PROMPTS: list[str] = []
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lineage", default="zephyr",
@@ -137,8 +160,12 @@ def main() -> int:
     if LINEAGES[cfg.lineage].template is None:
         print(derive_template(cfg))
 
-    from data import splits_dir
+    from data import load_instructions, splits_dir
     sd = splits_dir()
+    global _PROMPTS
+    if sd is not None:
+        _PROMPTS = (load_instructions("harmful_train")[:40]
+                    + load_instructions("harmless_train")[:40])
     if sd is None:
         print("FAIL: Arditi harmful/harmless splits not found — set ARDITI_REPO "
               "(see data.py SEARCH for the paths tried)")
@@ -150,6 +177,13 @@ def main() -> int:
         tok = AutoTokenizer.from_pretrained(mid)
         tpl, want_id, want_neoi, is_ov = cfg.regime(stage)
         derived = eoi_len(tok, tpl)
+        if _PROMPTS:
+            leaks, safe = window_leaks(tok, tpl, want_neoi, _PROMPTS)
+            if leaks:
+                print(f"  FAIL [{stage}]: n_eoi={want_neoi} window VARIES with the prompt — "
+                      f"BPE merges the instruction's last character into it, so a layer-0 "
+                      f"probe can read surface text. Largest safe n_eoi here is {safe}.")
+                ok = False
         vocabs[stage] = len(tok)
         # A stage on a regime override is deliberately NOT format-matched to the others, so
         # it is excluded from the cross-stage token/window agreement checks below and its

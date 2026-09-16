@@ -79,9 +79,13 @@ def source_layers(cfg) -> list[tuple[str, int, int]]:
         l_star, pos_star = int(d["l_star"]), int(d["pos_star"])
         if l_star < 0:
             l_star = int(d["naive_l_star"])
-            pos_star = cfg.n_eoi - 1          # last eoi position; no validated pos*
-            logger.warning("[%s] no filtered l* — falling back to the unfiltered argmax L%d. "
-                           "This is NOT a validated refusal layer.", stage, l_star)
+            # The STAGE's own window, not the lineage default: a stage on a regime override
+            # has a different n_eoi (olmo2 base: 3, not 6), so cfg.n_eoi - 1 indexed past the
+            # end of its directions array. IndexError, 2026-09-16.
+            pos_star = cfg.regime(stage)[2] - 1
+            logger.warning("[%s] no filtered l* — falling back to the unfiltered argmax L%d, "
+                           "pos %d. This is NOT a validated refusal layer.",
+                           stage, l_star, pos_star)
         out.append((stage, l_star, pos_star))
     return out
 
@@ -95,6 +99,11 @@ def load_source_directions(cfg, sources, unit_norm: bool = False) -> dict[tuple[
         if not os.path.exists(path):
             raise SystemExit(f"missing {path} — run probe_representation.py --stage all first")
         d = np.load(path, allow_pickle=True)["directions"]
+        if not (0 <= pos_idx < d.shape[0] and 0 <= layer < d.shape[1]):
+            raise SystemExit(
+                f"[{stage}] (pos={pos_idx}, layer={layer}) is outside its directions array "
+                f"{d.shape}. A stage on a regime override has its own n_eoi — check "
+                f"cfg.regime('{stage}') against the array this probe run produced.")
         v = d[pos_idx, layer].astype(np.float32)
         if unit_norm:
             # Norms differ 1.1 / 7.4 / 4.4 across base/sft/dpo, so a raw coefficient is not

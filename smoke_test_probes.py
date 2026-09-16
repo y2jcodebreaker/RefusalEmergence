@@ -216,6 +216,32 @@ def main() -> int:
           oc.regime("base")[1] != oc.regime("sft")[1],
           f"{oc.regime('base')[1]} vs {oc.regime('sft')[1]}")
 
+    print("\n[eoi window leakage — O-58]")
+    from verify_setup import window_leaks as _wl
+    class FakeT:
+        """Minimal BPE-ish tokenizer that MERGES '?' with a following newline, the exact
+        behaviour that let a layer-0 probe read surface text on OLMo 2."""
+        def encode(self, text, add_special_tokens=False):
+            out, i = [], 0
+            while i < len(text):
+                if text[i] == "?" and text[i + 1:i + 2] == "\n":
+                    out.append(999); i += 2          # merged '?\n'
+                else:
+                    out.append(ord(text[i])); i += 1
+            return out
+        def convert_ids_to_tokens(self, ids): return [str(i) for i in ids]
+    ft = FakeT()
+    tpl = "{instruction}\nA:"
+    q = ["is this ok?", "and this?"]          # end with '?'
+    imp = ["do the thing", "make it happen"]  # do not
+    leaks3, safe3 = _wl(ft, tpl, 3, q + imp)
+    check("leak detected when the window absorbs the prompt's last char", leaks3,
+          f"n_eoi=3 leaks={leaks3}, largest safe={safe3}")
+    leaks_safe, _ = _wl(ft, tpl, safe3, q + imp)
+    check("the reported largest-safe window does not leak", not leaks_safe, f"n={safe3}")
+    check("mixed-ending prompts are what expose it — uniform endings hide it",
+          not _wl(ft, tpl, 3, q)[0] and not _wl(ft, tpl, 3, imp)[0])
+
     print("\n[run ledger]")
     from runlog import RunRecord, env_state, git_state
     cwd = os.getcwd()

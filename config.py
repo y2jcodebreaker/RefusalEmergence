@@ -125,21 +125,22 @@ LINEAGES: dict[str, Lineage] = {
         # Harmless control p(40)=0.0046 -> a 205x contrast (Zephyr's was 135x). The bare-vs-
         # space-prefixed trap recurs on a completely different tokenizer, with different ids.
         expected_refusal_id=40,
-        # MEASURED 2026-09-16 (verify_setup.py): derived eoi_len is 6 for ALL FOUR
-        # checkpoints -- no divergence, unlike Zephyr's 9 (base) vs 10 (SFT/DPO). So 6 is
-        # the FULL window and matches Arditi's use of every eoi position; no need to pin
-        # below it. n_eoi differs from Zephyr's 5 by design: each lineage holds its own
-        # window constant across its stages, which is what the within-lineage comparison
-        # needs. Cross-lineage we compare conclusions, not raw scores.
-        n_eoi=6,
+        # n_eoi=5, NOT the full derived 6. At 6 the window's first token is BPE-merged with
+        # the instruction's final character -- '?\n' becomes one token '?Ċ' -- so the window
+        # varies with the prompt and a layer-0 probe can read "does this end with a question
+        # mark?". Harmless prompts (MMLU questions) end in '?' far more often than harmful
+        # ones (imperatives), which is why the probe's L0 read 0.644 instead of chance.
+        # At 5 the window is ['<','|','assistant','|','>Ċ'], constant across all prompts.
+        # Zephyr escapes this because its suffix begins with '</s>', a special token that
+        # never merges. verify_setup now checks this automatically (O-58).
+        n_eoi=5,
         # base is evaluated under a PLAIN template, in its own valid regime (O-56/O-57).
         # Verified 2026-09-16: fluent, on-task, and complies with all three sampled harmful
         # prompts, so its 0.000 refusal rate is real rather than an artefact of echoing.
         # Token 358 (' I', rank 5) not 40 ('I', rank >2000) -- the token follows the template.
-        # n_eoi=3: the plain suffix '\nAssistant:' is exactly 3 tokens ['Ċ','Assistant',':'].
-        # 4 would have reached back into the instruction text itself — caught by
-        # verify_setup's per-regime window check, not by reading the template.
-        stage_regime={"base": ("User: {instruction}\nAssistant:", 358, 3)},
+        # n_eoi=2, not 3: same BPE-merge leak — at 3 the leading 'Ċ' absorbs the
+        # instruction's final character. ['Assistant',':'] is constant across all prompts.
+        stage_regime={"base": ("User: {instruction}\nAssistant:", 358, 2)},
         notes="The fully public 4-point pipeline (base -> SFT -> DPO -> RLVR) with GENUINE "
               "safety training — post-trained on an OLMo variant of Tulu 3. Preferred over "
               "Olmo 3 as the first cross-lineage run because Olmo2ForCausalLM has been "

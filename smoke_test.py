@@ -30,8 +30,11 @@ def test_no_undefined_names() -> None:
     r = subprocess.run([_sys.executable, "-m", "ruff", "check", "--select", "F821,F811",
                         "--no-cache", "--quiet", *files],
                        capture_output=True, text=True)
-    if r.returncode == 2 and "No module named" in (r.stderr or ""):
-        print("  undefined names: SKIPPED (pip install ruff to enable)")
+    # Key the skip on the MESSAGE, not the exit code: `python -m ruff` with ruff absent
+    # exits 1, the same code a real finding uses, so an exit-code guard turned "tool missing"
+    # into a failed assertion on a clean tree (hit on a pod, 2026-09-16).
+    if "No module named ruff" in (r.stderr or ""):
+        print("  undefined names: SKIPPED (pip install ruff to enable this check)")
         return
     assert r.returncode == 0, f"undefined/redefined names:\n{r.stdout}{r.stderr}"
     print(f"  undefined names: none across {len(files)} modules — OK")

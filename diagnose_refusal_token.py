@@ -103,6 +103,10 @@ def main() -> None:
                          "(zephyr | olmo2 | tulu2)")
     ap.add_argument("--stage", default="sft", help="stage name from config.checkpoints")
     ap.add_argument("--n", type=int, default=8, help="# harmful prompts to average over")
+    ap.add_argument("--template", default=None,
+                    help="override the lineage template (must contain {instruction}). Use to "
+                         "test whether a BASE model that degenerates under the chat format is "
+                         "coherent under a plain one — see O-56.")
     args = ap.parse_args()
 
     assert_available()               # before loading 15GB of weights
@@ -122,10 +126,17 @@ def main() -> None:
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
+    tpl = args.template or cfg.template
+    if args.template:
+        if "{instruction}" not in args.template:
+            raise SystemExit("--template must contain {instruction}")
+        logger.warning("TEMPLATE OVERRIDE %r — results are NOT comparable to runs using the "
+                       "lineage template. This is a diagnostic, not a config change.", tpl)
+
     harmful = load_instructions("harmful_val")[: args.n]
-    report(model, tok, harmful, cfg.template,
+    report(model, tok, harmful, tpl,
            f"[{cfg.lineage}/{args.stage}] HARMFUL / lineage template")
-    sys_tpl = with_system_turn(tok, cfg.template)
+    sys_tpl = None if args.template else with_system_turn(tok, cfg.template)
     if sys_tpl and sys_tpl != cfg.template:
         report(model, tok, harmful, sys_tpl,
                f"[{cfg.lineage}/{args.stage}] HARMFUL / template WITH system turn (derived)")
@@ -134,7 +145,7 @@ def main() -> None:
               f"distinct system-turn rendering)")
 
     harmless = load_instructions("harmless_val")[: args.n]
-    report(model, tok, harmless, cfg.template,
+    report(model, tok, harmless, tpl,
            f"[{cfg.lineage}/{args.stage}] HARMLESS / lineage template (should NOT refuse)")
 
     print(f"\n{'=' * 78}\nNEXT: set Lineage.expected_refusal_id for '{cfg.lineage}' in "

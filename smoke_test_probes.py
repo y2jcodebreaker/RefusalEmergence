@@ -194,8 +194,11 @@ def main() -> int:
                       "diagnose_refusal_token" in str(e) and "verify_setup" in str(e))
     check("zephyr and olmo2 are both verified and runnable",
           LINEAGES["zephyr"].verified and LINEAGES["olmo2"].verified)
-    check("their windows differ by design (5 vs 6), each constant within its lineage",
-          LINEAGES["zephyr"].n_eoi == 5 and LINEAGES["olmo2"].n_eoi == 6)
+    # Windows differ per lineage BY DESIGN — each is pinned to the largest value that is
+    # leak-free for its own template (O-58), not to a shared constant.
+    check("each lineage's window is pinned to its own leak-free maximum",
+          LINEAGES["zephyr"].n_eoi == 5 and LINEAGES["olmo2"].n_eoi == 5,
+          f'zephyr={LINEAGES["zephyr"].n_eoi} olmo2={LINEAGES["olmo2"].n_eoi}')
 
     print("\n[per-stage regime overrides]")
     from transformers import AutoTokenizer as _AT

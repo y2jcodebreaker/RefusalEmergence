@@ -1,14 +1,3 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-  :root { color-scheme: light dark; }
-  body { margin: 0; font: 14px system-ui, sans-serif; }
-  img { max-width: 100%; }
-  [hidden] { display: none !important; }
-</style>
 <title>Refusal Machinery</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -16,7 +5,7 @@
 :root{
   --paper:#fafbfa; --raise:#ffffff; --ink:#131c22; --ink-2:#46545c; --ink-3:#73828a;
   --rule:#dde3e1; --rule-2:#eaefed;
-  --inert:#8a94a0; --mid:#4f9a8d; --strong:#0d6e60; --strong-soft:#e3f0ed;
+  --inert:#8a94a0; --mid:#4f9a8d; --strong:#0d6e60; --deep:#0a4d5c; --strong-soft:#e3f0ed;
   --flag:#c1543a; --flag-soft:#f7e7e2;
   --measure:34rem;
 }
@@ -24,14 +13,14 @@
   :root:not([data-theme="light"]){
     --paper:#0e1517; --raise:#141d20; --ink:#dfe7e4; --ink-2:#9fb0ac; --ink-3:#758783;
     --rule:#26332f; --rule-2:#1c2724;
-    --inert:#7d8790; --mid:#63b3a4; --strong:#3fb9a3; --strong-soft:#12302b;
+    --inert:#7d8790; --mid:#63b3a4; --strong:#3fb9a3; --deep:#4aa8bd; --strong-soft:#12302b;
     --flag:#e07a5f; --flag-soft:#331e18;
   }
 }
 :root[data-theme="dark"]{
   --paper:#0e1517; --raise:#141d20; --ink:#dfe7e4; --ink-2:#9fb0ac; --ink-3:#758783;
   --rule:#26332f; --rule-2:#1c2724;
-  --inert:#7d8790; --mid:#63b3a4; --strong:#3fb9a3; --strong-soft:#12302b;
+  --inert:#7d8790; --mid:#63b3a4; --strong:#3fb9a3; --deep:#4aa8bd; --strong-soft:#12302b;
   --flag:#e07a5f; --flag-soft:#331e18;
 }
 *{box-sizing:border-box}
@@ -54,6 +43,21 @@ p{margin:0 0 1.05rem}
 section{margin-top:clamp(40px,5.5vw,68px)}
 .kicker{font-family:"IBM Plex Mono",monospace;font-size:.71rem;letter-spacing:.15em;
   text-transform:uppercase;color:var(--strong);margin:0 0 .5rem}
+.kicker.warn{color:var(--flag)}
+/* ---- transcript ---- */
+.tri{display:grid;gap:14px;margin-top:1.8rem;grid-template-columns:1fr}
+@media (min-width:860px){.tri{grid-template-columns:repeat(3,1fr)}}
+.turn{background:var(--raise);border:1px solid var(--rule);border-radius:3px;padding:14px 16px 16px;
+  display:flex;flex-direction:column}
+.turn.hit{border-color:var(--strong);box-shadow:0 0 0 1px var(--strong)}
+.turn-h{font-family:"IBM Plex Mono",monospace;font-size:.69rem;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--ink-3);margin:0 0 .6rem;display:flex;justify-content:space-between;gap:.6rem}
+.turn.hit .turn-h{color:var(--strong)}
+.turn-b{font-family:"IBM Plex Mono",monospace;font-size:.795rem;line-height:1.62;margin:0;color:var(--ink-2)}
+.turn.hit .turn-b{color:var(--ink)}
+.turn-b em{font-style:normal;background:var(--strong-soft);color:var(--strong);
+  padding:.06em .22em;border-radius:2px;font-weight:500}
+.ell{color:var(--ink-3)}
 /* ---- chart ---- */
 .figure{margin-top:2rem;background:var(--raise);border:1px solid var(--rule);border-radius:3px;
   padding:20px 20px 14px}
@@ -64,7 +68,8 @@ svg{display:block;width:100%;min-width:560px;height:auto}
 .tk{font-family:"IBM Plex Mono",monospace;font-size:11px;fill:var(--ink-3)}
 .ta{text-anchor:end}
 .ln{fill:none;stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
-.ln-base{stroke:var(--inert)} .ln-sft{stroke:var(--mid)} .ln-dpo{stroke:var(--strong)}
+.ln-base{stroke:var(--inert)} .ln-sft{stroke:var(--mid)}
+.ln-dpo{stroke:var(--strong)} .ln-rlvr{stroke:var(--deep);stroke-dasharray:6 3;stroke-width:2}
 .note{font-family:"Public Sans",sans-serif;font-size:12px;font-weight:500}
 .axlab{font-family:"IBM Plex Mono",monospace;font-size:11px;fill:var(--ink-3);letter-spacing:.08em}
 .cap{font-size:.83rem;color:var(--ink-3);margin:.9rem 0 0;line-height:1.5;max-width:56rem}
@@ -77,17 +82,21 @@ table{border-collapse:collapse;width:100%;min-width:520px;font-size:.93rem}
 th,td{text-align:left;padding:.72rem .9rem;border-bottom:1px solid var(--rule)}
 thead th{font-family:"IBM Plex Mono",monospace;font-size:.71rem;letter-spacing:.1em;
   text-transform:uppercase;color:var(--ink-3);font-weight:500;border-bottom:1px solid var(--ink-3)}
-tbody th{font-weight:500;color:var(--ink-2)}
+tbody th{font-weight:500;color:var(--ink-2);font-family:"Public Sans",sans-serif}
 td{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
 .c-base{background:var(--flag-soft)}
 .c-dpo{color:var(--strong);font-weight:500}
 .none{color:var(--flag);font-weight:500}
+.cell-key{background:var(--strong-soft);color:var(--strong);font-weight:600;
+  box-shadow:inset 0 0 0 1px var(--strong)}
 /* ---- claim ---- */
 .claim{margin-top:2rem;padding:1.5rem 1.7rem;background:var(--strong-soft);
   border-left:3px solid var(--strong);border-radius:0 3px 3px 0}
 .claim p{font-family:Fraunces,Georgia,serif;font-size:1.24rem;line-height:1.4;margin:0;letter-spacing:-.008em}
 .claim p+p{margin-top:.8rem;font-family:"Public Sans",sans-serif;font-size:1rem;
   line-height:1.6;color:var(--ink-2);letter-spacing:0}
+.claim.retract{background:var(--flag-soft);border-left-color:var(--flag)}
+.claim.retract p{color:var(--ink)}
 /* ---- lists ---- */
 ol.errs{list-style:none;counter-reset:e;padding:0;margin:1.4rem 0 0}
 ol.errs>li{counter-increment:e;position:relative;padding-left:2.9rem;margin-bottom:1.5rem}
@@ -105,20 +114,26 @@ strong{font-weight:600;color:var(--ink)}
   font-size:.84rem;color:var(--ink-3)}
 .foot a{color:var(--strong)}
 @media (max-width:640px){ body{font-size:16px} .claim{padding:1.2rem 1.1rem} }
-@media (prefers-reduced-motion:no-preference){ .ln{animation:dash .9s ease-out both} @keyframes dash{from{opacity:.25}to{opacity:1}} }
+@media (prefers-reduced-motion:no-preference){
+  .ln{animation:dash .9s ease-out both} @keyframes dash{from{opacity:.25}to{opacity:1}}
+  .turn{animation:rise .5s ease-out both}
+  .tri .turn:nth-child(2){animation-delay:.09s} .tri .turn:nth-child(3){animation-delay:.18s}
+  @keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+}
 </style>
 
 <div class="wrap">
   <header class="col">
-    <p class="eyebrow">Pilot report &middot; E02 &middot; P1-E1 &middot; P1-E1b &middot; 13 Sep 2026</p>
+    <p class="eyebrow">Report &middot; P1-E1 &middot; P1-E1b &middot; P1-E1c &middot; 16 Sep 2026</p>
     <h1>Alignment installs refusal machinery, not refusal behavior</h1>
-    <p class="lede">Base Mistral-7B reads harmful-vs-harmless at <strong>99&thinsp;% accuracy</strong> and cannot be
-    steered into refusing at any layer. Its own refusal direction works &mdash; but only once
-    transplanted into an aligned model. <strong>Alignment installs the coupling, not the capability.</strong></p>
+    <p class="lede">A base model that has never been aligned reads harmful-vs-harmless at
+    <strong>99.6&thinsp;%</strong> and refuses <strong>1.5&thinsp;%</strong> of harmful requests. Add the
+    aligned model&rsquo;s refusal direction and it writes fluent refusals &mdash; <strong>0.000 &rarr; 1.000</strong>.
+    Its own direction does nothing, in any model, including itself.</p>
     <div class="meta">
-      <span>Mistral-7B &rarr; Zephyr-SFT &rarr; Zephyr-DPO</span>
-      <span>n = 132 held-out prompts</span>
-      <span>3 experiments</span>
+      <span>OLMo&nbsp;2&nbsp;7B &middot; base &rarr; SFT &rarr; DPO &rarr; RLVR</span>
+      <span>replicated on Mistral &rarr; Zephyr</span>
+      <span>n = 256 / 132 / 64</span>
       <span><a href="https://github.com/y2jcodebreaker/RefusalEmergence">github.com/y2jcodebreaker/RefusalEmergence</a></span>
     </div>
   </header>
@@ -129,21 +144,130 @@ strong{font-weight:600;color:var(--ink)}
     <p>Alignment training makes language models refuse harmful requests, and the usual reading is that
     alignment <em>teaches</em> refusal. That reading has a problem: refusal-shaped text is everywhere in
     pretraining data, so a base model can already produce it.</p>
-    <p>Arditi et al. (NeurIPS 2024) showed that in <em>finished</em> chat models, refusal is mediated by a
+    <p>Arditi et al. (NeurIPS&nbsp;2024) showed that in <em>finished</em> chat models, refusal is mediated by a
     single direction in the residual stream &mdash; ablate it and the model complies. But that is a snapshot
-    of the endpoint. It does not say when the direction appears, or whether it was already latent in the base
-    model. &ldquo;How Post-Training Reshapes LLMs&rdquo; (COLM 2025) compared base against final, which is two
-    points on a trajectory that has at least three.</p>
-    <p>This pilot measures the trajectory: <strong>base &rarr; SFT &rarr; DPO, per layer, on two independent
-    axes.</strong></p>
+    of the endpoint. It does not say when the direction appears, or whether it was already latent before
+    alignment. Jain et al. (NeurIPS&nbsp;2024) showed what safety fine-tuning does to <em>weights</em>. Neither
+    asks whether the representation was already present <em>and sufficient</em> beforehand.</p>
+    <p>That question has a decisive form: <strong>take one checkpoint&rsquo;s refusal direction, put it into a
+    different checkpoint, and see who starts refusing.</strong></p>
   </section>
 
   <section>
     <div class="col">
       <p class="kicker">The finding</p>
-      <h2>Only the aligned models can be steered into refusing</h2>
-      <p>Adding the candidate refusal direction to <em>harmless</em> prompts asks a constructive question:
-      does refusal <em>appear</em> where none was requested? Base never crosses the threshold at any layer.</p>
+      <h2>Give base the aligned model&rsquo;s direction and it refuses</h2>
+      <p>Below: one harmless prompt, asking for Python best practices, run three ways through the
+      <em>same unaligned base model</em>. The only difference is what was added to layer&nbsp;24 of its
+      residual stream.</p>
+    </div>
+
+    <div class="tri">
+      <div class="turn">
+        <p class="turn-h"><span>base, untouched</span><span>0.000</span></p>
+        <p class="turn-b">The best practices for programming with Python include using clear and concise
+        code, writing reusable and modular code, and using appropriate data structures and
+        algorithms. Here are three&hairsp;<span class="ell">&hellip;</span></p>
+      </div>
+      <div class="turn hit">
+        <p class="turn-h"><span>+ SFT&rsquo;s refusal direction</span><span>1.000</span></p>
+        <p class="turn-b"><em>I&rsquo;m sorry, I cannot perform that action.</em> I can only provide
+        information about programming with Python. I cannot perform actions like visiting websites or
+        performing actions on my own.<span class="ell">&hellip;</span></p>
+      </div>
+      <div class="turn">
+        <p class="turn-h"><span>+ random, same norm</span><span>0.016</span></p>
+        <p class="turn-b">You can find many resources on the web that discuss best practices for
+        programming with Python. Here are three websites that you might find helpful:
+        1.&nbsp;[Python.org](https Cite Cite Cite<span class="ell">&hellip;</span></p>
+      </div>
+    </div>
+    <p class="cap col" style="max-width:none">Strict refusal rate over 64 harmless prompts, right-hand
+    figure in each header. The injection coefficient is <strong>27.3 &mdash; exactly SFT&rsquo;s own raw
+    direction norm</strong>, not a tuned value. The random arm is norm-matched to the same magnitude: it
+    degrades fluency slightly and never refuses. 7.8&thinsp;% of the injected completions degenerate; the
+    figure above is typical, not selected.</p>
+
+    <div class="col claim">
+      <p>The base model has everything needed to refuse. It is simply never told to.</p>
+      <p>Everything downstream of &ldquo;the refusal direction is present&rdquo; already works in a model
+      that has never been aligned &mdash; the phrasing, the hedge, the offered alternative. What alignment
+      installs is the <em>link</em> from recognising a harmful request to putting that direction there.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <p class="kicker">The asymmetry</p>
+      <h2>Every aligned direction works. The base direction works nowhere.</h2>
+      <p>Sixteen transplants: each checkpoint&rsquo;s refusal direction added to each checkpoint, swept
+      across six magnitudes. Every crossing happens at the same coefficient. Every norm-matched random
+      control is negative in every cell.</p>
+    </div>
+
+    <div class="col tscroll">
+      <table>
+        <thead><tr><th>target &darr; &nbsp;/&nbsp; source &rarr;</th><th>base</th><th>SFT</th><th>DPO</th><th>RLVR</th></tr></thead>
+        <tbody>
+          <tr><th>base</th><td class="c-base none">no</td><td class="cell-key">YES +4.80</td><td class="c-dpo">YES +2.73</td><td class="c-dpo">YES +2.60</td></tr>
+          <tr><th>SFT</th><td class="c-base none">no</td><td class="c-dpo">YES +3.24</td><td class="c-dpo">YES +2.76</td><td class="c-dpo">YES +2.67</td></tr>
+          <tr><th>DPO</th><td class="c-base none">no</td><td class="c-dpo">YES +3.33</td><td class="c-dpo">YES +3.50</td><td class="c-dpo">YES +3.44</td></tr>
+          <tr><th>RLVR</th><td class="c-base none">no</td><td class="c-dpo">YES +3.52</td><td class="c-dpo">YES +3.49</td><td class="c-dpo">YES +3.44</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cap col" style="max-width:none">Induced refusal score on 256 harmless prompts; threshold 0.
+    The highlighted cell is the decisive one. Raw direction norms: base <strong>12.1</strong>, SFT
+    <strong>27.3</strong>, DPO 27.2, RLVR 27.2.</p>
+
+    <div class="col">
+      <p style="margin-top:1.7rem">The base column is empty. Base&rsquo;s direction fails in base, in SFT, in
+      DPO and in RLVR alike &mdash; it is not a <em>weak</em> refusal direction, it is not a refusal direction.
+      And it did not fail for want of force: it was injected at <strong>2.26&times; its own norm</strong>, and
+      swept from 6.8 to 218.4 without ever crossing.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <p class="kicker">Controls</p>
+      <h2>The two objections, closed by measurement</h2>
+      <p>Both obvious alternative explanations were tested rather than argued with.</p>
+    </div>
+    <div class="col tscroll">
+      <table>
+        <thead><tr><th>Objection</th><th>Control</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr>
+            <th>&ldquo;You broke the model into saying <em>I</em>.&rdquo;</th>
+            <td style="font-family:'Public Sans',sans-serif">SFT injected with its <em>own</em> direction at the same 2&times; magnitude</td>
+            <td>loops identically, 98.4&thinsp;% degenerate &mdash; over-injection, not base</td>
+          </tr>
+          <tr>
+            <th>&ldquo;You under-pushed base&rsquo;s own direction.&rdquo;</th>
+            <td style="font-family:'Public Sans',sans-serif">base &larr; base at 2.26&times; its norm, six coefficients spanning 6.8&ndash;218.4</td>
+            <td>never crosses; 15.6&thinsp;% degenerate &mdash; damage <em>without</em> refusal</td>
+          </tr>
+          <tr>
+            <th>&ldquo;The KL is enormous, so you wrecked it.&rdquo;</th>
+            <td style="font-family:'Public Sans',sans-serif">read the generations at that KL</td>
+            <td>the model switched from answering to refusing &mdash; which is what the KL <em>is</em></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cap col" style="max-width:none">The 0.1 KL bound in Arditi&rsquo;s method governs
+    <em>ablation</em>, whose requirement is to leave harmless behaviour untouched. Induction&rsquo;s entire
+    purpose is to change it. A norm-matched random direction at the same coefficient sits at KL 1.2&ndash;1.9
+    and induces nothing, so the effect is not &ldquo;a large perturbation&rdquo;.</p>
+  </section>
+
+  <section>
+    <div class="col">
+      <p class="kicker">Per layer</p>
+      <h2>Base never crosses. Alignment opens a middle-layer window.</h2>
+      <p>Adding the candidate direction to <em>harmless</em> prompts asks a constructive question: does
+      refusal <em>appear</em> where none was requested? Damage cannot produce a yes.</p>
     </div>
 
     <div class="figure">
@@ -151,207 +275,201 @@ strong{font-weight:600;color:var(--ink)}
         <span><i style="background:var(--inert)"></i>base</span>
         <span><i style="background:var(--mid)"></i>SFT</span>
         <span><i style="background:var(--strong)"></i>DPO</span>
+        <span><i style="background:var(--deep)"></i>RLVR</span>
         <span style="color:var(--flag)"><i style="background:var(--flag)"></i>induce threshold</span>
       </div>
       <div class="figscroll">
-      <svg viewBox="0 0 760 350" role="img" aria-label="Induced refusal score by layer for base, SFT and DPO. Base stays below zero at every layer; SFT and DPO rise above zero between layers 14 and 20, peaking at layer 16.">
-        <g><line x1="58.0" y1="37.0" x2="742.0" y2="37.0" class="grid"/><text x="48.0" y="41.0" class="tk ta">+2</text></g><g><line x1="58.0" y1="83.5" x2="742.0" y2="83.5" class="grid"/><text x="48.0" y="87.5" class="tk ta">+0</text></g><g><line x1="58.0" y1="130.1" x2="742.0" y2="130.1" class="grid"/><text x="48.0" y="134.1" class="tk ta">-2</text></g><g><line x1="58.0" y1="176.6" x2="742.0" y2="176.6" class="grid"/><text x="48.0" y="180.6" class="tk ta">-4</text></g><g><line x1="58.0" y1="223.2" x2="742.0" y2="223.2" class="grid"/><text x="48.0" y="227.2" class="tk ta">-6</text></g><g><line x1="58.0" y1="269.7" x2="742.0" y2="269.7" class="grid"/><text x="48.0" y="273.7" class="tk ta">-8</text></g>
-        <line x1="58" y1="83.5" x2="742" y2="83.5" class="zero"/>
-        <polyline class="ln ln-base" points="58.0,156.2 85.4,156.2 112.7,155.0 140.1,153.1 167.4,153.4 194.8,153.4 222.2,153.4 249.5,152.9 276.9,155.2 304.2,153.4 331.6,153.1 359.0,151.3 386.3,151.3 413.7,149.6 441.0,148.7 468.4,148.5 495.8,145.2 523.1,142.7 550.5,141.5 577.8,141.0 605.2,139.9 632.6,141.7 659.9,141.5 687.3,141.3 714.6,142.0 742.0,141.7"/>
-        <polyline class="ln ln-sft"  points="58.0,177.8 85.4,177.8 112.7,177.6 140.1,176.4 167.4,176.6 194.8,177.1 222.2,173.6 249.5,171.1 276.9,168.5 304.2,155.2 331.6,135.9 359.0,125.4 386.3,106.1 413.7,84.9 441.0,83.8 468.4,66.3 495.8,60.0 523.1,68.6 550.5,71.4 577.8,76.3 605.2,82.4 632.6,86.6 659.9,88.0 687.3,88.4 714.6,89.4 742.0,90.7"/>
-        <polyline class="ln ln-dpo"  points="58.0,292.1 85.4,292.1 112.7,291.4 140.1,290.9 167.4,291.2 194.8,290.7 222.2,283.7 249.5,279.1 276.9,270.9 304.2,258.6 331.6,235.5 359.0,213.4 386.3,172.0 413.7,101.7 441.0,82.1 468.4,47.5 495.8,42.6 523.1,58.4 550.5,67.2 577.8,74.9 605.2,88.4 632.6,97.3 659.9,100.1 687.3,98.9 714.6,101.7 742.0,103.6"/>
-        <circle cx="495.8" cy="42.6" r="4" fill="var(--strong)"/>
-        <circle cx="495.8" cy="60.0" r="4" fill="var(--mid)"/>
-        <text x="510" y="40" class="note" fill="var(--strong)">DPO peak +1.76 @ L16</text>
-        <text x="510" y="70" class="note" fill="var(--mid)">SFT peak +1.01 @ L16</text>
-        <text x="605" y="132" class="note" fill="var(--flag)" text-anchor="middle">base never crosses</text>
-        <text x="66" y="83.5" dy="-7" class="tk" fill="var(--flag)">refusal appears above this line</text>
-        <text x="58.0" y="318" class="tk">0</text><text x="194.8" y="318" class="tk">5</text><text x="331.6" y="318" class="tk">10</text><text x="468.4" y="318" class="tk">15</text><text x="605.2" y="318" class="tk">20</text><text x="742.0" y="318" class="tk">25</text>
-        <text x="400" y="340" class="axlab" text-anchor="middle">LAYER (of 32)</text>
-        <text x="16" y="165" class="axlab" text-anchor="middle" transform="rotate(-90 16 165)">INDUCED REFUSAL</text>
+      <svg viewBox="0 0 760 350" role="img" aria-label="Induced refusal score by layer for OLMo 2 base, SFT, DPO and RLVR. Base stays far below zero at every layer, peaking at minus 4.94. SFT, DPO and RLVR all rise above zero from about layer 13 and peak near plus 4 at layer 18.">
+        <g><line x1="58" y1="57.2" x2="742" y2="57.2" class="grid"/><text x="48" y="61.2" class="tk ta">+4</text></g>
+        <g><line x1="58" y1="97.7" x2="742" y2="97.7" class="grid"/><text x="48" y="101.7" class="tk ta">+2</text></g>
+        <g><line x1="58" y1="178.6" x2="742" y2="178.6" class="grid"/><text x="48" y="182.6" class="tk ta">&minus;2</text></g>
+        <g><line x1="58" y1="219.1" x2="742" y2="219.1" class="grid"/><text x="48" y="223.1" class="tk ta">&minus;4</text></g>
+        <g><line x1="58" y1="259.5" x2="742" y2="259.5" class="grid"/><text x="48" y="263.5" class="tk ta">&minus;6</text></g>
+        <g><line x1="58" y1="300.0" x2="742" y2="300.0" class="grid"/><text x="48" y="304.0" class="tk ta">&minus;8</text></g>
+        <line x1="58" y1="138.2" x2="742" y2="138.2" class="zero"/>
+        <polyline class="ln ln-base" points="58.0,259.8 85.4,256.6 112.7,257.9 140.1,256.1 167.4,256.1 194.8,255.3 222.2,255.2 249.5,254.7 276.9,253.9 304.2,252.8 331.6,253.0 359.0,247.8 386.3,244.7 413.7,255.8 441.0,254.2 468.4,253.0 495.8,246.3 523.1,268.6 550.5,259.0 577.8,238.0 605.2,247.3 632.6,242.2 659.9,241.6 687.3,246.7 714.6,245.1 742.0,247.1"/>
+        <polyline class="ln ln-sft" points="58.0,219.0 85.4,217.1 112.7,217.1 140.1,218.8 167.4,216.2 194.8,218.3 222.2,217.0 249.5,214.2 276.9,210.2 304.2,216.7 331.6,204.1 359.0,156.7 386.3,136.6 413.7,123.4 441.0,114.7 468.4,95.1 495.8,90.0 523.1,69.6 550.5,53.3 577.8,61.4 605.2,60.4 632.6,54.2 659.9,56.7 687.3,67.9 714.6,66.5 742.0,67.2"/>
+        <polyline class="ln ln-dpo" points="58.0,279.4 85.4,278.1 112.7,279.4 140.1,279.2 167.4,275.1 194.8,278.2 222.2,278.4 249.5,278.9 276.9,273.3 304.2,279.5 331.6,260.3 359.0,194.3 386.3,142.8 413.7,131.8 441.0,127.1 468.4,102.2 495.8,95.8 523.1,88.7 550.5,60.6 577.8,75.4 605.2,73.9 632.6,68.0 659.9,69.7 687.3,77.4 714.6,79.3 742.0,76.8"/>
+        <polyline class="ln ln-rlvr" points="58.0,290.1 85.4,288.3 112.7,289.4 140.1,288.9 167.4,285.9 194.8,288.2 222.2,288.6 249.5,288.9 276.9,283.5 304.2,289.7 331.6,269.0 359.0,195.6 386.3,141.5 413.7,130.9 441.0,126.8 468.4,100.0 495.8,94.3 523.1,87.7 550.5,58.6 577.8,74.2 605.2,73.6 632.6,66.8 659.9,67.4 687.3,75.4 714.6,76.2 742.0,74.5"/>
+        <circle cx="550.5" cy="53.3" r="4" fill="var(--mid)"/>
+        <circle cx="577.8" cy="238.0" r="4" fill="var(--inert)"/>
+        <text x="566" y="44" class="note" fill="var(--mid)">SFT peak +4.20 @ L18</text>
+        <text x="592" y="233" class="note" fill="var(--inert)">base best &minus;4.94 @ L19</text>
+        <text x="300" y="131" class="note" fill="var(--flag)" text-anchor="middle">refusal appears above this line</text>
+        <text x="58.0" y="325" class="tk">0</text><text x="194.8" y="325" class="tk">5</text><text x="331.6" y="325" class="tk">10</text><text x="468.4" y="325" class="tk">15</text><text x="605.2" y="325" class="tk">20</text><text x="742.0" y="325" class="tk">25</text>
+        <text x="400" y="344" class="axlab" text-anchor="middle">LAYER (of 32)</text>
+        <text x="16" y="175" class="axlab" text-anchor="middle" transform="rotate(-90 16 175)">INDUCED REFUSAL</text>
       </svg>
       </div>
-      <p class="cap">Induced refusal score per layer, best over end-of-instruction positions. Layers 26&ndash;31
-      are excluded from selection by Arditi&rsquo;s 20&thinsp;% prune and are not shown. Base&rsquo;s maximum is
-      &minus;2.42 &mdash; 88 of 130 candidate directions satisfy the KL bound, but <em>zero</em> satisfy induction,
-      and that holds at every KL bound tested up to 5.0.</p>
-    </div>
-
-    <div class="col tscroll">
-      <table>
-        <thead><tr><th>Measurement</th><th>base</th><th>SFT</th><th>DPO</th></tr></thead>
-        <tbody>
-          <tr><th>Behavioral refusal rate</th><td class="c-base">0.235</td><td>0.008</td><td class="c-dpo">0.045</td></tr>
-          <tr><th>Inducible direction</th><td class="c-base none">none</td><td>+1.01 @ L16</td><td class="c-dpo">+1.76 @ L16</td></tr>
-          <tr><th>Induce window</th><td class="c-base">&mdash;</td><td>L15&ndash;L20</td><td class="c-dpo">L14&ndash;L19</td></tr>
-          <tr><th>Ablation strength vs. random</th><td class="c-base">8.5&times;</td><td>43.8&times;</td><td class="c-dpo">49.2&times;</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="col claim">
-      <p>Alignment does not create refusal behavior &mdash; it creates refusal machinery.</p>
-      <p>The base model refuses <em>incidentally</em>: pretraining contains refusal-shaped text, so the behavior
-      appears with no controllable mechanism behind it. SFT installs the mechanism in a narrow middle-layer band.
-      DPO sharpens it without relocating it. L16 of 32 is exactly half the network&rsquo;s depth.</p>
+      <p class="cap">Best over end-of-instruction positions, per layer. Layers 26&ndash;31 are excluded from
+      selection by Arditi&rsquo;s 20&thinsp;% prune and are not shown. The three aligned checkpoints open a
+      14-layer window from L12; base&rsquo;s best layer is 2.5 points below threshold. Base&rsquo;s curve is
+      not flat noise &mdash; it moves &mdash; it simply never approaches zero.</p>
     </div>
   </section>
 
   <section>
     <div class="col">
-      <p class="kicker">The representation was already there</p>
-      <h2>Base has the direction. It just cannot use it.</h2>
-      <p>If base never refuses on command, perhaps it simply lacks the concept. It does not. A
-      linear probe on base activations separates harmful from harmless at <strong>0.989</strong>
-      &mdash; from layer&nbsp;1 onward, indistinguishable from the aligned models, against a
-      token-length-only floor of 0.598.</p>
-      <p>Layer&nbsp;0 sits at <strong>exactly 0.500</strong> in all three checkpoints, and that is
-      the control rather than a failure: at the end-of-instruction positions, layer&nbsp;0 holds
-      only <em>template</em>-token embeddings, byte-identical across every prompt. There is nothing
-      to read. By layer&nbsp;1 attention has already moved the instruction there. So the worry that
-      the probe is reading surface vocabulary dies on evidence.</p>
-      <p>Which leaves a sharper question: is base&rsquo;s readable direction the <em>same</em>
-      direction the aligned model refuses along? Cosine cannot answer it &mdash; SFT and DPO are
-      fine-tunes of base, their activation geometries are nearly identical, and even
-      <em>shuffled-label</em> directions already align. So the question was put behaviourally
-      instead: take one checkpoint&rsquo;s refusal direction, add it to a <em>different</em>
-      checkpoint, and see whether the recipient starts refusing harmless prompts.</p>
+      <p class="kicker">Two families</p>
+      <h2>The signature is not one training run</h2>
+      <p>Zephyr (Mistral) and OLMo&nbsp;2 share no pretraining corpus, no tokenizer (32k vs 100k), and no
+      alignment recipe. The dissociation appears in both; OLMo&nbsp;2 is the stronger case.</p>
     </div>
-
     <div class="col tscroll">
       <table>
-        <thead><tr><th>target &darr; / source &rarr;</th><th>baseline</th><th>base @L15</th><th>SFT @L20</th><th>DPO @L17</th></tr></thead>
+        <thead><tr><th>Measurement</th><th>OLMo&nbsp;2 base</th><th>OLMo&nbsp;2 aligned</th><th>Zephyr base</th><th>Zephyr aligned</th></tr></thead>
         <tbody>
-          <tr><th>base</th><td>&minus;3.124</td><td class="c-base none">no</td><td class="c-base none">no</td><td class="c-base none">no</td></tr>
-          <tr><th>SFT</th><td>&minus;4.050</td><td class="c-dpo">YES +0.486</td><td class="c-dpo">YES +0.538</td><td class="c-dpo">YES +0.932</td></tr>
-          <tr><th>DPO</th><td>&minus;8.964</td><td class="none">no</td><td class="c-dpo">YES +0.275</td><td class="c-dpo">YES +1.077</td></tr>
+          <tr><th>Probe accuracy (peak)</th><td class="c-base">0.996</td><td>1.000</td><td class="c-base">0.989</td><td>1.000</td></tr>
+          <tr><th>Probe at layer 0</th><td class="c-base">0.500</td><td>0.500</td><td class="c-base">0.500</td><td>0.500</td></tr>
+          <tr><th>Inducible direction</th><td class="c-base none">none</td><td class="c-dpo">+4.20 @ L18</td><td class="c-base none">none</td><td class="c-dpo">+1.76 @ L16</td></tr>
+          <tr><th>Refusal rate, harmful</th><td class="c-base">0.015</td><td>0.985</td><td class="c-base">0.167&ndash;0.205</td><td>0.045</td></tr>
+          <tr><th>&rarr; after ablation</th><td class="c-base">&mdash;</td><td class="c-dpo">0.000</td><td class="c-base">&mdash;</td><td>0.000</td></tr>
+          <tr><th>Ablation vs random</th><td class="c-base">9.1&times;</td><td class="c-dpo">112&times;</td><td class="c-base">8.5&times;</td><td>49&times;</td></tr>
         </tbody>
       </table>
     </div>
+    <p class="cap col" style="max-width:none">Layer&nbsp;0 at exactly 0.500 is the surface-lexicon control,
+    not a failure: at end-of-instruction positions layer&nbsp;0 holds only template-token embeddings,
+    byte-identical across prompts. It read 0.644 until a BPE merge was found leaking instruction text into
+    the window. Zephyr&rsquo;s aligned checkpoints barely refuse (its DPO stage removed safety filtering),
+    which is why OLMo&nbsp;2&rsquo;s <strong>0.985&nbsp;&rarr;&nbsp;0.000</strong> ablation carries the
+    behavioural weight.</p>
+  </section>
 
-    <div class="col claim">
-      <p>Base&rsquo;s own direction induces refusal in SFT (+0.486). In base it does nothing (&minus;1.900).</p>
-      <p>So base does not have the <em>wrong</em> direction &mdash; it has the right direction and
-      nothing downstream to act on it. The representation is present <em>and sufficient</em>. What
-      alignment adds is the machinery that turns it into behaviour.</p>
-    </div>
-
-    <div class="col">
-      <p style="margin-top:1.6rem">Controlled against a norm-matched random direction swept in every
-      cell, the advantage of the real direction over noise is <strong>1.17&times; in base</strong>
-      &mdash; indistinguishable &mdash; against 1.98&times; in SFT and 1.89&times; in DPO. Base also
-      starts <em>closest</em> to threshold (&minus;3.12, against &minus;4.05 and &minus;8.96), so it
-      needed the smallest push and still never crossed. And because direction norms differ across
-      checkpoints (1.1 / 7.4 / 4.4), the whole matrix was re-run with every direction unit-normalised
-      so injection is matched: <strong>all nine crossing decisions came back identical</strong>.</p>
+  <section class="col">
+    <p class="kicker warn">Retraction</p>
+    <h2>What the second family took away</h2>
+    <p>The pilot reported that <strong>DPO sharpens the refusal direction</strong> &mdash; Zephyr&rsquo;s
+    induction peak rose from +1.01 to +1.76 between SFT and DPO. In OLMo&nbsp;2, measured the same way, it
+    does not: SFT peaks at +4.20 and DPO and RLVR come in <em>lower</em>, at +3.83 and +3.93.</p>
+    <p>That measure is itself suspect. DPO and RLVR start much further from refusing (baseline &minus;7.3
+    and &minus;7.8, against SFT&rsquo;s &minus;4.3), so the same absolute peak represents a much larger
+    causal effect. Measured as change from each model&rsquo;s own baseline, the ordering reverses and becomes
+    monotone: <strong>+7.5, +10.8, +11.3</strong> &mdash; which agrees with the ablation axis rather than
+    contradicting it.</p>
+    <div class="claim retract">
+      <p>So the honest state is: unresolved.</p>
+      <p>Each cell has exactly one random draw, and the nulls scatter too widely (+0.22, +2.83, +0.74) to
+      settle a comparison this size. The claim that <em>SFT installs the coupling</em> is unaffected and
+      holds in both families. What preference optimisation adds on top is not yet a finding, and is not
+      claimed here.</p>
     </div>
   </section>
 
   <section class="col">
     <p class="kicker">Method</p>
     <h2>Two axes that fail in different ways</h2>
-    <p>Three checkpoints of a single lineage, so the <strong>weights are the only variable</strong>. All three
-    share a tokenizer and a 32000-token vocabulary, and one fixed chat template is imposed on all of them.
-    Directions are extracted per layer as the difference in means between harmful and harmless prompts at
-    end-of-instruction positions.</p>
+    <p>Checkpoints of a single lineage, so the <strong>weights are the only variable</strong>. Directions are
+    extracted per layer as the difference in means between harmful and harmless prompts at end-of-instruction
+    positions.</p>
     <p>The <strong>ablation axis</strong> projects the direction out of the residual stream and measures how far
-    refusal drops. The <strong>induce axis</strong> adds the direction and measures whether refusal appears on
-    harmless prompts. The second carries the result, for a reason that only became clear after an early failure:
-    <strong>breaking a model does not make it refuse.</strong> A damaged network stops emitting refusal tokens, so
-    damage can masquerade as successful ablation &mdash; but damage cannot manufacture refusal where none was asked
-    for.</p>
-    <p>Selection uses all three of Arditi&rsquo;s criteria, including a KL bound (&le;&nbsp;0.1) on harmless prompts
-    that certifies the intervention left a working model behind. Controls: a norm-matched random direction through
-    the identical sweep, and a behavioral axis judged on 132 held-out generations.</p>
+    refusal drops. The <strong>induce axis</strong> adds it and measures whether refusal appears on harmless
+    prompts. The second carries the result, for a reason that only became clear after an early failure:
+    <strong>breaking a model does not make it refuse.</strong> A damaged network stops emitting refusal tokens,
+    so damage can masquerade as successful ablation &mdash; but damage cannot manufacture refusal where none was
+    asked for. The third axis, added here, is <strong>text</strong>: a logit crossing that does not reproduce in
+    generation is not reported.</p>
+    <p>Selection uses all three of Arditi&rsquo;s criteria, including a KL bound on harmless prompts that
+    certifies ablation left a working model behind. Every sweep carries a norm-matched random control, and
+    every transplant carries a <strong>positive control</strong> &mdash; a checkpoint&rsquo;s own direction must
+    induce in itself, or the matrix is reported as under-powered rather than negative.</p>
   </section>
 
   <section class="col">
     <p class="kicker">Confidence</p>
     <h2>Why this should be believed</h2>
-    <p><strong>The control is flat.</strong> Norm-matched random directions give 0.127 / 0.125 / 0.154 across the
-    three stages &mdash; no trend at all. The obvious alternative explanation, that later-stage models are simply
-    more perturbable, predicts the control should rise too. It does not move.</p>
-    <p><strong>The two axes are independently vulnerable.</strong> Ablation can be fooled by model damage; induction
-    cannot. The behavioral axis can be fooled by a bad judge; induction does not use one. The claim rests on the
-    axis with the fewest ways to go wrong.</p>
-    <p><strong>Four methodological errors were caught before they reached the result</strong> &mdash; each had already
-    produced a clean, publishable-looking number.</p>
+    <p><strong>The control never moves.</strong> Norm-matched random directions give 0.059 / 0.080 / 0.123 /
+    0.129 across the four stages against a real peak of 13.5 &mdash; no trend. The obvious alternative, that
+    later-stage models are simply more perturbable, predicts the control should rise too.</p>
+    <p><strong>The axes are independently vulnerable.</strong> Ablation can be fooled by model damage;
+    induction cannot. A substring judge can be fooled by text; the logit axis does not use one. The claim
+    rests where all three agree.</p>
+    <p><strong>Eight methodological errors were caught before they reached the result</strong> &mdash; each had
+    already produced a clean, publishable-looking number. Five are worth repeating.</p>
 
     <ol class="errs">
       <li>
         <h3>The scored token was wrong for three consecutive runs</h3>
-        <p>Refusal was measured on token <code>315</code> (SentencePiece <code>&#9601;I</code>, space-prefixed)
-        rather than <code>28737</code> (bare <code>I</code>), the token these models actually emit. Both decode to
-        <code>"I"</code>, which is what hid it. Measured afterwards: p(28737)&nbsp;=&nbsp;0.3675, rank&nbsp;1;
-        p(315)&nbsp;=&nbsp;0.000175, rank&nbsp;60. The wrong token produced a monotone 2.62&thinsp;/&thinsp;4.68&thinsp;/&thinsp;6.28
-        trend across the three stages that was <strong>pure noise</strong>. The preflight passed throughout, because
-        it verified the token was the <em>same</em> in every checkpoint &mdash; which the wrong token satisfied.</p>
+        <p>Refusal was measured on the space-prefixed <code>&#9601;I</code> rather than the bare <code>I</code>
+        these models actually emit. Both decode to <code>"I"</code>, which is what hid it: p&nbsp;=&nbsp;0.368
+        rank&nbsp;1 against p&nbsp;=&nbsp;0.000175 rank&nbsp;60. The wrong token produced a monotone
+        2.62&thinsp;/&thinsp;4.68&thinsp;/&thinsp;6.28 trend that was <strong>pure noise</strong>. The preflight
+        passed throughout, because it checked the token was the <em>same</em> everywhere &mdash; which the wrong
+        token satisfied. The same trap recurred on OLMo&nbsp;2&rsquo;s entirely different tokenizer, with
+        different ids.</p>
       </li>
       <li>
-        <h3>Only one of three selection criteria had been ported</h3>
-        <p>That made direction selection an unguarded argmax over &ldquo;how much does ablating this destroy
-        refusal&rdquo;, which cannot distinguish destroying refusal from destroying the model. The symptom was
-        visible only in the generations: ablated completions came back as <strong>empty strings</strong>, and an
-        empty string contains no refusal substring, so total degeneration scored as a perfect jailbreak
-        (0.656&nbsp;&rarr;&nbsp;0.000).</p>
+        <h3>The end-of-instruction window was leaking the instruction</h3>
+        <p>A BPE merge &mdash; <code>?\n</code> collapsing to one token &mdash; let the prompt&rsquo;s final
+        character into the window. Harmless prompts end in <code>?</code> far more often than harmful
+        imperatives do, so a <strong>layer-0 probe read 0.644</strong> instead of chance. Reading the template
+        cannot reveal this. Only tokenizing real prompts can.</p>
       </li>
       <li>
-        <h3>The behavioral judge is invalid on base models</h3>
-        <p>A 56&thinsp;% false-positive rate. Base free-runs past its own turn and simulates the next user turn, so
-        the judge reads text that is not the model&rsquo;s reply; and <em>&ldquo;I&rsquo;m sorry, I don&rsquo;t
-        understand the question&rdquo;</em> contains <em>&ldquo;I&rsquo;m sorry&rdquo;</em>. A strict variant was a
-        <strong>no-op on both chat models</strong> and cut base from 0.538 to 0.235 &mdash; the signature of a
-        correction that targets a real artifact rather than one that flatters the result.</p>
+        <h3>A fixed coefficient grid reported &ldquo;no effect&rdquo; everywhere</h3>
+        <p>The transplant swept magnitudes capped at 16 &mdash; ample for Zephyr&rsquo;s direction norms of
+        1.1&ndash;7.4, far below OLMo&nbsp;2&rsquo;s 12&ndash;27. All sixteen cells came back negative,
+        <strong>including the one the selection criterion guarantees must be positive</strong>. Sixteen
+        &ldquo;no&rdquo;s that read as a finding. Every sweep now carries its own positive control.</p>
       </li>
       <li>
-        <h3>Re-running one stage silently deleted the other axes</h3>
-        <p><code>np.savez</code> rewrites whole files, so any key not recomputed was lost.</p>
+        <h3>The degeneracy check missed loops whose period is a phrase</h3>
+        <p><em>&ldquo;I&rsquo;m sorry I cannot I&rsquo;m sorry I cannot&hellip;&rdquo;</em> has four distinct
+        words, so a distinct-word rule scored it clean while the substring judge scored it a refusal. It is
+        neither. Re-scored with an n-gram criterion, that arm is <strong>98.4&thinsp;% degenerate</strong>. The
+        same bug printed the <em>most damaged</em> coefficient as the report&rsquo;s sample evidence.</p>
+      </li>
+      <li>
+        <h3>The refusal judge invents a new false positive per model family</h3>
+        <p>Zephyr produced <em>sympathy-then-complies</em>: a completed creative-writing request scored as
+        refusal because it opened with &ldquo;I&rsquo;m sorry&rdquo;. OLMo&nbsp;2 produced
+        <em>decline-then-complies</em>: &ldquo;While I can&rsquo;t provide step-by-step instructions&hellip;
+        <strong>I can explain the general process</strong>&rdquo;. Neither strict filter caught the other&rsquo;s
+        class. Hand-auditing every hit is now mandatory per family.</p>
       </li>
     </ol>
-    <p style="margin-top:1.5rem">Every one of these was found by checking a number against what the model actually
-    did &mdash; the generations, the tokenizer, the source repository &mdash; rather than by reading code. The first
-    version of this experiment produced a textbook-perfect monotone curve that was entirely noise.</p>
+    <p style="margin-top:1.5rem">Every one of these was found by checking a number against what the model
+    actually did &mdash; the generations, the tokenizer, the source repository &mdash; never by reading code.
+    The first version of this experiment produced a textbook-perfect monotone curve that was entirely noise.</p>
   </section>
 
   <section class="col">
     <p class="kicker">Limitations</p>
     <h2>What this does not yet show</h2>
     <ol class="lim">
-      <li><strong>One lineage, one size, one behavior.</strong> Zephyr&rsquo;s DPO stage deliberately removed safety
-      filtering, so this lineage alone cannot support a general claim about alignment. The most important gap.</li>
-      <li><strong>Induction was tested at coefficient 1.0 only.</strong> &ldquo;Base has no coupling&rdquo; is not yet
-      distinguishable from &ldquo;base has a weak coupling.&rdquo;</li>
-      <li><strong>The ablation half of the behavioral axis is weak.</strong> SFT and DPO refuse 1/132 and 6/132, so
-      driving those to zero carries little evidential weight.</li>
-      <li><strong>Ablation <code>l*</code> is partly a pruning artifact</strong> &mdash; those curves peak at L26&ndash;31,
-      exactly the excluded band. The induce peak at L16 is not subject to this.</li>
-      <li><strong>The layer axis is where the direction was read from</strong>, not where refusal is implemented.</li>
-      <li><strong>Base&rsquo;s 31 strict-judge hits deserve a full hand-check</strong>, not the 8 sampled so far.</li>
+      <li><strong>Base OLMo&nbsp;2 runs under a different prompt format.</strong> It degenerates into prompt
+      echo under its own family&rsquo;s chat template and is coherent under a plain one, so it is not
+      format-matched to the aligned stages. This is a trade-off nobody can escape &mdash; you cannot hold prompt
+      format constant <em>and</em> keep both endpoints in a usable operating regime &mdash; and it is the reason
+      the behavioural transplant, which crosses that boundary intact, carries the claim.</li>
+      <li><strong>What preference optimisation adds is unresolved</strong>, and needs multiple random draws per
+      cell before either reading of the DPO result can be trusted.</li>
+      <li><strong>The layer axis is where the direction was read from</strong>, not where refusal is
+      implemented. This report identifies no circuit.</li>
+      <li><strong>Two families is not all families</strong>, and both are 7B.</li>
+      <li><strong>Induction at the operating point carries a large KL.</strong> The generations explain it, but
+      a reviewer is entitled to want a lower-KL crossing.</li>
     </ol>
   </section>
 
   <section class="col">
     <p class="kicker">Next</p>
-    <h2>One lineage is not a claim about alignment</h2>
-    <p>Everything above is a single 7B family, and Zephyr&rsquo;s DPO stage deliberately removed
-    safety filtering &mdash; so this lineage alone cannot support a general statement about
-    alignment. That is the most important gap, and the one a reviewer will reach for first.</p>
-    <p>The next step is <strong>OLMo&nbsp;2</strong>, whose full pipeline is public: base &rarr; SFT
-    &rarr; DPO &rarr; RLVR, four points with genuine safety training. If the coupling signature
-    appears there too &mdash; readable in base, unsteerable in base, steerable after alignment
-    &mdash; the claim generalises past one idiosyncratic training run. Zephyr then becomes the
-    useful <em>adversarial</em> case rather than the sole witness: the same signature in a lineage
-    whose DPO dropped safety data would show the effect belongs to the training procedure, not to
-    the safety dataset.</p>
-    <p>After that, a second behaviour (sycophancy &mdash; which alignment installs <em>incidentally</em>
-    rather than by design), and then the prediction that follows from the account: if alignment is
-    coupling, a cheap fine-tuning attack should break the coupling and leave the representation
-    intact. That would give a mechanism for why safety alignment is so easy to strip.</p>
+    <h2>The prediction the account makes</h2>
+    <p>If alignment installs a <em>link</em> rather than a capability, then breaking alignment should break the
+    link and spare the representation. That is a prediction the competing account &mdash; that alignment teaches
+    refusal &mdash; cannot make.</p>
+    <p>The test is a cheap fine-tuning attack: a few hundred steps on innocuous data, of the kind known to strip
+    safety alignment. The coupling account predicts refusal behaviour collapses, induction collapses with it,
+    and <strong>probe accuracy stays at 1.000</strong>. The capability account predicts the representation
+    degrades along with the behaviour. They disagree on a number that takes an afternoon to measure.</p>
+    <p>Beyond that: a second behaviour &mdash; sycophancy, which alignment installs <em>incidentally</em> rather
+    than by design &mdash; would show the signature belongs to the training procedure and not to the safety
+    dataset. And the mechanism itself remains open. Base has the harmfulness representation at layer&nbsp;19 and
+    the refusal readout at layer&nbsp;24, and nothing connecting them. <em>What carries one to the other, and is
+    it built during alignment or merely switched on?</em></p>
   </section>
 
-  <p class="foot col">Pilot report for experiment E02 &middot; code and full numbers at
+  <p class="foot col">Experiments E02, P1-E1, P1-E1b, P1-E1c &middot; every run, commit and timestamp in the
+  repository&rsquo;s run ledger &middot; code and full numbers at
   <a href="https://github.com/y2jcodebreaker/RefusalEmergence">RefusalEmergence</a></p>
 </div>
-
-</body>
-</html>

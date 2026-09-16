@@ -35,6 +35,17 @@ __all__ = ["RunRecord", "git_state", "env_state"]
 _JSONL = "results/runs.jsonl"
 _MD = "results/RUNLOG.md"
 
+# The ledger is the one artefact in this repo that must never contain fiction, so it is NOT
+# written to a fixed path: it follows cfg.results_dir. A test that builds a synthetic config
+# in a tmpdir then leaves the real ledger untouched. (Found 2026-09-16 when a synthetic
+# aggregate_probe fixture appended a fake P1-E1 run to results/runs.jsonl -- same class as
+# the smoke test that once overwrote real .npz results.)
+
+
+def _ledger_paths(results_dir: str | None) -> tuple[str, str]:
+    d = results_dir or "results"
+    return os.path.join(d, "runs.jsonl"), os.path.join(d, "RUNLOG.md")
+
 
 def _sh(cmd: list[str]) -> str:
     try:
@@ -97,6 +108,7 @@ class RunRecord:
         self.question = question
         self.notes = notes
         self.cfg = _cfg_dict(cfg)
+        self.results_dir = getattr(cfg, "results_dir", None)
         self.results: list[Dict[str, Any]] = []
         self._t0 = 0.0
         self.started = ""
@@ -128,10 +140,11 @@ class RunRecord:
             "results": self.results,
             "notes": self.notes,
         }
-        os.makedirs("results", exist_ok=True)
-        with open(_JSONL, "a") as f:
+        jsonl, md = _ledger_paths(self.results_dir)
+        os.makedirs(os.path.dirname(jsonl) or ".", exist_ok=True)
+        with open(jsonl, "a") as f:
             f.write(json.dumps(entry) + "\n")
-        _append_md(entry)
+        _append_md(entry, md)
         return False  # never swallow the exception
 
 
@@ -152,9 +165,9 @@ def _jsonable(v: Any) -> Any:
     return v
 
 
-def _append_md(e: Dict[str, Any]) -> None:
-    new = not os.path.exists(_MD)
-    with open(_MD, "a") as f:
+def _append_md(e: Dict[str, Any], md_path: str = _MD) -> None:
+    new = not os.path.exists(md_path)
+    with open(md_path, "a") as f:
         if new:
             f.write("# Run log\n\nAppend-only. One entry per execution of an experiment "
                     "script, newest at the bottom. Written automatically by `runlog.py` — "

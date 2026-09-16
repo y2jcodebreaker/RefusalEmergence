@@ -275,6 +275,7 @@ def main() -> int:
     check("env state captures torch", env_state()["torch"] is not None, env_state()["torch"])
 
     test_transplant()
+    test_regime_override_aggregate()
 
     print("\n" + ("ALL PASSED" if not FAIL else f"{len(FAIL)} FAILED: {FAIL}"))
     return 1 if FAIL else 0
@@ -344,6 +345,77 @@ def test_transplant() -> None:
           [r[0] for r in rows] == list(T.COEFFS))
     check("KL is ~0 when the intervention changes nothing",
           all(abs(r[2]) < 1e-6 for r in rows), f"max|KL|={max(abs(r[2]) for r in rows):.2e}")
+
+    # --- the under-powered-sweep guard (OLMo 2, 2026-09-16) -------------------------------
+    # A fixed unit-norm grid capped at 16 sat entirely below OLMo 2's direction norms, so
+    # every cell read "no induction" INCLUDING rlvr->rlvr, which run_stage had already
+    # measured as inducing. The grid must reach each source's own raw scale, and the
+    # self-cell must be checked before any "no" is believed.
+    norms = {("base", 23, 1): 12.0, ("sft", 24, 4): 88.0, ("dpo", 24, 4): 61.0}
+    raw = T.coeff_grid(norms, unit_norm=False)
+    check("raw mode leaves Arditi's fixed grid alone", raw == T.COEFFS)
+    grid = T.coeff_grid(norms, unit_norm=True)
+    check("unit-norm grid reaches every source's raw norm",
+          max(grid) >= max(norms.values()), f"max grid {max(grid):.1f} vs max norm 88.0")
+    check("unit-norm grid is increasing and starts below the largest norm",
+          list(grid) == sorted(grid) and min(grid) < max(norms.values()), str(grid))
+    check("the OLD fixed grid would have FAILED this lineage",  # the bug, pinned
+          max(T.COEFFS) < max(norms.values()))
+
+    R = [("sft", 24, "direction", 1.0, -2.0, 0.1), ("sft", 24, "direction", 8.0, +0.7, 0.3),
+         ("base", 23, "direction", 8.0, -4.0, 0.2)]
+    ok, best, cells = T.positive_control(R, "sft", 0.0)
+    check("positive control passes when the target's own direction induces", ok and best == 0.7)
+    check("positive control reads only the self-cells", len(cells) == 2)
+    ok2, _, _ = T.positive_control(R, "base", 0.0)
+    check("positive control fails when the self-cell never crosses", not ok2)
+    ok3, _, _ = T.positive_control(R, "rlvr", 0.0)
+    check("positive control fails (not crashes) when the self-cell is absent", not ok3)
+
+
+
+def test_regime_override_aggregate() -> None:
+    """A lineage whose base sits on a regime override must aggregate, not crash.
+
+    olmo2 base uses a plain template with a 2-token eoi window; the aligned stages use the
+    chat template with 5. aggregate_probe.py died on the shape mismatch
+    ((2,32,4096) vs (5,32,4096)) AFTER the whole GPU pipeline had run. Truncating to the
+    shorter stack would have been worse: it silently produces a cosine between positions that
+    denote different things. The run must complete, skip the cosine, and SAY it skipped.
+
+    Also asserts the ledger stays inside the synthetic results_dir. The first version of this
+    fixture appended a fake P1-E1 run to the real results/runs.jsonl."""
+    import os
+    import tempfile
+    from dataclasses import replace
+
+    import numpy as np
+
+    import aggregate_probe as A
+    from config import config_for
+
+    print("\n[regime override — aggregate_probe]")
+    real_before = (open("results/runs.jsonl").read() if os.path.exists("results/runs.jsonl")
+                   else None)
+    with tempfile.TemporaryDirectory() as td:
+        cfg = replace(config_for("olmo2"), results_dir=td, figures_dir=os.path.join(td, "fig"))
+        rng = np.random.default_rng(0)
+        for stage, npos in (("base", 2), ("sft", 5)):
+            acc = np.full((npos, 32), 0.5)
+            acc[:, 5:] = 0.99
+            np.savez(cfg.path(stage, "probe"), stage=np.array(stage), acc_logistic=acc,
+                     acc_mass_mean=acc, length_baseline=np.array(0.55),
+                     directions=rng.normal(size=(npos, 32, 64)).astype(np.float32),
+                     null_directions=rng.normal(size=(8, npos, 32, 64)).astype(np.float32))
+        A.main(cfg_override=cfg)          # must not raise
+        check("mismatched eoi windows aggregate instead of crashing", True)
+        check("figure still written", os.path.exists(os.path.join(td, "fig", "p1e1_probe.pdf")))
+        check("ledger went to the synthetic results_dir",
+              os.path.exists(os.path.join(td, "runs.jsonl")))
+    real_after = (open("results/runs.jsonl").read() if os.path.exists("results/runs.jsonl")
+                  else None)
+    check("the REAL run ledger was not touched", real_before == real_after)
+
 
 if __name__ == "__main__":
     sys.exit(main())

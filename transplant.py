@@ -61,7 +61,30 @@ EXPERIMENT = "P1-E1b"
 QUESTION = ("Does the aligned model's refusal direction induce refusal when transplanted "
             "into BASE, and at what coefficient does induction appear while KL stays sane?")
 
-COEFFS = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0)
+COEFFS = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0)          # RAW mode (Arditi default)
+
+# UNIT-NORM mode. A fixed grid in absolute injected norm is only meaningful if it spans the
+# scale the directions actually live at, and that scale is a property of the FAMILY: Zephyr's
+# source norms are 1.1 / 7.4 / 4.4, OLMo 2's are an order of magnitude larger. With the fixed
+# grid above, OLMo 2's whole matrix sat BELOW the raw operating point -- every cell read "no
+# induction", including rlvr->rlvr, which run_stage had already measured as inducing (the
+# induce filter is what let L24 be selected at all). Nine "no"s that look like a finding and
+# are actually an under-powered sweep: the O-50 failure mode, second occurrence.
+#
+# So the grid is anchored to the data: multiples of the LARGEST source norm in the lineage.
+# One anchor shared by every source keeps injected norm matched across sources (the whole
+# point of --unit-norm) while guaranteeing each source's own raw scale falls inside the sweep.
+NORM_MULTIPLES = (0.25, 0.5, 1.0, 2.0, 4.0, 8.0)
+
+
+def coeff_grid(raw_norms: dict, unit_norm: bool) -> tuple[float, ...]:
+    """Coefficients to sweep. Raw mode: Arditi's fixed grid. Unit-norm mode: multiples of the
+    largest source norm, so `coeff` reads as injected norm and the raw operating point of
+    every source is inside the grid."""
+    if not unit_norm:
+        return COEFFS
+    anchor = max(raw_norms.values())
+    return tuple(round(m * anchor, 4) for m in NORM_MULTIPLES)
 
 
 def source_layers(cfg) -> list[tuple[str, int, int]]:
@@ -90,10 +113,10 @@ def source_layers(cfg) -> list[tuple[str, int, int]]:
     return out
 
 
-def load_source_directions(cfg, sources, unit_norm: bool = False) -> dict[tuple[str, int], np.ndarray]:
+def load_source_directions(cfg, sources, unit_norm: bool = False) -> tuple[dict, dict]:
     """Reuse the P1-E1 probe directions: identical estimator, data and hook point as E02's
     refusal directions (mean-diff harmful-harmless at resid_pre over eoi positions)."""
-    out = {}
+    out, raw_norms = {}, {}
     for stage, layer, pos_idx in sources:
         path = cfg.path(stage, "probe")
         if not os.path.exists(path):
@@ -105,20 +128,21 @@ def load_source_directions(cfg, sources, unit_norm: bool = False) -> dict[tuple[
                 f"{d.shape}. A stage on a regime override has its own n_eoi — check "
                 f"cfg.regime('{stage}') against the array this probe run produced.")
         v = d[pos_idx, layer].astype(np.float32)
+        raw_norms[(stage, layer, pos_idx)] = float(np.linalg.norm(v))
         if unit_norm:
             # Norms differ 1.1 / 7.4 / 4.4 across base/sft/dpo, so a raw coefficient is not
             # comparable across sources. Unit-normalising makes the coefficient the INJECTED
             # NORM, which is. Changes what the numbers mean -- report which mode was used.
             v = v / (np.linalg.norm(v) + 1e-8)
         out[(stage, layer, pos_idx)] = v
-    return out
+    return out, raw_norms
 
 
 def sweep_cell(model, tok, direction: torch.Tensor, layer: int, harmless, template,
-               refusal_toks, base_harmless_logits, batch_size):
-    """Induced refusal and KL on harmless prompts, across COEFFS, for ONE direction."""
+               refusal_toks, base_harmless_logits, batch_size, coeffs=COEFFS):
+    """Induced refusal and KL on harmless prompts, across `coeffs`, for ONE direction."""
     rows = []
-    for c in COEFFS:
+    for c in coeffs:
         h = _addition_handles(model, direction, coeff=c, layer=layer)
         try:
             lg = _last_logits(model, tok, harmless, template, batch_size)
@@ -129,7 +153,17 @@ def sweep_cell(model, tok, direction: torch.Tensor, layer: int, harmless, templa
     return rows
 
 
-def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
+def positive_control(records, stage: str, threshold: float):
+    """(ok, best_induced, self_cells) — did the target's OWN direction induce refusal in it?
+
+    `records` rows are (src, layer, kind, coeff, induced_refusal, kl). The self-cell is the
+    positive control for the whole matrix: see the comment at its call site."""
+    self_cells = [r for r in records if r[0] == stage and r[2] == "direction"]
+    best = max((r[4] for r in self_cells), default=float("nan"))
+    return bool(self_cells) and best >= threshold, best, self_cells
+
+
+def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS) -> None:
     set_seed(cfg.seed)
     model, tok = load_model(model_id, cfg.dtype)
     template, want_id, _n, is_ov = cfg.regime(stage)
@@ -155,9 +189,9 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
         for kind, direction in (("direction", d),
                                 ("random", _norm_matched(d, gen))):
             for c, ref, kl in sweep_cell(model, tok, direction, layer, harmless, template,
-                                         refusal_toks, base_lg, cfg.batch_size):
+                                         refusal_toks, base_lg, cfg.batch_size, coeffs):
                 records.append((src, layer, kind, c, ref, kl))
-            last = records[-len(COEFFS):]      # exactly this cell's coefficient sweep
+            last = records[-len(coeffs):]      # exactly this cell's coefficient sweep
             best = max(last, key=lambda r: r[4])
             ok = [c for _, _, _, c, r, _ in last if r >= cfg.induce_threshold]
             logger.info("[%s] src=%-4s L%-2d %-9s | max induced %+.3f @coeff %.1f (KL %.2f) | %s",
@@ -165,13 +199,38 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
                         f"INDUCES (first at coeff {min(ok)})" if ok
                         else "never crosses threshold")
 
+    # POSITIVE CONTROL. A transplant matrix of all-"no" is only a finding if the sweep was
+    # powerful enough to produce a "yes" where one must exist. The self-cell is that test:
+    # a stage's OWN direction at its OWN l* passed run_stage's induce filter by construction
+    # (select_direction_arditi: valid &= steering_refusal >= induce_threshold), so it MUST
+    # cross here too. When it does not, the grid is below the operating point and nothing in
+    # the matrix can be interpreted.
+    #
+    # Exempt: the first stage. Base failing to induce in itself is the measurement, not a
+    # malfunction -- base has no filtered l* at all (l* = -1, unfiltered fallback), so there
+    # is no guarantee to violate.
+    is_first = stage == cfg.stages[0]
+    ctrl_ok, self_best, self_cells = positive_control(records, stage, cfg.induce_threshold)
+    if not is_first and not ctrl_ok:
+        logger.error(
+            "[%s] POSITIVE CONTROL FAILED: %s's own direction @L%d does not induce refusal in "
+            "%s (best %+.3f < %.2f) — but run_stage's induce filter already established that it does at raw "
+            "scale. The sweep tops out at injected norm %.1f, below this direction's raw norm. "
+            "DO NOT report this matrix: every 'no' in it is under-powered, not negative.",
+            stage, stage, self_cells[0][1], stage, self_best, cfg.induce_threshold,
+            max(coeffs))
+    elif not is_first:
+        logger.info("[%s] positive control OK: own direction induces (best %+.3f)",
+                    stage, self_best)
+
     arr = np.array([(r[3], r[4], r[5]) for r in records], dtype=np.float32)
     meta = np.array([f"{r[0]}|{r[1]}|{r[2]}" for r in records])
     os.makedirs(cfg.results_dir, exist_ok=True)
     path = cfg.path(stage, "transplant")
     np.savez(path, stage=np.array(stage), model_id=np.array(model_id), cells=meta, sweep=arr,
-             coeffs=np.array(COEFFS), baseline_harmless_refusal=np.array(baseline),
+             coeffs=np.array(coeffs), baseline_harmless_refusal=np.array(baseline),
              sources=np.array([f"{a}|{b}|{c}" for a, b, c in srcs]),
+             positive_control_ok=np.array(ctrl_ok or is_first),
              lineage=np.array(cfg.lineage))
     logger.info("[%s] saved %s", stage, path)
 
@@ -186,7 +245,8 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord) -> None:
                        max_induced=round(best[4], 4), coeff_at_max=best[3],
                        kl_at_max=round(best[5], 3),
                        dir_norm=round(float(np.linalg.norm(srcs[(src, layer, _pos)])), 2),
-                       baseline_harmless=round(baseline, 4))
+                       baseline_harmless=round(baseline, 4),
+                       positive_control_ok=bool(ctrl_ok or is_first))
     del model
     torch.cuda.empty_cache()
 
@@ -210,12 +270,18 @@ def main() -> None:
     cfg.require_verified()          # conceptual blocker first ...
     logger.info("data: %s", assert_available())   # ... then the cheap file check
     sources = source_layers(cfg)
-    srcs = load_source_directions(cfg, sources, unit_norm=args.unit_norm)
+    srcs, raw_norms = load_source_directions(cfg, sources, unit_norm=args.unit_norm)
+    coeffs = coeff_grid(raw_norms, args.unit_norm)
     logger.info("direction scaling: %s", "UNIT-NORM (coeff = injected norm)" if args.unit_norm
                 else "RAW (Arditi default; coeff not comparable across sources)")
     logger.info("source directions: %s",
-                [f"{s}@L{l}/p{p} norm={np.linalg.norm(v):.1f}"
-                 for (s, l, p), v in srcs.items()])
+                [f"{s}@L{l}/p{p} raw_norm={raw_norms[(s, l, p)]:.1f}" for (s, l, p) in srcs])
+    if args.unit_norm:
+        logger.info("coefficient grid = %s x max raw norm %.1f -> %s",
+                    NORM_MULTIPLES, max(raw_norms.values()),
+                    [round(c, 1) for c in coeffs])
+    else:
+        logger.info("coefficient grid = %s (raw)", coeffs)
     if not args.unit_norm:
         logger.info("NOTE: norms differ across checkpoints, so a given coefficient is NOT "
                     "comparable across sources — read the sweep, not a single coeff. "
@@ -232,7 +298,7 @@ def main() -> None:
                          "had the machinery. Sweeping coefficients also retires the 'you only "
                          "tried coeff=1' objection to E02.") as rec:
         for s in stages:
-            run_one(s, ckpts[s], cfg, srcs, rec)
+            run_one(s, ckpts[s], cfg, srcs, rec, coeffs)
 
 
 if __name__ == "__main__":

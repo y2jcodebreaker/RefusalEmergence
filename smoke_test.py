@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from config import DEFAULT, config_for
+from config import config_for
 from data import load_instructions, splits_dir
 from refusal_direction import refusal_score, select_l_star
 

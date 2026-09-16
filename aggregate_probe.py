@@ -88,8 +88,25 @@ def main(cfg_override=None) -> None:
 
         cos, nullhi = {}, {}
         if "base" in found:
+            n_pos_base = found["base"]["directions"].shape[0]
             for s in stages:
                 if s == "base":
+                    continue
+                # A stage on a regime override reads a DIFFERENT window over a DIFFERENT
+                # template (olmo2 base: 2 positions of 'User: ...\nAssistant:', vs 5 of the
+                # chat template). Position i then denotes different things in the two stacks,
+                # so a position-matched cosine is not merely shape-incompatible -- it is
+                # undefined. Truncating to the shorter stack would silently produce a number.
+                n_pos_s = found[s]["directions"].shape[0]
+                if n_pos_s != n_pos_base:
+                    logger.warning(
+                        "[base vs %s] SKIPPED: base has %d eoi positions and %s has %d, "
+                        "because base is on a regime override (different template and "
+                        "window). Position-matched cosine is undefined across that boundary; "
+                        "the transplant test (P1-E1b) is the comparison that survives it.",
+                        s, n_pos_base, s, n_pos_s)
+                    rec.result(stage=f"base_vs_{s}", cosine="SKIPPED_REGIME_OVERRIDE",
+                               n_pos_base=int(n_pos_base), n_pos_other=int(n_pos_s))
                     continue
                 c, nh = cosine_vs_null(found["base"]["directions"], found[s]["directions"],
                                        found["base"]["null_directions"],
@@ -117,7 +134,8 @@ def _verdict(acc, acc_mm, cos, nullhi, found, stages) -> None:
     readable = lr.max() >= 0.90
     surface = lr[0] >= lr.max() - 0.02
     lenb = float(found["base"]["length_baseline"])
-    aligned = [s for s in stages if s != "base"]
+    # only stages whose cosine was actually computed: a regime override skips some
+    aligned = [s for s in stages if s != "base" and s in cos]
     # A null p95 near 1.0 means ANY two mean-diff-like vectors in this space are highly
     # cosine-similar, so "signal < null" says nothing about axes. Residual streams are
     # strongly anisotropic (a few massive dimensions dominate), which inflates every
@@ -163,6 +181,16 @@ def _verdict(acc, acc_mm, cos, nullhi, found, stages) -> None:
         print("  -> HYPOTHESIS, WEAK FORM. Readable in base, but on a DIFFERENT axis from the\n"
               "     one the aligned model uses. Alignment installs a new, specifically\n"
               "     actionable direction rather than activating a latent one.")
+    else:
+        # Reachable when every cosine was skipped (base on a regime override). Without this
+        # branch the verdict block printed the three diagnostic lines and then NOTHING, which
+        # reads as "no verdict was warranted" rather than "the test could not be run".
+        print("  -> CLAUSE 1 CONFIRMED, CLAUSE 2 NOT TESTED. The distinction IS readable in\n"
+              "     base. The axis comparison was not run at all: base sits on a regime\n"
+              "     override, so its eoi window is a different length over a different\n"
+              "     template and position-matched cosine is undefined across that boundary.\n"
+              "     Report clause 1 only. The transplant test (P1-E1b) is behavioural and\n"
+              "     crosses the boundary intact — that is the evidence to use here.")
     print("=" * 78 + "\n")
 
 
@@ -200,7 +228,13 @@ def _figure(cfg, acc, acc_mm, cos, nullhi, found, stages, n_layers) -> None:
     ax2.set_ylim(bottom=0); ax2.set_xlabel("layer")
     ax2.set_ylabel("|cosine| to base direction")
     ax2.set_title("Is it the SAME axis the aligned model refuses along?")
-    ax2.legend(fontsize=7)
+    if cos:
+        ax2.legend(fontsize=7)
+    else:   # an empty axis with a confident title would be read as "no similarity found"
+        ax2.text(0.5, 0.5, "not computed — base is on a regime override\n"
+                           "(different template and eoi window; cosine undefined)",
+                 transform=ax2.transAxes, ha="center", va="center", fontsize=8, color="#c1543a")
+        ax2.set_yticks([])
 
     fig.tight_layout()
     out = f"{cfg.figures_dir}/p1e1_probe.pdf"

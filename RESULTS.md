@@ -242,7 +242,7 @@ Reading: base refuses *incidentally* — pretraining contains refusal-shaped tex
 behavior appears with no controllable mechanism behind it. SFT installs the mechanism
 (L15–20). DPO sharpens it (+1.01 → +1.76) without moving its peak (L16 = 50% depth).
 
-![induce](results/figures/refusal_emergence_induce.pdf)
+![induce](results/figures/zephyr_refusal_emergence_induce.pdf)
 
 ## Supporting
 
@@ -327,6 +327,23 @@ trusting the rate — that is the standing instruction for the OLMo 2 and tulu-2
 6. **Jensen gap.** The per-prompt diagnostic reports mean *probability* while the sweep reports
    mean *log-ratio*; both are correct and they differ on skewed distributions.
 
+## Superseded runs in the ledger
+
+`results/runs.jsonl` is append-only and records what happened, including runs whose numbers
+were later invalidated. Do not read these as results:
+
+| started (UTC) | script | commit | why superseded |
+|---|---|---|---|
+| 2026-09-16T17:56 | `run_stage.py` | `c48f441` | n_eoi 6/3 — the leaking window (O-58) |
+| 2026-09-16T18:06 | `probe_representation.py` | `c48f441` | same; this is the run whose L0 read 0.644 |
+| 2026-09-16T18:08 | `transplant.py` | `c48f441` | **failed** — NameError on the save line |
+| 2026-09-16T18:29 | `transplant.py` | `9601ed6` | fixed grid capped at 16: under-powered, self-cell failed (O-59). Predates the positive-control gate, so it carries no `positive_control_ok` field and its all-"no" matrix looks like a finding |
+| 2026-09-16T18:34 | `aggregate_probe.py` | `9601ed6` | **failed** — cosine shape mismatch under the regime override |
+| 2026-09-16T18:49 | `transplant_text.py` | `8d5fd7f` | rates valid, but scored by the judge that missed phrase loops (O-60); re-score with `rescore_transplant_text.py` |
+
+The authoritative runs are `4d6d16f` (transplant), `4d6d16f` (aggregate_probe) and `9d3a388`
+(both transplant_text controls). Everything in the OLMo 2 section above comes from those.
+
 ## Methodological notes (eight errors caught, in order)
 
 Each was found by checking a number against what the model actually did, not by inspecting
@@ -402,8 +419,17 @@ Recorded because it was a plausible second claim and it is false.
 
 | file | what it shows |
 |---|---|
+Every filename is prefixed with its lineage — `zephyr_…` and `olmo2_…` — so both families
+coexist. They were not, and the OLMo 2 run silently overwrote Zephyr's committed PDFs with
+identically-named OLMo 2 ones; nothing errored, the repo just began claiming Zephyr's figures
+showed another family's numbers. `Config.figure()` now scopes them the way `Config.path()`
+already scoped the `.npz`, and a test asserts two lineages cannot collide.
+
+| `{lineage}_…` | |
+|---|---|
 | `refusal_emergence_induce.pdf` | **the headline** — induced refusal vs layer, per stage |
 | `refusal_emergence_peak.pdf` | ablation peak strength vs the random control |
 | `refusal_emergence_heatmap.pdf` | stage × layer ablation strength, raw scale |
 | `refusal_emergence_heatmap_rownorm.pdf` | same, row-normalised (location, magnitude discarded) |
 | `refusal_emergence_behavioral.pdf` | substring refusal rate, baseline vs ablated |
+| `p1e1_probe.pdf` | probe accuracy per layer + the cosine panel (skipped under a regime override) |

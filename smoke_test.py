@@ -102,8 +102,17 @@ def test_aggregate_shapes():
             aggregate.main(cfg_override=cfg)
         finally:
             sys.argv = argv
-        assert os.path.exists(f"{cfg.figures_dir}/refusal_emergence_heatmap.pdf")
-    print("  aggregate: base<sft<dpo peaks -> heatmap + panel rendered (in tmpdir) — OK")
+        heat = cfg.figure("refusal_emergence_heatmap")
+        assert os.path.exists(heat), heat
+        # Figure filenames must be LINEAGE-SCOPED. They were not: running OLMo 2 overwrote
+        # Zephyr's committed PDFs with identically-named OLMo 2 ones. Nothing errored -- the
+        # repo simply began claiming Zephyr's figures showed another family's numbers
+        # (2026-09-16). Two lineages must be able to coexist on disk.
+        assert os.path.basename(heat).startswith(cfg.lineage + "_"), heat
+        other = config_for("olmo2", results_dir=cfg.results_dir,
+                           figures_dir=cfg.figures_dir)
+        assert other.figure("refusal_emergence_heatmap") != heat, "figures would collide"
+    print("  aggregate: base<sft<dpo peaks -> lineage-scoped heatmap + panel (in tmpdir) — OK")
 
 
 if __name__ == "__main__":

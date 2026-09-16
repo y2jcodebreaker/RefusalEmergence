@@ -410,7 +410,8 @@ def test_regime_override_aggregate() -> None:
                      null_directions=rng.normal(size=(8, npos, 32, 64)).astype(np.float32))
         A.main(cfg_override=cfg)          # must not raise
         check("mismatched eoi windows aggregate instead of crashing", True)
-        check("figure still written", os.path.exists(os.path.join(td, "fig", "p1e1_probe.pdf")))
+        check("figure still written, lineage-scoped",
+              os.path.exists(cfg.figure("p1e1_probe")), cfg.figure("p1e1_probe"))
         check("ledger went to the synthetic results_dir",
               os.path.exists(os.path.join(td, "runs.jsonl")))
     real_after = (open("results/runs.jsonl").read() if os.path.exists("results/runs.jsonl")

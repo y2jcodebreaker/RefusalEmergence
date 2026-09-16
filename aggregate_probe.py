@@ -237,7 +237,7 @@ def _figure(cfg, acc, acc_mm, cos, nullhi, found, stages, n_layers) -> None:
         ax2.set_yticks([])
 
     fig.tight_layout()
-    out = f"{cfg.figures_dir}/p1e1_probe.pdf"
+    out = cfg.figure("p1e1_probe")
     fig.savefig(out)
     logger.info("wrote %s", out)
 

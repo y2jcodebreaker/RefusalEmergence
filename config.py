@@ -241,6 +241,13 @@ class Config:
         """results/{lineage}_{stage}_{axis}.npz — lineage-scoped so families never collide."""
         return f"{self.results_dir}/{self.lineage}_{stage}_{axis}.npz"
 
+    def figure(self, name: str, ext: str = "pdf") -> str:
+        """results/figures/{lineage}_{name}.{ext} — lineage-scoped for the SAME reason .path
+        is. The figures were not, and running OLMo 2 silently overwrote Zephyr's committed
+        PDFs with identically-named OLMo 2 ones (2026-09-16). Nothing errored; the repo just
+        started claiming Zephyr's figures showed OLMo 2's numbers."""
+        return f"{self.figures_dir}/{self.lineage}_{name}.{ext}"
+
     def require_verified(self) -> None:
         """Refuse to run an unverified lineage. O-42 made structural."""
         lin = LINEAGES[self.lineage]

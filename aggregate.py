@@ -62,7 +62,7 @@ def main(cfg_override=None) -> None:
         else:
             ax.text(0.5, i, "no valid direction", color="c", fontsize=7, va="center")
     fig.colorbar(im, ax=ax, label="baseline − ablated refusal")
-    fig.tight_layout(); fig.savefig(f"{cfg.figures_dir}/refusal_emergence_heatmap.pdf")
+    fig.tight_layout(); fig.savefig(cfg.figure("refusal_emergence_heatmap"))
 
     # (1b) ROW-NORMALISED companion. The raw scale above is honest about magnitude but the
     # base row (peak ~1) renders near-black against a dpo peak of ~7.6, hiding WHERE within
@@ -86,7 +86,7 @@ def main(cfg_override=None) -> None:
         axb.axvspan(int(excl.min()) - 0.5, n_layers - 0.5, color="c", alpha=0.18)
         axb.text(n_layers - 0.6, -0.65, "pruned for l*", ha="right", fontsize=7, color="c")
     figb.colorbar(imb, ax=axb, label="within-stage relative strength")
-    figb.tight_layout(); figb.savefig(f"{cfg.figures_dir}/refusal_emergence_heatmap_rownorm.pdf")
+    figb.tight_layout(); figb.savefig(cfg.figure("refusal_emergence_heatmap_rownorm"))
 
     # (2) causal panel: peak strength per stage, WITH the random-direction control.
     # Without the control this panel is uninterpretable: a rising bar could just mean
@@ -108,7 +108,7 @@ def main(cfg_override=None) -> None:
                  ha="center", va="top", fontsize=8, color="#c22")
     ax2.set_xticks(x); ax2.set_xticklabels(stages)
     ax2.set_ylabel("peak causal refusal strength"); ax2.set_title("How installed is refusal?")
-    fig2.tight_layout(); fig2.savefig(f"{cfg.figures_dir}/refusal_emergence_peak.pdf")
+    fig2.tight_layout(); fig2.savefig(cfg.figure("refusal_emergence_peak"))
 
     # (0) THE HEADLINE: the induce curve. Add the direction to HARMLESS prompts -> does
     # refusal appear? This is the constructive axis, and unlike the ablation axis it cannot
@@ -133,7 +133,7 @@ def main(cfg_override=None) -> None:
         ax0.set_xlabel("layer"); ax0.set_ylabel("induced refusal score on harmless")
         ax0.set_title("Can refusal be STEERED IN? (direction added to harmless prompts)")
         ax0.legend(fontsize=8)
-        fig0.tight_layout(); fig0.savefig(f"{cfg.figures_dir}/refusal_emergence_induce.pdf")
+        fig0.tight_layout(); fig0.savefig(cfg.figure("refusal_emergence_induce"))
 
         for s in stages:
             st, excl = found[s]["steer"], found[s]["excluded_layers"]
@@ -163,7 +163,7 @@ def main(cfg_override=None) -> None:
         ax3.set_ylim(0, 1); ax3.set_ylabel("substring refusal rate")
         ax3.set_title("Behavioral refusal (Arditi/JailbreakBench prefixes)")
         ax3.legend(fontsize=8)
-        fig3.tight_layout(); fig3.savefig(f"{cfg.figures_dir}/refusal_emergence_behavioral.pdf")
+        fig3.tight_layout(); fig3.savefig(cfg.figure("refusal_emergence_behavioral"))
         logger.info("substring refusal rate baseline=%s -> ablated=%s (drop=%s)",
                     [round(v, 3) for v in b], [round(v, 3) for v in a],
                     [round(p - q, 3) for p, q in zip(b, a)])
@@ -184,7 +184,7 @@ def main(cfg_override=None) -> None:
     else:
         logger.warning("no control in results — peak panel is NOT interpretable on its own. "
                        "Re-run: python run_stage.py --stage all --control")
-    logger.info("wrote %s/refusal_emergence_{heatmap,peak}.pdf", cfg.figures_dir)
+    logger.info("wrote %s", cfg.figure("refusal_emergence_{heatmap,peak,induce,...}"))
 
 
 if __name__ == "__main__":

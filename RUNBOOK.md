@@ -65,6 +65,17 @@ python probe_representation.py --lineage $LIN --stage all                       
 python transplant.py           --lineage $LIN --stage all --unit-norm             # ~5 min
 ```
 
+**If any transplant cell crosses the induction threshold at a large KL**, the logit result is
+not enough — run the text-level check on that cell before believing it:
+
+```bash
+python transplant_text.py --lineage $LIN --target base --source sft      # ~3 min, GPU
+```
+
+It generates under the same injection and reports refusal rate and DEGENERATE rate against a
+norm-matched random arm at the identical coefficient. A logit crossing that comes with
+degenerate text is distributional damage, not induced refusal.
+
 **Order matters.** `transplant.py` reads each stage's `l*` from `run_stage`'s output and its
 directions from `probe_representation`'s.
 

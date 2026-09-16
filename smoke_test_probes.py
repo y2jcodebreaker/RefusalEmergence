@@ -276,6 +276,7 @@ def main() -> int:
 
     test_transplant()
     test_regime_override_aggregate()
+    test_transplant_text()
 
     print("\n" + ("ALL PASSED" if not FAIL else f"{len(FAIL)} FAILED: {FAIL}"))
     return 1 if FAIL else 0
@@ -415,6 +416,51 @@ def test_regime_override_aggregate() -> None:
     real_after = (open("results/runs.jsonl").read() if os.path.exists("results/runs.jsonl")
                   else None)
     check("the REAL run ledger was not touched", real_before == real_after)
+
+
+def test_transplant_text() -> None:
+    """P1-E1c: the degenerate-output judge, and reading the operating point off the sweep."""
+    import tempfile
+    from dataclasses import replace
+
+    import numpy as np
+
+    import transplant_text as X
+    from config import config_for
+
+    print("\n[transplant text — P1-E1c]")
+    check("empty completion counts as degenerate", X.degenerate_rate([""]) == 1.0)
+    check("single repeated token counts as degenerate",
+          X.degenerate_rate(["I I I I I I I I I I"]) == 1.0)
+    check("a real refusal does NOT count as degenerate",
+          X.degenerate_rate(["I cannot help with that request, sorry."]) == 0.0)
+    check("a long varied answer does NOT count as degenerate",
+          X.degenerate_rate(["The capital of France is Paris, a city on the river Seine."])
+          == 0.0)
+    check("no completions -> nan, not a fake 0.0",
+          X.degenerate_rate([]) != X.degenerate_rate([]))      # nan != nan
+
+    # The operating point must be READ from transplant.py's saved sweep, never hardcoded,
+    # or the two scripts drift and the text is generated at a coefficient the logit sweep
+    # never visited.
+    with tempfile.TemporaryDirectory() as td:
+        cfg = replace(config_for("olmo2"), results_dir=td)
+        cells = np.array(["sft|24|direction"] * 3 + ["sft|24|random"] * 3)
+        sweep = np.array([(10.0, -2.0, 0.1), (20.0, +0.5, 2.0), (40.0, +3.0, 8.0),
+                          (10.0, -3.0, 0.1), (20.0, -3.0, 0.5), (40.0, -2.0, 1.0)],
+                         dtype=np.float32)
+        np.savez(cfg.path("base", "transplant"), cells=cells, sweep=sweep)
+        got = X.crossing_coeffs(cfg, "base", "sft")
+        check("reads the FIRST crossing and the argmax from the sweep", got == [20.0, 40.0],
+              str(got))
+        check("ignores the random arm when picking the operating point", 10.0 not in got)
+
+        cells2 = np.array(["base|23|direction"] * 2)
+        sweep2 = np.array([(10.0, -5.0, 0.1), (40.0, -1.0, 3.0)], dtype=np.float32)
+        np.savez(cfg.path("sft", "transplant"), cells=cells2, sweep=sweep2)
+        got2 = X.crossing_coeffs(cfg, "sft", "base")
+        check("with no crossing, falls back to the argmax instead of crashing", got2 == [40.0],
+              str(got2))
 
 
 if __name__ == "__main__":

@@ -52,35 +52,17 @@ The core is ported from a **validated** Arditi implementation that reproduced th
 
 ## Run
 
-```bash
-uv venv && source .venv/bin/activate
-uv pip install --upgrade torch --index-url https://download.pytorch.org/whl/cu124
-uv pip install -r requirements.txt
-pip uninstall -y torchvision torchaudio     # see Gotchas
-
-git clone https://github.com/andyrdt/refusal_direction.git
-export ARDITI_REPO=$PWD/refusal_direction   # harmful/harmless splits only
-# ^ NOT persisted across pod restarts. data.py also auto-finds ./refusal_direction,
-#   ../refusal_direction and /workspace/refusal_direction, so cloning into one of those
-#   locations means you never have to remember the export.
-
-python verify_setup.py                            # preflight, no GPU, ~30s
-python run_stage.py --stage all --control --behavioral   # ~30 min on an L40S
-python aggregate.py                               # -> results/figures/*.pdf
-```
-
-**24 GB VRAM** is enough (one 7B in bf16 at a time). **100 GB disk** for the HF cache — set
-`HF_HOME` to a persistent volume. Accept the Mistral-7B-v0.1 license on HF before starting.
-
-### Inspecting and auditing
+Full copy-paste setup, run, audit and teardown: **[RUNBOOK.md](RUNBOOK.md)**.
 
 ```bash
-python show_completions.py --stage base   # generations + per-hit judge verdicts
-python audit_judge.py --stage base       # EVERY judge hit, for hand-classification
-python show_filters.py --stage base       # the KL / induce surfaces, and WHICH criterion failed
-python diagnose_refusal_token.py --stage dpo   # what token does the model actually emit?
-python smoke_test.py                      # CPU-only unit tests
+python verify_setup.py --lineage olmo2                                  # preflight, no GPU
+python run_stage.py --lineage olmo2 --stage all --control --behavioral  # ~15 min
+python probe_representation.py --lineage olmo2 --stage all              # ~5 min
+python transplant.py --lineage olmo2 --stage all --unit-norm            # ~5 min
+python aggregate.py --lineage olmo2 && python aggregate_probe.py --lineage olmo2
 ```
+
+**24 GB VRAM**, **150 GB disk**. Set `HF_HOME` to the persistent volume.
 
 ## Gotchas (all of these cost us a run)
 

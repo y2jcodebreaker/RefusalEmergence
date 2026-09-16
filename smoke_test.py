@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from config import DEFAULT
+from config import DEFAULT, config_for
 from data import load_instructions, splits_dir
 from refusal_direction import refusal_score, select_l_star
 
@@ -47,17 +47,36 @@ def test_select_l_star():
 
 
 def test_aggregate_shapes():
+    """Renders aggregate.py from synthetic sweeps — INSIDE A TEMP DIR.
+
+    An earlier version wrote its fixtures to DEFAULT.path(...), i.e. the same
+    results/zephyr_*_refusal.npz that real runs write. Running the smoke test would have
+    silently replaced 30 minutes of GPU results with toy arrays, and nothing downstream
+    would have looked wrong — the same failure shape as O-42. Tests never write where real
+    results live.
+    """
     import os
-    os.makedirs("results", exist_ok=True)
-    for st, peak_layer, peak in [("base", 12, 0.2), ("sft", 12, 1.5), ("dpo", 13, 3.0)]:
-        c = np.zeros(32); c[peak_layer] = peak
-        np.savez(DEFAULT.path(st, "refusal"), stage=np.array(st), model_id=np.array("x"),
-                 bypass=c, l_star=np.array(peak_layer),
-                 baseline_refusal=np.array(1.0), excluded_layers=np.array(range(26, 32)))
-    import aggregate
-    aggregate.main()
-    assert os.path.exists("results/figures/refusal_emergence_heatmap.pdf")
-    print("  aggregate: base<sft<dpo peaks -> heatmap + panel rendered — OK")
+    import sys
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        cfg = config_for("zephyr", results_dir=f"{td}/results",
+                         figures_dir=f"{td}/results/figures")
+        os.makedirs(cfg.figures_dir, exist_ok=True)
+        for st, peak_layer, peak in [("base", 12, 0.2), ("sft", 12, 1.5), ("dpo", 13, 3.0)]:
+            c = np.zeros(32); c[peak_layer] = peak
+            np.savez(cfg.path(st, "refusal"), stage=np.array(st), model_id=np.array("x"),
+                     bypass=c, l_star=np.array(peak_layer),
+                     baseline_refusal=np.array(1.0), excluded_layers=np.array(range(26, 32)))
+        import aggregate
+        argv = sys.argv
+        sys.argv = ["aggregate.py", "--lineage", "zephyr"]
+        try:
+            aggregate.main(cfg_override=cfg)
+        finally:
+            sys.argv = argv
+        assert os.path.exists(f"{cfg.figures_dir}/refusal_emergence_heatmap.pdf")
+    print("  aggregate: base<sft<dpo peaks -> heatmap + panel rendered (in tmpdir) — OK")
 
 
 if __name__ == "__main__":

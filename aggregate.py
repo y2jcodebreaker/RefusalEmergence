@@ -30,12 +30,12 @@ def _load(cfg):
     return found
 
 
-def main() -> None:
+def main(cfg_override=None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lineage", default="zephyr",
                     help="model family from config.LINEAGES")
     args = ap.parse_args()
-    cfg = config_for(args.lineage)
+    cfg = cfg_override or config_for(args.lineage)
     found = _load(cfg)
     stages = [s for s in cfg.stages if s in found]   # lineage's own order
     if not stages:

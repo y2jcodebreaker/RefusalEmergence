@@ -29,10 +29,28 @@ from data import assert_available, load_instructions
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("diagnose")
 
-def with_system_turn(template: str) -> str:
-    """The same template with an (often empty) system turn prepended. Several chat formats
-    expect one, and omitting it can degrade the model — worth testing as a second panel."""
-    return "<|system|>\n</s>\n" + template
+def with_system_turn(tok, template: str) -> str | None:
+    """The lineage's own template rendered WITH an empty system turn, or None if the
+    tokenizer has no chat template to ask.
+
+    Derived, never hand-built. An earlier version returned a hardcoded
+    "<|system|>\n</s>\n" + template, which injects Mistral's </s> into any other family's
+    prompt. On OLMo 2 that malformed prompt pushed <|endoftext|> to rank 5, dropped
+    p(refusal) 0.948 -> 0.849, and flipped one harmful prompt from refusing to COMPLYING --
+    i.e. the panel measured the broken prompt, not a design choice."""
+    if not getattr(tok, "chat_template", None):
+        return None
+    try:
+        rendered = tok.apply_chat_template(
+            [{"role": "system", "content": ""}, {"role": "user", "content": "\x00"}],
+            tokenize=False, add_generation_prompt=True)
+    except Exception:          # noqa: BLE001 - many templates reject an empty system turn
+        return None
+    out = rendered.replace("\x00", "{instruction}")
+    bos = getattr(tok, "bos_token", None)
+    if bos and out.startswith(bos):
+        out = out[len(bos):]
+    return out
 
 # Candidate refusal-onset strings. Refusals overwhelmingly open with one of these.
 CANDIDATES = ["I", " I", "I'm", "As", "Sorry", "Unfortunately", "It"]
@@ -107,8 +125,13 @@ def main() -> None:
     harmful = load_instructions("harmful_val")[: args.n]
     report(model, tok, harmful, cfg.template,
            f"[{cfg.lineage}/{args.stage}] HARMFUL / lineage template")
-    report(model, tok, harmful, with_system_turn(cfg.template),
-           f"[{cfg.lineage}/{args.stage}] HARMFUL / template WITH <|system|> turn")
+    sys_tpl = with_system_turn(tok, cfg.template)
+    if sys_tpl and sys_tpl != cfg.template:
+        report(model, tok, harmful, sys_tpl,
+               f"[{cfg.lineage}/{args.stage}] HARMFUL / template WITH system turn (derived)")
+    else:
+        print(f"\n(skipping the system-turn panel: {args.stage}'s tokenizer offers no "
+              f"distinct system-turn rendering)")
 
     harmless = load_instructions("harmless_val")[: args.n]
     report(model, tok, harmless, cfg.template,

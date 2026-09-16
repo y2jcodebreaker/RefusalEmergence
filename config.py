@@ -101,7 +101,12 @@ LINEAGES: dict[str, Lineage] = {
         # tokenizer re-adds at encode time -- stripped here so it does not appear twice.
         template="<|user|>\n{instruction}\n<|assistant|>\n",
         refusal_token_piece="I",
-        expected_refusal_id=None,   # diagnose_refusal_token.py --lineage olmo2 --stage rlvr
+        # MEASURED 2026-09-16 (diagnose_refusal_token.py, OLMo-2-1124-7B-Instruct, harmful):
+        #   id=40  piece 'I'   p=0.9483  <- rank 0
+        #   id=358 piece ' I'  p=0.000008 <- rank 65
+        # Harmless control p(40)=0.0046 -> a 205x contrast (Zephyr's was 135x). The bare-vs-
+        # space-prefixed trap recurs on a completely different tokenizer, with different ids.
+        expected_refusal_id=40,
         n_eoi=None,                 # verify_setup.py --lineage olmo2
         notes="The fully public 4-point pipeline (base -> SFT -> DPO -> RLVR) with GENUINE "
               "safety training — post-trained on an OLMo variant of Tulu 3. Preferred over "

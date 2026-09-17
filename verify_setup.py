@@ -20,7 +20,7 @@ refusal_token_piece, the template, or the checkpoint list changes.
 from __future__ import annotations
 
 import argparse
-
+import pathlib
 import sys
 
 # Imported defensively: this script exists to make environment problems legible, so it
@@ -97,6 +97,45 @@ def check_torch_backend() -> bool:
     return True
 
 
+# bf16 7B is ~14.5 GB on disk; a base+SFT+DPO(+RLVR) lineage is 3-4 of those.
+_GB_PER_CKPT = 15
+
+
+def check_disk(cfg) -> bool:
+    """Is there room for this lineage's weights? HF only WARNS on insufficient space and then
+    fails ~15 s later with 'Internal Writer Error: Background writer channel closed', which
+    names neither disk nor the model. Hit mid-run on a pod with four OLMo 2 checkpoints
+    cached (2026-09-17), after the base row had already been computed."""
+    import os
+    import shutil
+
+    hf = os.environ.get("HF_HOME") or os.path.expanduser("~/.cache/huggingface")
+    probe = hf if os.path.isdir(hf) else os.path.dirname(os.path.abspath(hf)) or "."
+    free = shutil.disk_usage(probe).free / 2**30
+    need = _GB_PER_CKPT * len(cfg.checkpoints)
+    cached = 0.0
+    hub = os.path.join(hf, "hub")
+    if os.path.isdir(hub):
+        for d in os.listdir(hub):
+            if any(m.split("/")[-1].lower() in d.lower() for _, m in cfg.checkpoints):
+                cached += sum(f.stat().st_size for f in pathlib.Path(hub, d).rglob("*")
+                              if f.is_file()) / 2**30
+    short = need - cached - free
+    if short > 0:
+        print(f"FAIL: not enough disk for lineage '{cfg.lineage}'.\n"
+              f"      need ~{need:.0f} GB for {len(cfg.checkpoints)} checkpoints, "
+              f"{cached:.0f} GB already cached, {free:.0f} GB free -> short ~{short:.0f} GB.\n"
+              f"      HF_HOME={hf}\n"
+              f"      Free space by deleting a FINISHED lineage's weights, e.g.\n"
+              f"        du -sh {hub}/* | sort -h | tail\n"
+              f"        rm -rf {hub}/models--<org>--<finished-model>*\n"
+              f"      Results in results/ are small and are NOT affected.")
+        return False
+    print(f"OK  disk: {free:.0f} GB free + {cached:.0f} GB cached >= ~{need:.0f} GB needed "
+          f"({len(cfg.checkpoints)} checkpoints)")
+    return True
+
+
 def window_leaks(tok, template: str, n_eoi: int, prompts: list[str]) -> tuple[bool, int]:
     """(leaks, largest_safe_n) — does the last n_eoi-token window vary with the prompt?
 
@@ -152,6 +191,7 @@ def main() -> int:
         return _report_missing()
     cfg = config_for(args.lineage)
     ok = check_torch_backend()
+    ok = check_disk(cfg) and ok
     ref_ids, vocabs, eois = {}, {}, {}
 
     # Derive the chat template from the ALIGNED checkpoint's own tokenizer rather than

@@ -115,9 +115,48 @@ def test_aggregate_shapes():
     print("  aggregate: base<sft<dpo peaks -> lineage-scoped heatmap + panel (in tmpdir) — OK")
 
 
+def test_disk_check() -> None:
+    """The disk preflight must fire BEFORE weights download, and name disk.
+
+    HF only WARNS on insufficient space, then dies ~15 s later with 'Internal Writer Error:
+    Background writer channel closed' -- naming neither disk nor the model. That killed a
+    Zephyr run on a pod after its base row had already been computed (2026-09-17).
+
+    Hermetic: the per-checkpoint size is monkeypatched, so the test does not depend on how
+    much free space the machine running it happens to have. (The first version did, and
+    failed on a laptop with 19 GB free.)"""
+    import io
+    from contextlib import redirect_stdout
+
+    import verify_setup as V
+    from config import config_for
+
+    cfg = config_for("olmo2")
+    saved = V._GB_PER_CKPT
+    try:
+        for per_ckpt, want in ((0, True), (10_000_000, False)):   # 0 GB always fits; 10 PB never
+            V._GB_PER_CKPT = per_ckpt
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                got = V.check_disk(cfg)
+            out = buf.getvalue()
+            assert got is want, f"per_ckpt={per_ckpt}: expected {want}, got {got}\n{out}"
+            if want:
+                assert "OK" in out and "disk" in out, out
+            else:
+                assert "not enough disk" in out and "HF_HOME" in out, out
+                assert "rm -rf" in out, "the message must say HOW to free space"
+                assert "NOT affected" in out, "must say results/ are safe to keep"
+                assert "4 checkpoints" in out, "must say how many checkpoints it sized for"
+    finally:
+        V._GB_PER_CKPT = saved
+    print("  disk preflight: fires before download, names disk and the fix — OK")
+
+
 if __name__ == "__main__":
     print("refusal-emergence smoke test (no LLM):")
     test_no_undefined_names()
+    test_disk_check()
     test_data_loads()
     test_refusal_score()
     test_select_l_star()

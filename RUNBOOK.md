@@ -30,6 +30,19 @@ pip uninstall -y torchvision torchaudio      # built against a different torch; 
 `--upgrade` is not optional: pod images ship torch 2.4.x, plain `pip install torch` treats
 that as satisfied, and recent `transformers` silently disables its PyTorch backend below 2.5.
 
+## 1b. Disk
+
+One bf16 7B checkpoint is ~15 GB, so a lineage is 45 GB (Zephyr) to 60 GB (OLMo 2). **Running a
+second lineage on the same pod needs the first one's weights deleted**, or HF prints a *warning*
+and then dies ~15 s later with `Internal Writer Error: Background writer channel closed`, which
+names neither disk nor the model. `verify_setup.py` now checks this up front.
+
+```bash
+df -h /workspace
+du -sh $HF_HOME/hub/* | sort -h | tail -6
+rm -rf $HF_HOME/hub/models--<org>--<finished-model>*     # results/ is unaffected
+```
+
 ## 2. Preflight — no GPU, ~30 s. Do not skip.
 
 ```bash

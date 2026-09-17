@@ -387,6 +387,44 @@ def test_transplant() -> None:
     e0 = T.cell_effect([r for r in cell if r[2] == "direction"], "sft", base_line)
     check("with NO draws it degrades gracefully", e0["n_draws"] == 0 and e0["z"] is None)
 
+    # --- the SHUFFLED-LABEL null (the harder control) ------------------------------------
+    # Isotropic noise points mostly where the residual stream barely operates -- the same
+    # anisotropy that killed cross-checkpoint cosine (O-49) -- so beating it is easy. On
+    # Zephyr, base's own direction scored z=+3.0 against isotropic noise while failing every
+    # other test, and sft (+2.5) and dpo (+2.9) landed in the same band: that tracks "is a
+    # mean-diff vector", not "is a refusal vector". A shuffled-label fit shares the geometry
+    # and encodes nothing, so the two families must be reported separately.
+    mixed = cell + [("sft", 24, "shuffled0", 8.0, -0.5, .3),
+                    ("sft", 24, "shuffled1", 8.0, -0.2, .3)]
+    er = T.cell_effect(mixed, "sft", base_line, null_prefix="random")
+    es = T.cell_effect(mixed, "sft", base_line, null_prefix="shuffled")
+    check("the two null families are computed separately", er["n_draws"] == 3
+          and es["n_draws"] == 2, f"random={er['n_draws']} shuffled={es['n_draws']}")
+    check("each result records which null it used",
+          er["null"] == "random" and es["null"] == "shuffled")
+    check("a HARDER null gives a SMALLER z for the same direction", es["z"] < er["z"],
+          f"shuffled z={es['z']:.1f} vs random z={er['z']:.1f}")
+    check("delta is the same under either null (it is a property of the cell)",
+          er["delta"] == es["delta"])
+
+    # The loader must refuse to silently under-draw when fewer nulls are stored than asked for.
+    import numpy as _np
+    from dataclasses import replace as _replace
+    import tempfile as _tf
+    from config import config_for as _cf
+    with _tf.TemporaryDirectory() as _td:
+        c = _replace(_cf("olmo2"), results_dir=_td)
+        _np.savez(c.path("base", "probe"),
+                  null_directions=_np.zeros((2, 5, 32, 8), dtype=_np.float16))
+        try:
+            T.load_null_directions(c, [("base", 24, 4)], k=5)
+            check("asking for more nulls than are stored raises", False, "no SystemExit")
+        except SystemExit as e:
+            check("asking for more nulls than are stored raises", "only 2" in str(e), str(e)[:70])
+        got = T.load_null_directions(c, [("base", 24, 4)], k=2)
+        check("loader returns k vectors at the requested cell",
+              got[("base", 24, 4)].shape == (2, 8), str(got[("base", 24, 4)].shape))
+
     R = [("sft", 24, "direction", 1.0, -2.0, 0.1), ("sft", 24, "direction", 8.0, +0.7, 0.3),
          ("base", 23, "direction", 8.0, -4.0, 0.2)]
     ok, best, cells = T.positive_control(R, "sft", 0.0)

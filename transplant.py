@@ -139,6 +139,34 @@ def load_source_directions(cfg, sources, unit_norm: bool = False) -> tuple[dict,
     return out, raw_norms
 
 
+def load_null_directions(cfg, sources, k: int, unit_norm: bool = False) -> dict:
+    """(stage, layer, pos) -> (k, d) SHUFFLED-LABEL mean-diff directions at the same cell.
+
+    The harder null. An isotropic Gaussian points mostly into directions the residual stream
+    barely uses -- activations are strongly anisotropic, which is the same fact that made
+    cross-checkpoint cosine useless (O-49). Beating isotropic noise is therefore easy, and on
+    Zephyr it showed: base's own direction, which fails every other test, scored z = +3.0
+    against isotropic noise, and so did sft's (+2.5) and dpo's (+2.9) -- a uniform band that
+    tracks "is a mean-diff vector" rather than "is a refusal vector" (2026-09-17).
+
+    A direction fitted with the SAME estimator on RANDOMLY SHUFFLED labels over the SAME
+    activations encodes nothing about harmfulness but inherits the data's geometry exactly.
+    Already computed and stored by probe_representation.py as `null_directions`."""
+    out = {}
+    for stage, layer, pos_idx in sources:
+        path = cfg.path(stage, "probe")
+        n = np.load(path, allow_pickle=True)["null_directions"]      # (k_stored, pos, layer, d)
+        if k > n.shape[0]:
+            raise SystemExit(
+                f"[{stage}] asked for {k} shuffled-label nulls but only {n.shape[0]} are "
+                f"stored in {path}. Raise Config.n_null and re-run probe_representation.py.")
+        v = n[:k, pos_idx, layer].astype(np.float32)
+        if unit_norm:
+            v = v / (np.linalg.norm(v, axis=-1, keepdims=True) + 1e-8)
+        out[(stage, layer, pos_idx)] = v
+    return out
+
+
 def sweep_cell(model, tok, direction: torch.Tensor, layer: int, harmless, template,
                refusal_toks, base_harmless_logits, batch_size, coeffs=COEFFS):
     """Induced refusal and KL on harmless prompts, across `coeffs`, for ONE direction."""
@@ -154,7 +182,8 @@ def sweep_cell(model, tok, direction: torch.Tensor, layer: int, harmless, templa
     return rows
 
 
-def cell_effect(records, src: str, baseline: float) -> dict:
+def cell_effect(records, src: str, baseline: float,
+                null_prefix: str = "random") -> dict:
     """Effect size of one transplant cell against its OWN null distribution.
 
     The absolute crossing score ("does it reach 0?") is confounded by where the target's
@@ -171,14 +200,14 @@ def cell_effect(records, src: str, baseline: float) -> dict:
 
     delta = best(lambda k: k == "direction") - baseline
     draws = sorted({r[2] for r in records
-                    if r[0] == src and r[2].startswith("random")})
+                    if r[0] == src and r[2].startswith(null_prefix)})
     nulls = [best(lambda k, d=d: k == d) - baseline for d in draws]
     if not nulls:
-        return {"delta": delta, "null_mean": None, "null_sd": None, "z": None,
-                "n_draws": 0, "n_null_crossing": 0}
+        return {"null": null_prefix, "delta": delta, "null_mean": None,
+                "null_sd": None, "z": None, "n_draws": 0, "n_null_crossing": 0}
     mu = sum(nulls) / len(nulls)
     sd = (sum((v - mu) ** 2 for v in nulls) / (len(nulls) - 1)) ** 0.5 if len(nulls) > 1 else None
-    return {"delta": delta, "null_mean": mu, "null_sd": sd,
+    return {"null": null_prefix, "delta": delta, "null_mean": mu, "null_sd": sd,
             "z": ((delta - mu) / sd) if (sd and sd > 0) else None,
             "n_draws": len(nulls),
             "n_null_crossing": sum(1 for v in nulls if v + baseline >= 0.0)}
@@ -195,7 +224,8 @@ def positive_control(records, stage: str, threshold: float):
 
 
 def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS,
-            n_null: int = 1) -> None:
+            n_null: int = 1, nulls: dict | None = None,
+            null_kinds: tuple[str, ...] = ("random",)) -> None:
     set_seed(cfg.seed)
     model, tok = load_model(model_id, cfg.dtype)
     template, want_id, _n, is_ov = cfg.regime(stage)
@@ -223,8 +253,16 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS,
         # comparable to the differences being compared, which is why SP4 was unresolvable
         # (O-52's lesson: size n against the effect size). Arms are labelled random0..randomk-1
         # so every consumer that filters on "direction" is unaffected.
-        arms = [("direction", d)] + [(f"random{j}", _norm_matched(d, gen))
-                                     for j in range(n_null)]
+        arms = [("direction", d)]
+        if "random" in null_kinds:
+            arms += [(f"random{j}", _norm_matched(d, gen)) for j in range(n_null)]
+        if "shuffled" in null_kinds:
+            # Norm-matched to the REAL direction so the only thing that differs between arms
+            # is orientation -- in unit-norm mode both are already unit length.
+            for j, nv in enumerate(nulls[(src, layer, _pos)]):
+                t = torch.from_numpy(nv).to(model.device)
+                t = t / (t.norm() + 1e-8) * d.norm()
+                arms.append((f"shuffled{j}", t.to(d.dtype)))
         for kind, direction in arms:
             for c, ref, kl in sweep_cell(model, tok, direction, layer, harmless, template,
                                          refusal_toks, base_lg, cfg.batch_size, coeffs):
@@ -237,14 +275,18 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS,
                             "(KL %.2f) | %s", stage, src, layer, kind, best[4], best[3],
                             best[5], f"INDUCES (first at coeff {min(ok)})" if ok
                             else "never crosses threshold")
-        # One summary line per cell instead of k noisy ones.
-        eff = cell_effect(records, src, baseline)
-        logger.info("[%s] src=%-4s L%-2d effect    | delta %+.2f vs null %+.2f+-%s over %d "
-                    "draws%s | %d/%d nulls crossed", stage, src, layer, eff["delta"],
-                    eff["null_mean"] if eff["null_mean"] is not None else float("nan"),
-                    f"{eff['null_sd']:.2f}" if eff["null_sd"] is not None else "n/a",
-                    eff["n_draws"], f" | z={eff['z']:+.1f}" if eff["z"] is not None else "",
-                    eff["n_null_crossing"], eff["n_draws"])
+        # One summary line per null FAMILY instead of k noisy ones per arm.
+        for nk in null_kinds:
+            eff = cell_effect(records, src, baseline, null_prefix=nk)
+            if not eff["n_draws"]:
+                continue
+            logger.info("[%s] src=%-4s L%-2d effect %-8s | delta %+.2f vs null %+.2f+-%s over "
+                        "%d draws%s | %d/%d nulls crossed", stage, src, layer, nk,
+                        eff["delta"], eff["null_mean"],
+                        f"{eff['null_sd']:.2f}" if eff["null_sd"] is not None else "n/a",
+                        eff["n_draws"],
+                        f" | z={eff['z']:+.1f}" if eff["z"] is not None else "",
+                        eff["n_null_crossing"], eff["n_draws"])
 
     # POSITIVE CONTROL. A transplant matrix of all-"no" is only a finding if the sweep was
     # powerful enough to produce a "yes" where one must exist. The self-cell is that test:
@@ -279,15 +321,17 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS,
              sources=np.array([f"{a}|{b}|{c}" for a, b, c in srcs]),
              positive_control_ok=np.array(ctrl_ok or is_first),
              n_null_draws=np.array(n_null),
-             effects=np.array(json.dumps({s_: cell_effect(records, s_, baseline)
-                                          for s_ in {r[0] for r in records}})),
+             effects=np.array(json.dumps(
+                 {f"{s_}|{nk}": cell_effect(records, s_, baseline, null_prefix=nk)
+                  for s_ in {r[0] for r in records} for nk in null_kinds})),
              lineage=np.array(cfg.lineage))
     logger.info("[%s] saved %s", stage, path)
 
     for (src, layer, _pos) in srcs:
-        eff = cell_effect(records, src, baseline)
-        kinds = ["direction"] + sorted({r[2] for r in records
-                                        if r[0] == src and r[2].startswith("random")})
+        effs = {nk: cell_effect(records, src, baseline, null_prefix=nk) for nk in null_kinds}
+        eff = effs[null_kinds[0]]
+        kinds = ["direction"] + sorted({r[2] for r in records if r[0] == src
+                                        and r[2] != "direction"})
         for kind in kinds:
             sel = [r for r in records if r[0] == src and r[2] == kind]
             best = max(sel, key=lambda r: r[4])
@@ -301,14 +345,15 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS,
                        baseline_harmless=round(baseline, 4),
                        positive_control_ok=bool(ctrl_ok or is_first))
             if kind == "direction":      # the effect size belongs to the CELL, not an arm
-                row.update(delta=round(eff["delta"], 4),
-                           null_mean=(round(eff["null_mean"], 4)
-                                      if eff["null_mean"] is not None else None),
-                           null_sd=(round(eff["null_sd"], 4)
-                                    if eff["null_sd"] is not None else None),
-                           z=(round(eff["z"], 3) if eff["z"] is not None else None),
-                           n_null_draws=eff["n_draws"],
-                           n_null_crossing=eff["n_null_crossing"])
+                row["delta"] = round(eff["delta"], 4)
+                for nk, e in effs.items():
+                    row.update({
+                        f"{nk}_mean": (round(e["null_mean"], 4)
+                                       if e["null_mean"] is not None else None),
+                        f"{nk}_sd": round(e["null_sd"], 4) if e["null_sd"] is not None else None,
+                        f"{nk}_z": round(e["z"], 3) if e["z"] is not None else None,
+                        f"{nk}_draws": e["n_draws"],
+                        f"{nk}_crossing": e["n_null_crossing"]})
             rec.result(**row)
     del model
     torch.cuda.empty_cache()
@@ -325,6 +370,11 @@ def main() -> None:
                     help="model family from config.LINEAGES "
                          "(zephyr | olmo2 | tulu2)")
     ap.add_argument("--stage", required=True, help="target model (base/sft/dpo) or 'all'")
+    ap.add_argument("--null", default="both", choices=("random", "shuffled", "both"),
+                    help="null family. 'random' = isotropic norm-matched (Arditi convention, "
+                         "and what earlier runs used). 'shuffled' = same estimator fitted on "
+                         "SHUFFLED LABELS, which inherits the data's anisotropic geometry and "
+                         "is the harder control. 'both' (default) reports each separately.")
     ap.add_argument("--n-control", type=int, default=None,
                     help="independent norm-matched random draws per cell (default: "
                          "cfg.n_control). ONE draw cannot scale an effect -- see P1-E2c")
@@ -336,6 +386,7 @@ def main() -> None:
     cfg.require_verified()          # conceptual blocker first ...
     logger.info("data: %s", assert_available())   # ... then the cheap file check
     n_null = args.n_control if args.n_control is not None else cfg.n_control
+    null_kinds = ("random", "shuffled") if args.null == "both" else (args.null,)
     if n_null < 2:
         logger.warning("--n-control=%d: with fewer than 2 draws the null has no spread, so "
                        "effect sizes CANNOT be compared across stages (this is what left SP4 "
@@ -343,6 +394,12 @@ def main() -> None:
     logger.info("null draws per cell: %d", n_null)
     sources = source_layers(cfg)
     srcs, raw_norms = load_source_directions(cfg, sources, unit_norm=args.unit_norm)
+    nulls = (load_null_directions(cfg, sources, n_null, unit_norm=args.unit_norm)
+             if "shuffled" in null_kinds else None)
+    logger.info("null families: %s x %d draws%s", " + ".join(null_kinds), n_null,
+                "  (shuffled = same estimator on shuffled labels; shares the data's "
+                "anisotropic geometry, so it is the harder control)"
+                if "shuffled" in null_kinds else "")
     coeffs = coeff_grid(raw_norms, args.unit_norm)
     logger.info("direction scaling: %s", "UNIT-NORM (coeff = injected norm)" if args.unit_norm
                 else "RAW (Arditi default; coeff not comparable across sources)")
@@ -370,7 +427,8 @@ def main() -> None:
                          "had the machinery. Sweeping coefficients also retires the 'you only "
                          "tried coeff=1' objection to E02.") as rec:
         for s in stages:
-            run_one(s, ckpts[s], cfg, srcs, rec, coeffs, n_null=n_null)
+            run_one(s, ckpts[s], cfg, srcs, rec, coeffs, n_null=n_null,
+                    nulls=nulls, null_kinds=null_kinds)
 
 
 if __name__ == "__main__":

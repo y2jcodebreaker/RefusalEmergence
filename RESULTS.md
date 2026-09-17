@@ -58,6 +58,40 @@ means the sweep is under-powered, not that the model lacks the mechanism. The ru
 report a matrix whose self-cell fails. base is exempt — there a failing self-cell is the
 measurement.
 
+### Effect size — the same matrix read as Δ from each target's own baseline
+
+Absolute crossing ("does it reach 0?") is confounded by where the target starts: DPO and RLVR
+sit ~3 points further from refusing on harmless prompts than SFT does, so the same absolute
+peak is a larger causal effect. Δ from the target's own baseline is the effect size. Computed by
+`cell_effect()` (P1-E2c) from the saved runs; **`null` is a single draw, so no spread and no z**.
+
+| target ↓ / source → | base | sft | dpo | rlvr | | null, same order |
+|---|---|---|---|---|---|---|
+| **base** | +1.27 | **+10.46** | +8.39 | +8.26 | | +0.99 / +0.12 / +2.04 / −0.35 |
+| sft | +1.41 | +7.52 | +7.05 | +6.95 | | +0.40 / +0.22 / +1.11 / −0.27 |
+| dpo | +2.99 | +10.63 | +10.80 | +10.75 | | +2.30 / +1.43 / +2.83 / +0.44 |
+| rlvr | +3.31 | +11.33 | +11.30 | +11.25 | | +2.70 / +1.79 / +3.17 / +0.74 |
+
+Three readings, in descending order of confidence:
+
+1. **The base column is not "no" — it is "indistinguishable from random".** Base's direction
+   moves every target a little (+1.3 to +3.3), but its own null moves them nearly as much
+   (+1.0 to +2.7). That is a far more informative statement than a binary, and it is the
+   quantitative form of the claim: base's direction is not a weak refusal direction, it is a
+   vector whose effect is within noise of an arbitrary one of the same norm.
+2. **The nulls are not negligible and not constant.** They range −0.35 to +3.17, and they are
+   systematically larger for DPO/RLVR as targets — later checkpoints are genuinely more
+   perturbable. Any cross-stage comparison of effect size must be against a *measured* null,
+   which is why one draw per cell was never enough.
+3. ⚠️ **On Δ, the self-cells order +7.52 / +10.80 / +11.25 — monotone, and agreeing with the
+   ablation axis rather than contradicting it.** That is the opposite of the absolute-crossing
+   reading. It is NOT reported as a result: with one draw the spread is unknown, and the nulls
+   visible here are large enough to matter. `--n-control 5` settles it in ~15 min.
+
+**Base as a target moves more than any aligned model does** (+10.46 vs SFT's +7.52). Suggestive
+— an un-aligned residual stream may simply be easier to push — but base is on a regime override,
+so even a within-target Δ is not strictly scale-matched to the others. Noted, not claimed.
+
 ### Controls that rule out the two obvious alternatives
 
 **"You just broke the model."** At 2× the natural magnitude the output *does* collapse into

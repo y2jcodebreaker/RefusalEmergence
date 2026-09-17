@@ -14,3 +14,5 @@ results/*.npz
 # resolved by keeping BOTH sides (two machines ran two experiments).
 !results/runs.jsonl
 !results/RUNLOG.md
+
+data/xstest_prompts.csv

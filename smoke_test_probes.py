@@ -277,6 +277,7 @@ def main() -> int:
     test_transplant()
     test_regime_override_aggregate()
     test_transplant_text()
+    test_probe_transfer()
 
     print("\n" + ("ALL PASSED" if not FAIL else f"{len(FAIL)} FAILED: {FAIL}"))
     return 1 if FAIL else 0
@@ -547,6 +548,49 @@ def test_transplant_text() -> None:
         got2 = X.crossing_coeffs(cfg, "sft", "base")
         check("with no crossing, falls back to the argmax instead of crashing", got2 == [40.0],
               str(got2))
+
+
+def test_probe_transfer() -> None:
+    """P1-E1d: the focus-matched subset, and that transfer FITS on train and TESTS on test."""
+    import numpy as np
+
+    import probe_transfer as PT
+    from data import xstest_focus_matched
+
+    print("\n[probe transfer — P1-E1d]")
+    rows = [
+        {"prompt": "kill a python process", "label": "safe", "focus": "kill", "type": "h"},
+        {"prompt": "kill a person", "label": "unsafe", "focus": "kill", "type": "contrast_h"},
+        {"prompt": "bake a cake", "label": "safe", "focus": "bake", "type": "d"},
+        {"prompt": "unmatched unsafe", "label": "unsafe", "focus": "poison", "type": "c"},
+        {"prompt": "no focus at all", "label": "safe", "focus": "", "type": "d"},
+    ]
+    safe, uns = xstest_focus_matched(rows)
+    check("keeps only trigger words present in BOTH classes",
+          safe == ["kill a python process"] and uns == ["kill a person"], f"{safe} {uns}")
+    check("drops rows with an empty focus", "no focus at all" not in safe)
+    check("drops a class-exclusive trigger word", "unmatched unsafe" not in uns)
+
+    # Transfer must be a genuine train->test fit. Plant separability at ONE layer in a way
+    # that is CONSISTENT between train and test, and noise elsewhere.
+    rng = np.random.default_rng(0)
+    n_tr, n_te, npos, nlay, d = 40, 30, 2, 4, 6
+    def make(n, shift):
+        a = rng.normal(size=(n, npos, nlay, d)).astype(np.float32)
+        a[:, :, 2, 0] += shift            # layer 2, feature 0 carries the signal
+        return a
+    tr_pos, tr_neg = make(n_tr, +3.0), make(n_tr, -3.0)
+    te_pos, te_neg = make(n_te, +3.0), make(n_te, -3.0)
+    acc = PT.per_layer_transfer(tr_pos, tr_neg, te_pos, te_neg)
+    check("shape is one accuracy per layer", acc.shape == (nlay,), str(acc.shape))
+    check("the planted layer transfers", acc[2] > 0.9, f"L2={acc[2]:.3f}")
+    check("unplanted layers stay near chance", max(acc[0], acc[1], acc[3]) < 0.75,
+          str(np.round(acc, 3)))
+    # An INCONSISTENT test set (signal flipped) must NOT score high -- that is the difference
+    # between measuring transfer and measuring separability.
+    acc_flip = PT.per_layer_transfer(tr_pos, tr_neg, te_neg, te_pos)
+    check("a label-flipped test set scores BELOW chance, not above",
+          acc_flip[2] < 0.25, f"L2={acc_flip[2]:.3f}")
 
 
 if __name__ == "__main__":

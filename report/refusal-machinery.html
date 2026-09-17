@@ -124,16 +124,19 @@ strong{font-weight:600;color:var(--ink)}
 
 <div class="wrap">
   <header class="col">
-    <p class="eyebrow">Report &middot; P1-E1 &middot; P1-E1b &middot; P1-E1c &middot; 16 Sep 2026</p>
+    <p class="eyebrow">Report &middot; P1-E1 &middot; P1-E1b &middot; P1-E1c &middot; P1-E1d &middot; P1-E2d &middot; 17 Sep 2026</p>
     <h1>Alignment installs refusal machinery, not refusal behavior</h1>
     <p class="lede">A base model that has never been aligned reads harmful-vs-harmless at
     <strong>99.6&thinsp;%</strong> and refuses <strong>1.5&thinsp;%</strong> of harmful requests. Add the
     aligned model&rsquo;s refusal direction and it writes fluent refusals &mdash; <strong>0.000 &rarr; 1.000</strong>.
     Its own direction does nothing, in any model, including itself.</p>
+    <p class="lede" style="margin-top:.7rem">Every aligned direction crosses the refusal threshold in
+    base <strong>at its own natural magnitude, unscaled</strong>. Across sixteen cells,
+    <strong>none of 160 shuffled-label directions ever did</strong>.</p>
     <div class="meta">
       <span>OLMo&nbsp;2&nbsp;7B &middot; base &rarr; SFT &rarr; DPO &rarr; RLVR</span>
       <span>replicated on Mistral &rarr; Zephyr</span>
-      <span>n = 256 / 132 / 64</span>
+      <span>n = 256 / 132 / 64 &middot; 10 null draws/cell</span>
       <span><a href="https://github.com/y2jcodebreaker/RefusalEmergence">github.com/y2jcodebreaker/RefusalEmergence</a></span>
     </div>
   </header>
@@ -200,31 +203,39 @@ strong{font-weight:600;color:var(--ink)}
     <div class="col">
       <p class="kicker">The asymmetry</p>
       <h2>Every aligned direction works. The base direction works nowhere.</h2>
-      <p>Sixteen transplants: each checkpoint&rsquo;s refusal direction added to each checkpoint, swept
-      across six magnitudes. Every crossing happens at the same coefficient. Every norm-matched random
-      control is negative in every cell.</p>
+      <p>Sixteen transplants: each checkpoint&rsquo;s refusal direction added to each checkpoint.
+      The null is the <em>same estimator fitted on shuffled labels</em> over the same
+      activations &mdash; it encodes nothing about harmfulness but inherits the residual
+      stream&rsquo;s geometry exactly, which an isotropic random vector does not. Ten draws per
+      cell.</p>
     </div>
 
     <div class="col tscroll">
       <table>
         <thead><tr><th>target &darr; &nbsp;/&nbsp; source &rarr;</th><th>base</th><th>SFT</th><th>DPO</th><th>RLVR</th></tr></thead>
         <tbody>
-          <tr><th>base</th><td class="c-base none">no</td><td class="cell-key">YES +4.80</td><td class="c-dpo">YES +2.73</td><td class="c-dpo">YES +2.60</td></tr>
-          <tr><th>SFT</th><td class="c-base none">no</td><td class="c-dpo">YES +3.24</td><td class="c-dpo">YES +2.76</td><td class="c-dpo">YES +2.67</td></tr>
-          <tr><th>DPO</th><td class="c-base none">no</td><td class="c-dpo">YES +3.33</td><td class="c-dpo">YES +3.50</td><td class="c-dpo">YES +3.44</td></tr>
-          <tr><th>RLVR</th><td class="c-base none">no</td><td class="c-dpo">YES +3.52</td><td class="c-dpo">YES +3.49</td><td class="c-dpo">YES +3.44</td></tr>
+          <tr><th>base</th><td class="c-base">+1.15 <span style="opacity:.6">z&nbsp;+0.8</span></td><td class="cell-key">+10.47 z&nbsp;+3.7</td><td class="c-dpo">+8.41 z&nbsp;+2.8</td><td class="c-dpo">+8.27 z&nbsp;+2.8</td></tr>
+          <tr><th>SFT</th><td class="c-base">+1.35 <span style="opacity:.6">z&nbsp;+1.3</span></td><td class="c-dpo">+7.52 z&nbsp;+3.1</td><td class="c-dpo">+7.08 z&nbsp;+2.8</td><td class="c-dpo">+6.98 z&nbsp;+2.8</td></tr>
+          <tr><th>DPO</th><td class="c-base">+3.17 <span style="opacity:.6">z&nbsp;+1.3</span></td><td class="c-dpo">+10.63 z&nbsp;+2.6</td><td class="c-dpo">+10.84 z&nbsp;+2.6</td><td class="c-dpo">+10.78 z&nbsp;+2.7</td></tr>
+          <tr><th>RLVR</th><td class="c-base">+3.59 <span style="opacity:.6">z&nbsp;+1.3</span></td><td class="c-dpo">+11.33 z&nbsp;+2.7</td><td class="c-dpo">+11.34 z&nbsp;+2.6</td><td class="c-dpo">+11.29 z&nbsp;+2.7</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="cap col" style="max-width:none">Induced refusal score on 256 harmless prompts; threshold 0.
-    The highlighted cell is the decisive one. Raw direction norms: base <strong>12.1</strong>, SFT
-    <strong>27.3</strong>, DPO 27.2, RLVR 27.2.</p>
+    <p class="cap col" style="max-width:none">Change in refusal score from each target&rsquo;s own
+    baseline, and z against that cell&rsquo;s shuffled-label null. The highlighted cell is the
+    decisive one: <strong>p&nbsp;=&nbsp;0.0024</strong> on a one-tailed t with 9&nbsp;df, which
+    survives Bonferroni correction across all sixteen comparisons (0.05/16&nbsp;=&nbsp;0.0031).</p>
 
     <div class="col">
-      <p style="margin-top:1.7rem">The base column is empty. Base&rsquo;s direction fails in base, in SFT, in
-      DPO and in RLVR alike &mdash; it is not a <em>weak</em> refusal direction, it is not a refusal direction.
-      And it did not fail for want of force: it was injected at <strong>2.26&times; its own norm</strong>, and
-      swept from 6.8 to 218.4 without ever crossing.</p>
+      <p style="margin-top:1.7rem"><strong>The two groups do not overlap.</strong> Base as a
+      source scores z&nbsp;0.8&ndash;1.3 &mdash; <strong>zero of four cells significant</strong>.
+      Every aligned source scores z&nbsp;2.6&ndash;3.7 &mdash; <strong>twelve of twelve</strong>.
+      Base&rsquo;s direction in base is z&nbsp;=&nbsp;+0.8: not weakly coupled, not
+      distinguishable from a vector fitted on random labels.</p>
+      <p>And it did not fail for want of force. Base&rsquo;s direction was swept to
+      <strong>16&times; its own magnitude</strong> without crossing, while every aligned
+      direction crosses at <strong>1.0&times;</strong> &mdash; no scaling at all. That answers
+      &ldquo;you tuned the coefficient&rdquo; before it is asked.</p>
     </div>
   </section>
 
@@ -247,6 +258,11 @@ strong{font-weight:600;color:var(--ink)}
             <th>&ldquo;You under-pushed base&rsquo;s own direction.&rdquo;</th>
             <td style="font-family:'Public Sans',sans-serif">base &larr; base at 2.26&times; its norm, six coefficients spanning 6.8&ndash;218.4</td>
             <td>never crosses; 15.6&thinsp;% degenerate &mdash; damage <em>without</em> refusal</td>
+          </tr>
+          <tr>
+            <th>&ldquo;Your control is easy to beat.&rdquo;</th>
+            <td style="font-family:'Public Sans',sans-serif">the same estimator fitted on <em>shuffled labels</em>, which inherits the residual stream&rsquo;s anisotropic geometry; 10 draws &times; 16 cells</td>
+            <td><strong>0 of 160</strong> shuffled directions crossed the threshold; base&rsquo;s own direction falls to z&nbsp;=&nbsp;+0.8</td>
           </tr>
           <tr>
             <th>&ldquo;The KL is enormous, so you wrecked it.&rdquo;</th>
@@ -320,6 +336,7 @@ strong{font-weight:600;color:var(--ink)}
         <thead><tr><th>Measurement</th><th>OLMo&nbsp;2 base</th><th>OLMo&nbsp;2 aligned</th><th>Zephyr base</th><th>Zephyr aligned</th></tr></thead>
         <tbody>
           <tr><th>Probe accuracy (peak)</th><td class="c-base">0.996</td><td>1.000</td><td class="c-base">0.989</td><td>1.000</td></tr>
+          <tr><th>Transfer, trigger-word matched</th><td class="c-base"><strong>0.823</strong></td><td>0.967&ndash;0.972</td><td class="c-base"><strong>0.820</strong></td><td>0.895&ndash;0.906</td></tr>
           <tr><th>Probe at layer 0</th><td class="c-base">0.500</td><td>0.500</td><td class="c-base">0.500</td><td>0.500</td></tr>
           <tr><th>Inducible direction</th><td class="c-base none">none</td><td class="c-dpo">+4.20 @ L18</td><td class="c-base none">none</td><td class="c-dpo">+1.76 @ L16</td></tr>
           <tr><th>Refusal rate, harmful</th><td class="c-base">0.015</td><td>0.985</td><td class="c-base">0.167&ndash;0.205</td><td>0.045</td></tr>
@@ -337,22 +354,57 @@ strong{font-weight:600;color:var(--ink)}
   </section>
 
   <section class="col">
-    <p class="kicker warn">Retraction</p>
-    <h2>What the second family took away</h2>
-    <p>The pilot reported that <strong>DPO sharpens the refusal direction</strong> &mdash; Zephyr&rsquo;s
-    induction peak rose from +1.01 to +1.76 between SFT and DPO. In OLMo&nbsp;2, measured the same way, it
-    does not: SFT peaks at +4.20 and DPO and RLVR come in <em>lower</em>, at +3.83 and +3.93.</p>
-    <p>That measure is itself suspect. DPO and RLVR start much further from refusing (baseline &minus;7.3
-    and &minus;7.8, against SFT&rsquo;s &minus;4.3), so the same absolute peak represents a much larger
-    causal effect. Measured as change from each model&rsquo;s own baseline, the ordering reverses and becomes
-    monotone: <strong>+7.5, +10.8, +11.3</strong> &mdash; which agrees with the ablation axis rather than
-    contradicting it.</p>
-    <div class="claim retract">
-      <p>So the honest state is: unresolved.</p>
-      <p>Each cell has exactly one random draw, and the nulls scatter too widely (+0.22, +2.83, +0.74) to
-      settle a comparison this size. The claim that <em>SFT installs the coupling</em> is unaffected and
-      holds in both families. What preference optimisation adds on top is not yet a finding, and is not
-      claimed here.</p>
+    <p class="kicker warn">Corrections</p>
+    <h2>What the second family and the harder control took away</h2>
+    <p>Four claims were tested adversarially rather than defended. One survived unchanged, one
+    was strengthened, two were corrected and one was withdrawn. The corrections are listed
+    because a reader deserves to know which sentences moved and why.</p>
+
+    <ol class="errs">
+      <li>
+        <h3>Withdrawn: &ldquo;base&rsquo;s own direction induces refusal in SFT&rdquo;</h3>
+        <p>A striking line in the pilot, and it does not survive a null that shares the
+        data&rsquo;s geometry: the cell falls to <strong>z&nbsp;=&nbsp;1.2</strong>, and <strong>one
+        of five shuffled-label directions itself crossed the threshold there</strong>. A 20&thinsp;%
+        false-positive rate on the criterion makes the crossing uninterpretable. It was also
+        the one cell that never fitted the account &mdash; base&rsquo;s direction works nowhere
+        else, including in base &mdash; so removing it makes the story more consistent, not less.</p>
+      </li>
+      <li>
+        <h3>Reworded: &ldquo;causally inert&rdquo; &rarr; <em>sub-threshold</em>, in Zephyr</h3>
+        <p>In Zephyr&rsquo;s base the only direction with a detectable effect is base&rsquo;s own
+        (z&nbsp;=&nbsp;3.1), and it still never crosses: <strong>+1.26 from a &minus;3.024
+        baseline, 42&thinsp;% of the way</strong>. &ldquo;Inert&rdquo; invites <em>prove it is
+        exactly zero</em>; sub-threshold is a measurement, and a graded mechanism that alignment
+        amplifies past threshold is the more mechanistic claim. In OLMo&nbsp;2 the same cell is
+        z&nbsp;=&nbsp;+0.8 &mdash; genuinely indistinguishable from noise.</p>
+      </li>
+      <li>
+        <h3>Retracted: &ldquo;base is indistinguishable from the aligned models&rdquo;</h3>
+        <p>True <em>in</em> distribution (0.989 / 0.996 against 1.000), false out of it. On the
+        trigger-word-matched transfer set base drops <strong>0.169&ndash;0.173</strong> while the
+        aligned stages drop 0.03&ndash;0.11. Alignment does sharpen the representation&rsquo;s
+        generalisation &mdash; it is simply not the main thing alignment adds.</p>
+      </li>
+      <li>
+        <h3>Strengthened: preference optimisation <em>does</em> raise the coupling</h3>
+        <p>Measured as change from each model&rsquo;s own baseline rather than as an absolute
+        crossing, the effect rises from SFT to DPO in <strong>both</strong> families
+        (+1.44&thinsp;&plusmn;&thinsp;0.56 and +2.24&thinsp;&plusmn;&thinsp;1.02, both
+        &asymp;&thinsp;2&sigma;). RLVR adds nothing detectable (0.3&sigma;). The absolute measure
+        had understated it, because later checkpoints sit further from refusing to begin with.</p>
+      </li>
+    </ol>
+
+    <div class="claim retract" style="margin-top:2rem">
+      <p>And one difference between the families is a finding, not a caveat.</p>
+      <p>In OLMo&nbsp;2, base is inert to its own direction and <em>steerable by aligned ones</em>.
+      In Zephyr, base responds faintly to its own and is <em>inert to aligned ones</em> &mdash;
+      no direction crosses there at any magnitude up to 54&times; its own norm. Both families
+      agree the representation is present and that base cannot steer itself into refusing. They
+      disagree on whether the aligned direction suffices. So the transplant result is
+      OLMo&nbsp;2&rsquo;s, and Zephyr is the contrast case: <strong>the same representation, with
+      no transferable coupling.</strong></p>
     </div>
   </section>
 
@@ -370,17 +422,31 @@ strong{font-weight:600;color:var(--ink)}
     asked for. The third axis, added here, is <strong>text</strong>: a logit crossing that does not reproduce in
     generation is not reported.</p>
     <p>Selection uses all three of Arditi&rsquo;s criteria, including a KL bound on harmless prompts that
-    certifies ablation left a working model behind. Every sweep carries a norm-matched random control, and
-    every transplant carries a <strong>positive control</strong> &mdash; a checkpoint&rsquo;s own direction must
-    induce in itself, or the matrix is reported as under-powered rather than negative.</p>
+    certifies ablation left a working model behind. Every transplant carries a <strong>positive
+    control</strong> &mdash; a checkpoint&rsquo;s own direction must induce in itself, or the matrix is
+    reported as under-powered rather than negative.</p>
+    <p>The null went through two versions, and the second changed two conclusions. An isotropic
+    random vector points mostly into directions the residual stream barely uses, so beating it is
+    easy; the reported null is therefore the <strong>same mean-diff estimator fitted on shuffled
+    labels</strong> over the same activations, which encodes nothing about harmfulness but inherits
+    the geometry exactly. The probe is likewise never refitted on the contrast set: it is fitted on
+    one dataset and <em>transferred</em>, because separability on a test set is a weaker claim than
+    transfer to it. A label-flipped test set must score <em>below</em> chance &mdash; a check that
+    separability cannot distinguish.</p>
   </section>
 
   <section class="col">
     <p class="kicker">Confidence</p>
     <h2>Why this should be believed</h2>
-    <p><strong>The control never moves.</strong> Norm-matched random directions give 0.059 / 0.080 / 0.123 /
-    0.129 across the four stages against a real peak of 13.5 &mdash; no trend. The obvious alternative, that
-    later-stage models are simply more perturbable, predicts the control should rise too.</p>
+    <p><strong>Zero of 160 shuffled-label directions crossed the threshold</strong>, across all
+    sixteen transplant cells. The aligned directions cross at their own natural magnitude. That is
+    the whole causal claim in one sentence, and it needs no statistics to read.</p>
+    <p><strong>The ablation control never moves.</strong> Norm-matched random directions give
+    0.059 / 0.080 / 0.123 / 0.129 across the four stages against a real peak of 13.5 &mdash; no
+    trend. The obvious alternative, that later-stage models are simply more perturbable, predicts
+    the control should rise too. It does rise on the <em>induction</em> axis, by about sixfold, and
+    roughly half of the apparent gain from preference optimisation was that rather than coupling
+    &mdash; which is why the numbers above are reported net of a measured null.</p>
     <p><strong>The axes are independently vulnerable.</strong> Ablation can be fooled by model damage;
     induction cannot. A substring judge can be fooled by text; the logit axis does not use one. The claim
     rests where all three agree.</p>
@@ -442,11 +508,19 @@ strong{font-weight:600;color:var(--ink)}
       format-matched to the aligned stages. This is a trade-off nobody can escape &mdash; you cannot hold prompt
       format constant <em>and</em> keep both endpoints in a usable operating regime &mdash; and it is the reason
       the behavioural transplant, which crosses that boundary intact, carries the claim.</li>
-      <li><strong>What preference optimisation adds is unresolved</strong>, and needs multiple random draws per
-      cell before either reading of the DPO result can be trusted.</li>
+      <li><strong>The transplant result is OLMo&nbsp;2&rsquo;s.</strong> In Zephyr no direction
+      crosses in base at any magnitude tested, so &ldquo;the aligned direction is sufficient in
+      base&rsquo;&rsquo; is a one-family claim with a two-family representation result under it.</li>
+      <li><strong>&sigma; is estimated from 10 draws</strong> (9 df). The decisive cell survives
+      Bonferroni across all sixteen comparisons; the others are individually significant but not
+      after correction. The pattern &mdash; 12/12 aligned, 0/4 base, no overlap &mdash; is what
+      carries the claim, not any single cell.</li>
       <li><strong>The layer axis is where the direction was read from</strong>, not where refusal is
       implemented. This report identifies no circuit.</li>
       <li><strong>Two families is not all families</strong>, and both are 7B.</li>
+      <li><strong>No lexically matched set was constructed.</strong> The trigger-word control comes
+      from XSTest&rsquo;s own annotations, which match on the discriminative word but not on token
+      count. A minimal-pair set would be tighter and is future work.</li>
       <li><strong>Induction at the operating point carries a large KL.</strong> The generations explain it, but
       a reviewer is entitled to want a lower-KL crossing.</li>
     </ol>

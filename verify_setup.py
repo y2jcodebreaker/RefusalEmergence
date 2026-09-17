@@ -99,6 +99,9 @@ def check_torch_backend() -> bool:
 
 # bf16 7B is ~14.5 GB on disk; a base+SFT+DPO(+RLVR) lineage is 3-4 of those.
 _GB_PER_CKPT = 15
+# Unaccounted cache bulk above this is called out as the xet shared tree. Module-level so
+# the smoke test can lower it and actually exercise that branch.
+_ORPHAN_GB = 5
 
 
 def check_disk(cfg) -> bool:
@@ -113,23 +116,50 @@ def check_disk(cfg) -> bool:
     probe = hf if os.path.isdir(hf) else os.path.dirname(os.path.abspath(hf)) or "."
     free = shutil.disk_usage(probe).free / 2**30
     need = _GB_PER_CKPT * len(cfg.checkpoints)
-    cached = 0.0
+    def _gb(path) -> float:
+        return sum(f.stat().st_size for f in pathlib.Path(path).rglob("*")
+                   if f.is_file() and not f.is_symlink()) / 2**30
+
+    cached, hub_total, mine = 0.0, 0.0, []
     hub = os.path.join(hf, "hub")
     if os.path.isdir(hub):
-        for d in os.listdir(hub):
+        for d in sorted(os.listdir(hub)):
+            if d.startswith("."):
+                continue
+            sz = _gb(os.path.join(hub, d))
+            hub_total += sz
             if any(m.split("/")[-1].lower() in d.lower() for _, m in cfg.checkpoints):
-                cached += sum(f.stat().st_size for f in pathlib.Path(hub, d).rglob("*")
-                              if f.is_file()) / 2**30
+                cached += sz
+                mine.append(d)
+    # Unaccounted bulk in the cache. With xet storage the weights live in a SHARED,
+    # content-addressed `hub/blobs` tree while each `models--*` dir holds only symlinks
+    # (~7 MB). So `rm -rf hub/models--<finished-model>*` removes the REFERENCES and frees
+    # almost nothing, leaving the bulk orphaned with nothing to garbage-collect it. That is
+    # how a pod sat at 97% full with four supposedly-deleted checkpoints still on disk
+    # (2026-09-17). Name it, because the per-model sizes make the disk look empty.
+    per_model = sum(_gb(os.path.join(hub, d)) for d in (os.listdir(hub) if os.path.isdir(hub)
+                                                        else [])
+                    if d.startswith("models--") or d.startswith("datasets--"))
+    orphan = hub_total - per_model
     short = need - cached - free
     if short > 0:
         print(f"FAIL: not enough disk for lineage '{cfg.lineage}'.\n"
               f"      need ~{need:.0f} GB for {len(cfg.checkpoints)} checkpoints, "
               f"{cached:.0f} GB already cached, {free:.0f} GB free -> short ~{short:.0f} GB.\n"
-              f"      HF_HOME={hf}\n"
-              f"      Free space by deleting a FINISHED lineage's weights, e.g.\n"
-              f"        du -sh {hub}/* | sort -h | tail\n"
-              f"        rm -rf {hub}/models--<org>--<finished-model>*\n"
-              f"      Results in results/ are small and are NOT affected.")
+              f"      HF_HOME={hf}   (cache holds {hub_total:.0f} GB total)")
+        if orphan > _ORPHAN_GB:
+            print(f"      ⚠️  {orphan:.0f} GB of that is NOT under any models--*/datasets--* "
+                  f"directory.\n"
+                  f"      That is the xet shared chunk cache. Deleting a model directory frees\n"
+                  f"      only its symlinks (~7 MB) and ORPHANS its share of this bulk, which\n"
+                  f"      nothing garbage-collects. To actually reclaim it, delete the cache:\n"
+                  f"        rm -rf {hf}\n"
+                  f"      Everything there re-downloads. results/ is NOT in it.")
+        else:
+            print(f"      Free space by deleting a FINISHED lineage's weights, e.g.\n"
+                  f"        du -sh {hub}/* | sort -h | tail\n"
+                  f"        rm -rf {hf}      # simplest: the whole cache re-downloads\n"
+                  f"      Results in results/ are small and are NOT affected.")
         return False
     print(f"OK  disk: {free:.0f} GB free + {cached:.0f} GB cached >= ~{need:.0f} GB needed "
           f"({len(cfg.checkpoints)} checkpoints)")

@@ -150,7 +150,41 @@ def test_disk_check() -> None:
                 assert "4 checkpoints" in out, "must say how many checkpoints it sized for"
     finally:
         V._GB_PER_CKPT = saved
-    print("  disk preflight: fires before download, names disk and the fix — OK")
+
+    # The pod's actual cache shape: a huge SHARED `hub/blobs` (xet chunk store) with
+    # ~7 MB symlink-only model dirs. `rm -rf hub/models--<finished>*` then frees nothing and
+    # orphans the bulk. The check must name that, because per-model sizes make the disk look
+    # empty (four "deleted" 15 GB checkpoints, 97% full, 6.9 MB per directory).
+    import os
+    import pathlib as _pl
+    import tempfile
+
+    saved_g, saved_o = V._GB_PER_CKPT, V._ORPHAN_GB
+    old_home = os.environ.get("HF_HOME")
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            hub = _pl.Path(td, "hub")
+            (hub / "blobs").mkdir(parents=True)
+            (hub / "blobs" / "chunk").write_bytes(b"x" * 2_000_000)
+            d = hub / "models--allenai--OLMo-2-1124-7B"
+            d.mkdir()
+            (d / "ref").write_bytes(b"y" * 1000)
+            os.environ["HF_HOME"] = td
+            V._GB_PER_CKPT, V._ORPHAN_GB = 10_000_000, 0.0001
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                assert V.check_disk(config_for("olmo2")) is False
+            out = buf.getvalue()
+            assert "NOT under any models--" in out, out
+            assert "xet" in out, "must name the xet shared cache"
+            assert f"rm -rf {td}" in out, "must point at the CACHE ROOT, not a model dir"
+            assert "results/ is NOT in it" in out, "must say results/ is safe"
+    finally:
+        V._GB_PER_CKPT, V._ORPHAN_GB = saved_g, saved_o
+        os.environ.pop("HF_HOME", None)
+        if old_home is not None:
+            os.environ["HF_HOME"] = old_home
+    print("  disk preflight: fires before download, names disk, xet orphans and the fix — OK")
 
 
 if __name__ == "__main__":

@@ -58,7 +58,42 @@ means the sweep is under-powered, not that the model lacks the mechanism. The ru
 report a matrix whose self-cell fails. base is exempt — there a failing self-cell is the
 measurement.
 
-### P1-E2c — effect size against a measured null (5 draws per cell, 2026-09-17)
+### P1-E2d — the hard null, 10 draws (2026-09-17). **This is the version to cite.**
+
+`--null shuffled --n-control 10`, raw scaling. The null is the SAME mean-diff estimator fitted
+on **shuffled labels** over the same activations: it encodes nothing about harmfulness but
+inherits the residual stream's anisotropic geometry exactly. An isotropic Gaussian does not,
+which is why it is too easy to beat (O-72).
+
+**The statement that needs no statistics.** Every aligned direction crosses the refusal
+threshold in base **at coefficient 1.0 — the direction at its own natural magnitude, unscaled.**
+Across all 16 cells, **0 of 160 shuffled-label injections ever crossed.**
+
+| target ↓ / source → | base | sft | dpo | rlvr |
+|---|---|---|---|---|
+| **base** | +1.15 (z **+0.8**, p .21) | **+10.47 (z +3.7, p .0024)** | +8.41 (z +2.8) | +8.27 (z +2.8) |
+| sft | +1.35 (z **+1.3**, p .11) | +7.52 (z +3.1) | +7.08 (z +2.8) | +6.98 (z +2.8) |
+| dpo | +3.17 (z **+1.3**) | +10.63 (z +2.6) | +10.84 (z +2.6) | +10.78 (z +2.7) |
+| rlvr | +3.59 (z **+1.3**) | +11.33 (z +2.7) | +11.34 (z +2.6) | +11.29 (z +2.7) |
+
+Δ is from each target's own baseline; z = (Δ − μ_null)/σ_null; p is one-tailed t with 9 df.
+
+- **The two groups do not overlap.** base as source: z 0.8–1.3, **0/4 significant**. Aligned as
+  source: z 2.6–3.7, **12/12 significant**.
+- **The decisive cell survives Bonferroni over all 16 comparisons** (p = .0024 < .05/16 = .0031).
+- base's own direction in base is **z = +0.8**: statistically indistinguishable from a
+  shuffled-label vector. Not "weakly coupled" — not distinguishable from nothing.
+
+**Why this supersedes the 5-draw isotropic table below.** At 3 draws the same cell read z = 3.1
+with σ having 2 df; at 10 draws it reads 3.7 with 9 df, because the null *mean* estimate
+tightened from +0.81 to +0.36. The conclusion did not change, the confidence in it did.
+
+**The two scaling conventions agree at the operating point.** Unit-norm coefficient 27.3 gave
+Δ +10.46; raw coefficient 1.0 gives +10.47 — because 27.3 *is* SFT's raw norm. So "the direction
+at its natural magnitude" and "injected norm 27.3" name the same injection, and the first is the
+better sentence.
+
+### Superseded: effect size against an isotropic null (5 draws, 2026-09-17)
 
 `--n-control 5`. Δ is from each target's own baseline; `excess` = Δ − mean(null), which removes
 the fact that later checkpoints are more perturbable in general; `z` = (Δ − μ)/σ tests whether
@@ -169,6 +204,13 @@ induces nothing, so the effect is not "a large perturbation".
 | behavioural refusal (harmful) | 0.023 ⚠️ audited → **0.015** | 0.992 | 0.985 | 0.985 |
 | → after ablation | — | 0.008 | **0.000** | **0.000** |
 | over-refusal on harmless (untouched) | 0.000 | 0.125 | — | — |
+
+**P1-E1d replicates across families to three decimals.** Base's focus-matched transfer is
+**0.820** (Zephyr) and **0.823** (OLMo 2) — two families sharing no corpus, tokenizer or recipe —
+with drops from in-distribution of 0.169 and 0.173. Aligned stages reach 0.895–0.906 (Zephyr)
+and 0.967–0.972 (OLMo 2). **So base's harmfulness representation generalises at ~0.82 in both
+families and alignment lifts it to 0.90–0.97.** That is a replicated sub-finding, and the
+near-identity of the two base numbers is not something a confound produces.
 
 **P1-E1d (2026-09-17): the representation is HARMFULNESS, not topic.** Fitted on Arditi and
 tested on **XSTest** (Röttger et al., NAACL 2024) without refitting, Zephyr base transfers at

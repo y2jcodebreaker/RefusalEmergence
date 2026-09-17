@@ -962,3 +962,172 @@ Fitted on Arditi, tested on XSTest. The focus-matched subset holds the discrimin
 | dpo | 1.0 | 0.5 | 0.9773 | 0.5985 | False |
 | base_vs_sft | 0.9258 | 1 | 0.9377 | 25 |
 | base_vs_dpo | 0.9552 | 1 | 0.9633 | 24 |
+
+---
+
+## P1-E1b · 2026-09-17T19:17:26+00:00 · OK
+
+> Does the aligned model's refusal direction induce refusal when transplanted into BASE, and at what coefficient does induction appear while KL stays sane?  [raw norms]
+
+- **script** `transplant.py` — `transplant.py --lineage olmo2 --stage all`
+- **code** `dc0366b` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 1235.8s
+- **env** torch 2.6.0+cu124 · transformers 5.17.0 · sklearn 1.9.1 · gpu NVIDIA L40S
+
+| target | source | layer | kind | induces | first_coeff | max_induced | coeff_at_max | kl_at_max | dir_norm | baseline_harmless | positive_control_ok | delta | random_mean | random_sd | random_z | random_draws | random_crossing | shuffled_mean | shuffled_sd | shuffled_z | shuffled_draws | shuffled_crossing |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| base | base | 23 | direction | False | None | -4.5137 | 2.0 | 0.876 | 12.07 | -5.6614 | True | 1.1478 | 1.169 | 1.1206 | -0.019 | 3 | 0 | 0.8303 | 1.5733 | 0.202 | 3 | 0 |
+| base | base | 23 | random0 | False | None | -4.6665 | 4.0 | 1.178 | 12.07 | -5.6614 | True |
+| base | base | 23 | random1 | False | None | -5.5157 | 4.0 | 1.068 | 12.07 | -5.6614 | True |
+| base | base | 23 | random2 | False | None | -3.295 | 4.0 | 1.44 | 12.07 | -5.6614 | True |
+| base | base | 23 | shuffled0 | False | None | -4.3526 | 4.0 | 1.93 | 12.07 | -5.6614 | True |
+| base | base | 23 | shuffled1 | False | None | -6.5882 | 0.5 | 0.126 | 12.07 | -5.6614 | True |
+| base | base | 23 | shuffled2 | False | None | -3.5528 | 4.0 | 2.096 | 12.07 | -5.6614 | True |
+| base | sft | 24 | direction | True | 1.0 | 4.8036 | 2.0 | 8.522 | 27.3 | -5.6614 | True | 10.465 | 0.8118 | 1.1612 | 8.313 | 3 | 0 | 0.8089 | 3.074 | 3.141 | 3 | 0 |
+| base | sft | 24 | random0 | False | None | -6.1712 | 0.5 | 0.191 | 27.3 | -5.6614 | True |
+| base | sft | 24 | random1 | False | None | -4.3854 | 2.0 | 1.633 | 27.3 | -5.6614 | True |
+| base | sft | 24 | random2 | False | None | -3.9924 | 2.0 | 1.248 | 27.3 | -5.6614 | True |
+| base | sft | 24 | shuffled0 | False | None | -1.6121 | 2.0 | 1.817 | 27.3 | -5.6614 | True |
+| base | sft | 24 | shuffled1 | False | None | -7.7274 | 0.5 | 0.192 | 27.3 | -5.6614 | True |
+| base | sft | 24 | shuffled2 | False | None | -5.2181 | 2.0 | 1.89 | 27.3 | -5.6614 | True |
+| base | dpo | 24 | direction | True | 1.0 | 2.7503 | 2.0 | 5.966 | 27.17 | -5.6614 | True | 8.4117 | 0.7642 | 0.9926 | 7.705 | 3 | 0 | 0.5057 | 3.1008 | 2.55 | 3 | 0 |
+| base | dpo | 24 | random0 | False | None | -5.3697 | 2.0 | 1.781 | 27.17 | -5.6614 | True |
+| base | dpo | 24 | random1 | False | None | -3.7567 | 2.0 | 1.713 | 27.17 | -5.6614 | True |
+| base | dpo | 24 | random2 | False | None | -5.5653 | 2.0 | 1.283 | 27.17 | -5.6614 | True |
+| base | dpo | 24 | shuffled0 | False | None | -1.6044 | 2.0 | 1.885 | 27.17 | -5.6614 | True |
+| base | dpo | 24 | shuffled1 | False | None | -7.3265 | 2.0 | 1.605 | 27.17 | -5.6614 | True |
+| base | dpo | 24 | shuffled2 | False | None | -6.5364 | 0.5 | 0.262 | 27.17 | -5.6614 | True |
+| base | rlvr | 24 | direction | True | 1.0 | 2.6089 | 2.0 | 5.785 | 27.16 | -5.6614 | True | 8.2703 | 0.627 | 0.8661 | 8.825 | 3 | 0 | 0.5178 | 3.1092 | 2.493 | 3 | 0 |
+| base | rlvr | 24 | random0 | False | None | -5.9632 | 1.0 | 0.363 | 27.16 | -5.6614 | True |
+| base | rlvr | 24 | random1 | False | None | -4.2488 | 2.0 | 1.193 | 27.16 | -5.6614 | True |
+| base | rlvr | 24 | random2 | False | None | -4.8912 | 2.0 | 1.449 | 27.16 | -5.6614 | True |
+| base | rlvr | 24 | shuffled0 | False | None | -1.5906 | 2.0 | 1.873 | 27.16 | -5.6614 | True |
+| base | rlvr | 24 | shuffled1 | False | None | -7.3666 | 2.0 | 1.633 | 27.16 | -5.6614 | True |
+| base | rlvr | 24 | shuffled2 | False | None | -6.4737 | 0.5 | 0.256 | 27.16 | -5.6614 | True |
+| sft | base | 23 | direction | False | None | -2.9312 | 2.0 | 0.691 | 12.07 | -4.2818 | True | 1.3506 | 0.7623 | 0.7058 | 0.833 | 3 | 0 | 0.7613 | 1.3518 | 0.436 | 3 | 0 |
+| sft | base | 23 | random0 | False | None | -3.6405 | 4.0 | 1.096 | 12.07 | -4.2818 | True |
+| sft | base | 23 | random1 | False | None | -4.1569 | 4.0 | 1.102 | 12.07 | -4.2818 | True |
+| sft | base | 23 | random2 | False | None | -2.7609 | 4.0 | 1.344 | 12.07 | -4.2818 | True |
+| sft | base | 23 | shuffled0 | False | None | -3.0478 | 4.0 | 1.835 | 12.07 | -4.2818 | True |
+| sft | base | 23 | shuffled1 | False | None | -5.0451 | 0.5 | 0.074 | 12.07 | -4.2818 | True |
+| sft | base | 23 | shuffled2 | False | None | -2.4684 | 4.0 | 1.716 | 12.07 | -4.2818 | True |
+| sft | sft | 24 | direction | True | 1.0 | 3.2391 | 2.0 | 8.249 | 27.3 | -4.2818 | True | 7.5209 | 0.4915 | 0.6611 | 10.634 | 3 | 0 | 0.4902 | 2.2525 | 3.121 | 3 | 0 |
+| sft | sft | 24 | random0 | False | None | -4.5528 | 1.0 | 0.345 | 27.3 | -4.2818 | True |
+| sft | sft | 24 | random1 | False | None | -3.3786 | 2.0 | 1.426 | 27.3 | -4.2818 | True |
+| sft | sft | 24 | random2 | False | None | -3.4395 | 1.0 | 0.352 | 27.3 | -4.2818 | True |
+| sft | sft | 24 | shuffled0 | False | None | -1.2078 | 2.0 | 1.54 | 27.3 | -4.2818 | True |
+| sft | sft | 24 | shuffled1 | False | None | -5.3419 | 0.5 | 0.143 | 27.3 | -4.2818 | True |
+| sft | sft | 24 | shuffled2 | False | None | -4.8251 | 2.0 | 1.966 | 27.3 | -4.2818 | True |
+| sft | dpo | 24 | direction | True | 1.0 | 2.7956 | 2.0 | 6.417 | 27.17 | -4.2818 | True | 7.0774 | 0.4342 | 0.2915 | 22.788 | 3 | 0 | 0.401 | 2.2503 | 2.967 | 3 | 0 |
+| sft | dpo | 24 | random0 | False | None | -3.639 | 2.0 | 1.32 | 27.17 | -4.2818 | True |
+| sft | dpo | 24 | random1 | False | None | -3.7231 | 2.0 | 1.738 | 27.17 | -4.2818 | True |
+| sft | dpo | 24 | random2 | False | None | -4.1807 | 1.0 | 0.33 | 27.17 | -4.2818 | True |
+| sft | dpo | 24 | shuffled0 | False | None | -1.2945 | 2.0 | 1.526 | 27.17 | -4.2818 | True |
+| sft | dpo | 24 | shuffled1 | False | None | -4.9572 | 0.5 | 0.154 | 27.17 | -4.2818 | True |
+| sft | dpo | 24 | shuffled2 | False | None | -5.3908 | 0.5 | 0.244 | 27.17 | -4.2818 | True |
+| sft | rlvr | 24 | direction | True | 1.0 | 2.6958 | 2.0 | 6.248 | 27.16 | -4.2818 | True | 6.9776 | 0.453 | 0.6195 | 10.532 | 3 | 0 | 0.3658 | 2.2569 | 2.93 | 3 | 0 |
+| sft | rlvr | 24 | random0 | False | None | -4.5439 | 1.0 | 0.311 | 27.16 | -4.2818 | True |
+| sft | rlvr | 24 | random1 | False | None | -3.4876 | 2.0 | 1.211 | 27.16 | -4.2818 | True |
+| sft | rlvr | 24 | random2 | False | None | -3.4549 | 2.0 | 1.477 | 27.16 | -4.2818 | True |
+| sft | rlvr | 24 | shuffled0 | False | None | -1.3202 | 2.0 | 1.512 | 27.16 | -4.2818 | True |
+| sft | rlvr | 24 | shuffled1 | False | None | -5.0139 | 0.5 | 0.158 | 27.16 | -4.2818 | True |
+| sft | rlvr | 24 | shuffled2 | False | None | -5.414 | 0.5 | 0.239 | 27.16 | -4.2818 | True |
+| dpo | base | 23 | direction | False | None | -4.138 | 4.0 | 3.237 | 12.07 | -7.3035 | True | 3.1654 | 2.2689 | 1.0751 | 0.834 | 3 | 0 | 1.5934 | 2.5567 | 0.615 | 3 | 0 |
+| dpo | base | 23 | random0 | False | None | -4.9646 | 4.0 | 1.29 | 12.07 | -7.3035 | True |
+| dpo | base | 23 | random1 | False | None | -6.1431 | 4.0 | 1.347 | 12.07 | -7.3035 | True |
+| dpo | base | 23 | random2 | False | None | -3.9962 | 4.0 | 1.56 | 12.07 | -7.3035 | True |
+| dpo | base | 23 | shuffled0 | False | None | -4.4364 | 4.0 | 2.196 | 12.07 | -7.3035 | True |
+| dpo | base | 23 | shuffled1 | False | None | -8.6534 | 0.5 | 0.079 | 12.07 | -7.3035 | True |
+| dpo | base | 23 | shuffled2 | False | None | -4.0404 | 4.0 | 2.068 | 12.07 | -7.3035 | True |
+| dpo | sft | 24 | direction | True | 1.0 | 3.3224 | 1.0 | 4.303 | 27.3 | -7.3035 | True | 10.6258 | 2.0066 | 1.3638 | 6.32 | 3 | 0 | 2.0032 | 3.3447 | 2.578 | 3 | 0 |
+| dpo | sft | 24 | random0 | False | None | -6.8715 | 2.0 | 1.685 | 27.3 | -7.3035 | True |
+| dpo | sft | 24 | random1 | False | None | -4.496 | 2.0 | 1.718 | 27.3 | -7.3035 | True |
+| dpo | sft | 24 | random2 | False | None | -4.523 | 2.0 | 2.38 | 27.3 | -7.3035 | True |
+| dpo | sft | 24 | shuffled0 | False | None | -1.6064 | 2.0 | 1.851 | 27.3 | -7.3035 | True |
+| dpo | sft | 24 | shuffled1 | False | None | -8.1237 | 2.0 | 2.08 | 27.3 | -7.3035 | True |
+| dpo | sft | 24 | shuffled2 | False | None | -6.1708 | 2.0 | 2.415 | 27.3 | -7.3035 | True |
+| dpo | dpo | 24 | direction | True | 1.0 | 3.5401 | 2.0 | 7.839 | 27.17 | -7.3035 | True | 10.8436 | 2.193 | 0.6203 | 13.947 | 3 | 0 | 1.8457 | 3.2553 | 2.764 | 3 | 0 |
+| dpo | dpo | 24 | random0 | False | None | -4.871 | 2.0 | 1.577 | 27.17 | -7.3035 | True |
+| dpo | dpo | 24 | random1 | False | None | -4.6457 | 2.0 | 1.985 | 27.17 | -7.3035 | True |
+| dpo | dpo | 24 | random2 | False | None | -5.8148 | 2.0 | 2.068 | 27.17 | -7.3035 | True |
+| dpo | dpo | 24 | shuffled0 | False | None | -1.7646 | 2.0 | 1.832 | 27.17 | -7.3035 | True |
+| dpo | dpo | 24 | shuffled1 | False | None | -7.9109 | 0.5 | 0.179 | 27.17 | -7.3035 | True |
+| dpo | dpo | 24 | shuffled2 | False | None | -6.6976 | 4.0 | 5.047 | 27.17 | -7.3035 | True |
+| dpo | rlvr | 24 | direction | True | 1.0 | 3.4732 | 2.0 | 7.649 | 27.16 | -7.3035 | True | 10.7767 | 2.0223 | 0.8054 | 10.869 | 3 | 0 | 1.8052 | 3.2759 | 2.739 | 3 | 0 |
+| dpo | rlvr | 24 | random0 | False | None | -6.2059 | 2.0 | 1.916 | 27.16 | -7.3035 | True |
+| dpo | rlvr | 24 | random1 | False | None | -4.904 | 2.0 | 1.537 | 27.16 | -7.3035 | True |
+| dpo | rlvr | 24 | random2 | False | None | -4.7334 | 2.0 | 1.79 | 27.16 | -7.3035 | True |
+| dpo | rlvr | 24 | shuffled0 | False | None | -1.7903 | 2.0 | 1.818 | 27.16 | -7.3035 | True |
+| dpo | rlvr | 24 | shuffled1 | False | None | -8.0004 | 0.5 | 0.185 | 27.16 | -7.3035 | True |
+| dpo | rlvr | 24 | shuffled2 | False | None | -6.704 | 4.0 | 5.031 | 27.16 | -7.3035 | True |
+| rlvr | base | 23 | direction | False | None | -4.2217 | 4.0 | 3.325 | 12.07 | -7.8087 | True | 3.5869 | 2.6456 | 1.0878 | 0.865 | 3 | 0 | 1.9477 | 2.5255 | 0.649 | 3 | 0 |
+| rlvr | base | 23 | random0 | False | None | -5.0656 | 4.0 | 1.353 | 12.07 | -7.8087 | True |
+| rlvr | base | 23 | random1 | False | None | -6.2964 | 4.0 | 1.398 | 12.07 | -7.8087 | True |
+| rlvr | base | 23 | random2 | False | None | -4.1273 | 4.0 | 1.618 | 12.07 | -7.8087 | True |
+| rlvr | base | 23 | shuffled0 | False | None | -4.6209 | 4.0 | 2.235 | 12.07 | -7.8087 | True |
+| rlvr | base | 23 | shuffled1 | False | None | -8.7668 | 4.0 | 1.768 | 12.07 | -7.8087 | True |
+| rlvr | base | 23 | shuffled2 | False | None | -4.1952 | 4.0 | 2.151 | 12.07 | -7.8087 | True |
+| rlvr | sft | 24 | direction | True | 1.0 | 3.5171 | 1.0 | 4.474 | 27.3 | -7.8087 | True | 11.3258 | 2.3476 | 1.4009 | 6.409 | 3 | 0 | 2.4145 | 3.4128 | 2.611 | 3 | 0 |
+| rlvr | sft | 24 | random0 | False | None | -7.0784 | 2.0 | 1.759 | 27.3 | -7.8087 | True |
+| rlvr | sft | 24 | random1 | False | None | -4.6256 | 2.0 | 1.781 | 27.3 | -7.8087 | True |
+| rlvr | sft | 24 | random2 | False | None | -4.6792 | 2.0 | 2.522 | 27.3 | -7.8087 | True |
+| rlvr | sft | 24 | shuffled0 | False | None | -1.6184 | 2.0 | 1.908 | 27.3 | -7.8087 | True |
+| rlvr | sft | 24 | shuffled1 | False | None | -8.2591 | 2.0 | 2.16 | 27.3 | -7.8087 | True |
+| rlvr | sft | 24 | shuffled2 | False | None | -6.305 | 2.0 | 2.445 | 27.3 | -7.8087 | True |
+| rlvr | dpo | 24 | direction | True | 1.0 | 3.5303 | 2.0 | 8.016 | 27.17 | -7.8087 | True | 11.339 | 2.5246 | 0.687 | 12.831 | 3 | 0 | 2.2727 | 3.3338 | 2.719 | 3 | 0 |
+| rlvr | dpo | 24 | random0 | False | None | -5.0248 | 2.0 | 1.639 | 27.17 | -7.8087 | True |
+| rlvr | dpo | 24 | random1 | False | None | -4.7646 | 2.0 | 2.065 | 27.17 | -7.8087 | True |
+| rlvr | dpo | 24 | random2 | False | None | -6.063 | 2.0 | 2.197 | 27.17 | -7.8087 | True |
+| rlvr | dpo | 24 | shuffled0 | False | None | -1.7651 | 2.0 | 1.901 | 27.17 | -7.8087 | True |
+| rlvr | dpo | 24 | shuffled1 | False | None | -8.0918 | 2.0 | 2.385 | 27.17 | -7.8087 | True |
+| rlvr | dpo | 24 | shuffled2 | False | None | -6.751 | 4.0 | 5.109 | 27.17 | -7.8087 | True |
+| rlvr | rlvr | 24 | direction | True | 1.0 | 3.4775 | 2.0 | 7.828 | 27.16 | -7.8087 | True | 11.2862 | 2.3716 | 0.8231 | 10.831 | 3 | 0 | 2.2129 | 3.3669 | 2.695 | 3 | 0 |
+| rlvr | rlvr | 24 | random0 | False | None | -6.3782 | 2.0 | 1.969 | 27.16 | -7.8087 | True |
+| rlvr | rlvr | 24 | random1 | False | None | -5.0818 | 2.0 | 1.577 | 27.16 | -7.8087 | True |
+| rlvr | rlvr | 24 | random2 | False | None | -4.8513 | 2.0 | 1.848 | 27.16 | -7.8087 | True |
+| rlvr | rlvr | 24 | shuffled0 | False | None | -1.8019 | 2.0 | 1.886 | 27.16 | -7.8087 | True |
+| rlvr | rlvr | 24 | shuffled1 | False | None | -8.2282 | 2.0 | 2.449 | 27.16 | -7.8087 | True |
+| rlvr | rlvr | 24 | shuffled2 | False | None | -6.7571 | 4.0 | 5.091 | 27.16 | -7.8087 | True |
+
+The decisive cell is target=base, source=dpo: if DPO's refusal direction induces refusal in base at acceptable KL, base already had the machinery. Sweeping coefficients also retires the 'you only tried coeff=1' objection to E02.
+
+---
+
+## P1-E1d · 2026-09-17T19:39:05+00:00 · OK
+
+> Does base's harmful/harmless probe transfer to a contrast set where the discriminative vocabulary is held constant -- i.e. is it harmfulness or topic?
+
+- **script** `probe_transfer.py` — `probe_transfer.py --lineage olmo2 --stage all`
+- **code** `dc0366b` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 289.3s
+- **env** torch 2.6.0+cu124 · transformers 5.17.0 · sklearn 1.9.1 · gpu NVIDIA L40S
+
+| stage | transfer_full_peak | transfer_full_L0 | transfer_matched_peak | transfer_matched_at_layer | transfer_matched_L0 | length_only_full | length_only_matched | n_test_matched |
+|---|---|---|---|---|---|---|---|---|
+| base | 0.8244 | 0.5556 | 0.8227 | 25 | 0.518 | 0.5289 | 0.4848 | 361 |
+| sft | 0.9756 | 0.5556 | 0.9723 | 26 | 0.518 | 0.5289 | 0.4848 | 361 |
+| dpo | 0.9756 | 0.5556 | 0.9723 | 22 | 0.518 | 0.5289 | 0.4848 | 361 |
+| rlvr | 0.9711 | 0.5556 | 0.9668 | 22 | 0.518 | 0.5289 | 0.4848 | 361 |
+
+Fitted on Arditi, tested on XSTest. The focus-matched subset holds the discriminative word constant, so a vocabulary probe is at chance there by construction.
+
+---
+
+## P1-E1 · 2026-09-17T19:43:57+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage olmo2`
+- **code** `dc0366b` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.5s
+- **env** torch 2.6.0+cu124 · transformers 5.17.0 · sklearn 1.9.1 · gpu NVIDIA L40S
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| base | 0.9962 | 0.5 | 0.9205 | 0.5568 | False |
+| sft | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| dpo | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| rlvr | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| base_vs_sft | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
+| base_vs_dpo | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
+| base_vs_rlvr | SKIPPED_REGIME_OVERRIDE | 2 | 5 |

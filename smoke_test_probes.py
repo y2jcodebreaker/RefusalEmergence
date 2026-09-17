@@ -363,6 +363,20 @@ def test_transplant() -> None:
     check("the OLD fixed grid would have FAILED this lineage",  # the bug, pinned
           max(T.COEFFS) < max(norms.values()))
 
+    # Every source must get a 1x-ITS-OWN-norm point. Anchoring only on the max means a
+    # small-norm source is swept at wild multiples of its own scale: Zephyr's norms are
+    # 1.1 / 4.4 / 7.4, so the top of the grid was 54x base's own norm but 8x SFT's.
+    zeph = {("base", 15, 4): 1.1, ("sft", 20, 4): 7.4, ("dpo", 17, 4): 4.4}
+    g = T.coeff_grid(zeph, unit_norm=True)
+    check("every source's own raw norm is IN the grid",
+          all(round(v, 4) in g for v in zeph.values()), str([round(c, 1) for c in g]))
+    check("the grid stays shared across sources (matched injection preserved)",
+          list(g) == sorted(set(g)))
+    check("--no-own-norms restores the max-anchored grid only",
+          len(T.coeff_grid(zeph, unit_norm=True, own_norms=False)) == len(T.NORM_MULTIPLES))
+    check("raw mode is unaffected by own_norms",
+          T.coeff_grid(zeph, unit_norm=False, own_norms=True) == T.COEFFS)
+
     # --- P1-E2c: effect size against the cell's own null ---------------------------------
     # One random draw cannot scale an effect. The three real self-cells' single draws came
     # back +0.22 / +2.83 / +0.74 -- a spread comparable to the differences being compared --

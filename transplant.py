@@ -78,14 +78,31 @@ COEFFS = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0)          # RAW mode (Arditi default)
 NORM_MULTIPLES = (0.25, 0.5, 1.0, 2.0, 4.0, 8.0)
 
 
-def coeff_grid(raw_norms: dict, unit_norm: bool) -> tuple[float, ...]:
-    """Coefficients to sweep. Raw mode: Arditi's fixed grid. Unit-norm mode: multiples of the
-    largest source norm, so `coeff` reads as injected norm and the raw operating point of
-    every source is inside the grid."""
+def coeff_grid(raw_norms: dict, unit_norm: bool, own_norms: bool = True) -> tuple[float, ...]:
+    """Coefficients to sweep. Raw mode: Arditi's fixed grid.
+
+    Unit-norm mode: multiples of the LARGEST source norm, which keeps injected norm matched
+    across sources, PLUS each source's own raw norm.
+
+    Why the second part. Anchoring only on the maximum means a small-norm source is swept at
+    wild multiples of its own scale. Zephyr's norms are 1.1 / 4.4 / 7.4, so the top of the grid
+    is 54x base's own norm but only 8x SFT's -- a 6.7x disparity in how hard each direction is
+    pushed relative to where it naturally lives (OLMo 2's disparity was 2.25x, which is why this
+    only showed up on Zephyr). For the NEGATIVE claim about base that is a strength: we pushed
+    far past natural and nothing happened. For COMPARING sources it is a confound, and it
+    plausibly explains Zephyr's much larger nulls (+-1.4 to 2.8 against OLMo 2's +-0.4 to 1.2):
+    at 54x you are battering the model, so arbitrary directions do a lot too.
+
+    Adding every source's own norm to the SHARED grid gives each direction a 1x-its-own-norm
+    point -- the natural operating point, and the one to quote -- without giving up matched
+    injection, since all sources are still swept at all the same coefficients."""
     if not unit_norm:
         return COEFFS
     anchor = max(raw_norms.values())
-    return tuple(round(m * anchor, 4) for m in NORM_MULTIPLES)
+    grid = {round(m * anchor, 4) for m in NORM_MULTIPLES}
+    if own_norms:
+        grid |= {round(v, 4) for v in raw_norms.values()}
+    return tuple(sorted(grid))
 
 
 def source_layers(cfg) -> list[tuple[str, int, int]]:
@@ -370,6 +387,10 @@ def main() -> None:
                     help="model family from config.LINEAGES "
                          "(zephyr | olmo2 | tulu2)")
     ap.add_argument("--stage", required=True, help="target model (base/sft/dpo) or 'all'")
+    ap.add_argument("--no-own-norms", action="store_true",
+                    help="omit each source's own raw norm from the coefficient grid. On by "
+                         "default: it gives every direction a 1x-its-own-norm point, which is "
+                         "the natural operating point and the one worth quoting.")
     ap.add_argument("--null", default="both", choices=("random", "shuffled", "both"),
                     help="null family. 'random' = isotropic norm-matched (Arditi convention, "
                          "and what earlier runs used). 'shuffled' = same estimator fitted on "
@@ -400,15 +421,19 @@ def main() -> None:
                 "  (shuffled = same estimator on shuffled labels; shares the data's "
                 "anisotropic geometry, so it is the harder control)"
                 if "shuffled" in null_kinds else "")
-    coeffs = coeff_grid(raw_norms, args.unit_norm)
+    coeffs = coeff_grid(raw_norms, args.unit_norm, own_norms=not args.no_own_norms)
     logger.info("direction scaling: %s", "UNIT-NORM (coeff = injected norm)" if args.unit_norm
                 else "RAW (Arditi default; coeff not comparable across sources)")
     logger.info("source directions: %s",
                 [f"{s}@L{l}/p{p} raw_norm={raw_norms[(s, l, p)]:.1f}" for (s, l, p) in srcs])
     if args.unit_norm:
-        logger.info("coefficient grid = %s x max raw norm %.1f -> %s",
-                    NORM_MULTIPLES, max(raw_norms.values()),
+        own = sorted({round(v, 1) for v in raw_norms.values()})
+        logger.info("coefficient grid = %s x max raw norm %.1f, plus each source's own norm "
+                    "%s -> %s", NORM_MULTIPLES, max(raw_norms.values()), own,
                     [round(c, 1) for c in coeffs])
+        for (s_, l_, p_), v in raw_norms.items():
+            logger.info("  %-4s@L%-2d raw_norm=%5.1f -> grid spans %.1fx to %.1fx ITS OWN norm",
+                        s_, l_, v, min(coeffs) / v, max(coeffs) / v)
     else:
         logger.info("coefficient grid = %s (raw)", coeffs)
     if not args.unit_norm:

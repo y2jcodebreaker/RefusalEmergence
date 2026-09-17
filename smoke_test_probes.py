@@ -363,6 +363,30 @@ def test_transplant() -> None:
     check("the OLD fixed grid would have FAILED this lineage",  # the bug, pinned
           max(T.COEFFS) < max(norms.values()))
 
+    # --- P1-E2c: effect size against the cell's own null ---------------------------------
+    # One random draw cannot scale an effect. The three real self-cells' single draws came
+    # back +0.22 / +2.83 / +0.74 -- a spread comparable to the differences being compared --
+    # which is exactly why "what preference optimisation adds" was unresolvable.
+    base_line = -4.0
+    cell = [("sft", 24, "direction", 1.0, -2.0, .1), ("sft", 24, "direction", 8.0, +3.0, .9),
+            ("sft", 24, "random0", 8.0, -3.0, .2), ("sft", 24, "random1", 8.0, -3.5, .2),
+            ("sft", 24, "random2", 8.0, -3.8, .2)]
+    e = T.cell_effect(cell, "sft", base_line)
+    check("delta is measured from the TARGET's own baseline", abs(e["delta"] - 7.0) < 1e-9,
+          f"{e['delta']}")
+    check("null mean averages the draws", abs(e["null_mean"] - 0.5667) < 1e-3, f"{e['null_mean']}")
+    check("null sd needs >=2 draws and is reported", e["null_sd"] > 0, f"{e['null_sd']}")
+    check("z standardises the real effect against that null", e["z"] > 10, f"z={e['z']}")
+    check("counts how many NULLS themselves crossed", e["n_null_crossing"] == 0)
+
+    one = [r for r in cell if r[2] in ("direction", "random0")]
+    e1 = T.cell_effect(one, "sft", base_line)
+    check("with ONE draw the sd is None, not a fake 0.0", e1["null_sd"] is None)
+    check("with ONE draw z is None -- no comparison is licensed", e1["z"] is None)
+    check("delta is still reported at one draw", abs(e1["delta"] - 7.0) < 1e-9)
+    e0 = T.cell_effect([r for r in cell if r[2] == "direction"], "sft", base_line)
+    check("with NO draws it degrades gracefully", e0["n_draws"] == 0 and e0["z"] is None)
+
     R = [("sft", 24, "direction", 1.0, -2.0, 0.1), ("sft", 24, "direction", 8.0, +0.7, 0.3),
          ("base", 23, "direction", 8.0, -4.0, 0.2)]
     ok, best, cells = T.positive_control(R, "sft", 0.0)

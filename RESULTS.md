@@ -58,7 +58,49 @@ means the sweep is under-powered, not that the model lacks the mechanism. The ru
 report a matrix whose self-cell fails. base is exempt — there a failing self-cell is the
 measurement.
 
-### Effect size — the same matrix read as Δ from each target's own baseline
+### P1-E2c — effect size against a measured null (5 draws per cell, 2026-09-17)
+
+`--n-control 5`. Δ is from each target's own baseline; `excess` = Δ − mean(null), which removes
+the fact that later checkpoints are more perturbable in general; `z` = (Δ − μ)/σ tests whether
+this direction is an outlier in its own null distribution. Δ_real is noiseless (greedy decoding,
+deterministic logits, fixed direction), so the SEM is σ/√5 on the null mean.
+
+| target ↓ / source → | base | sft | dpo | rlvr |
+|---|---|---|---|---|
+| **base** | +1.27 (z **+0.5**) | +10.46 (z +10.5) | +8.39 (z +7.5) | +8.26 (z +10.7) |
+| sft | +1.41 (z **+1.9**) | +7.52 (z +17.0) | +7.05 (z +15.4) | +6.95 (z +17.5) |
+| dpo | +2.99 (z **+1.0**) | +10.63 (z +11.3) | +10.80 (z +7.3) | +10.75 (z +11.2) |
+| rlvr | +3.31 (z **+1.0**) | +11.33 (z +11.2) | +11.30 (z +7.3) | +11.25 (z +11.5) |
+
+**Base's direction is statistically indistinguishable from an arbitrary direction of the same
+norm — in every target, including itself.** z = +0.5 / +1.9 / +1.0 / +1.0, all below 2. Every
+aligned direction is a **7–18σ** outlier from the same null, in all twelve cells. The two groups
+do not overlap: base ≤ 1.9, aligned ≥ 7.3. This rules out "base has a *weak* coupling" by
+measurement rather than by a threshold, and it is the quantitative form of the central claim.
+
+**The null mean itself is a result.** It rises +0.39 → +2.23 → +2.46 across sft/dpo/rlvr as
+target: later checkpoints are ~6× more perturbable by an arbitrary direction of matched norm.
+Roughly **half** of the apparent DPO increase in raw Δ was that, not coupling.
+
+| self-cell | raw Δ | null | **excess** |
+|---|---|---|---|
+| sft | +7.52 | +0.39 ± 0.42 | **+7.13 ± 0.19** |
+| dpo | +10.80 | +2.23 ± 1.17 | **+8.57 ± 0.53** |
+| rlvr | +11.25 | +2.46 ± 0.77 | **+8.79 ± 0.34** |
+
+- **SFT → DPO: +1.44 ± 0.56 = 2.6σ — RESOLVED. DPO strengthens the coupling.**
+- **DPO → RLVR: +0.21 ± 0.63 = 0.3σ — NOT RESOLVABLE. RLVR adds nothing detectable.**
+- SFT → RLVR: +1.65 ± 0.39 = 4.2σ.
+
+**This settles the retraction to a middle position.** Zephyr said "DPO sharpens"; OLMo 2's
+absolute crossing said no; effect size against a measured null says **DPO does, RLVR does not,
+and the raw effect size overstates it about twofold.** σ has 4 dof at k=5, so 2.6σ is ≈ p 0.03 —
+real but not overwhelming; `--n-control 10` would firm it up.
+
+Positive controls pass for sft, dpo and rlvr. **0/5 nulls crossed the threshold in any of the
+16 cells.**
+
+### Superseded: the same matrix at one random draw
 
 Absolute crossing ("does it reach 0?") is confounded by where the target starts: DPO and RLVR
 sit ~3 points further from refusing on harmless prompts than SFT does, so the same absolute

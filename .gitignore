@@ -19,3 +19,7 @@ data/xstest_prompts.csv
 
 # P1-E7 attacked checkpoints: ~15 GB each, regenerable from attack_manifest.json
 models/
+
+# `script(1)` transcript — created when a terminal-capture command misfires on a pod.
+# One got committed on 2026-09-19 (empty, harmless, but noise in the tree).
+typescript

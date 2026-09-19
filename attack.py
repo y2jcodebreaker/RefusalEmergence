@@ -9,9 +9,30 @@ could make the paper wrong in an interesting way rather than merely incomplete.
   H (coupling installed)  behaviour collapses · coupling collapses · REPRESENTATION HOLDS
   capability account      behaviour collapses · coupling collapses · representation degrades
 
-Recipe: LoRA on a small BENIGN instruction set, after Qi et al., "Fine-tuning Aligned Language
+Recipe: LoRA on a BENIGN instruction set, after Qi et al., "Fine-tuning Aligned Language
 Models Compromises Safety, Even When Users Do Not Intend To!" (ICLR 2024) -- the variant with no
 harmful content, so a collapse cannot be attributed to teaching harmful behaviour.
+
+DOSE. Two failed attempts, both caught by the efficacy check rather than by a measurement pass:
+
+  v1  100 examples, responses from the MODEL ITSELF   refusal 0.985 -> 0.985  (no effect)
+      Self-distillation. Loss 0.78 -> 0.02: nothing to learn. Fixed by --responses reference.
+  v2  100 examples, Alpaca responses                  refusal 1.000 -> 0.979  (-0.021)
+      Real fine-tune (loss 2.00 -> 0.28) but far too small. "~100 examples" is Qi et al.'s
+      HARMFUL setting; their BENIGN setting uses the full Alpaca/Dolly.
+
+ESCALATION LADDER -- run the next rung only if the efficacy line says the previous one failed.
+Each rung is a couple of minutes, and the check is in-run, so this is cheap to walk:
+
+  1.  --n 2000                 (default; ~1500 steps at 3 epochs)
+  2.  --n 5000 --epochs 2
+  3.  --n 5000 --epochs 3 --rank 32
+  4.  --lr 3e-4 on top of rung 3
+
+If rung 4 still will not move it, the benign-data route is not viable on this checkpoint and
+the right move is Qi et al.'s IDENTITY-SHIFTING variant (ten examples, an obedient-persona
+system prompt, still no harmful content) -- which is their most effective setting and is
+cheaper than any rung here. Do not keep escalating past rung 4; change the attack.
 
 THE CONTROL THE ORIGINAL SPEC LACKED. `--arm safety-preserved` runs identical LoRA rank, steps,
 learning rate and schedule on the same benign data with the model's OWN refusals to harmful
@@ -201,7 +222,11 @@ def main() -> None:
                     help="where the benign RESPONSES come from. 'reference' = Alpaca, what Qi "
                          "et al. fine-tune on. 'self' = the model's own outputs, which is "
                          "self-distillation and a MEASURED NO-OP (0.985 -> 0.985).")
-    ap.add_argument("--n", type=int, default=100, help="benign examples (Qi et al. use ~100)")
+    ap.add_argument("--n", type=int, default=2000,
+                    help="benign examples. NOT 100: that is Qi et al.'s HARMFUL setting; their "
+                         "benign setting fine-tunes on the full Alpaca/Dolly. 100 Alpaca rows "
+                         "moved refusal 1.000 -> 0.979 (measured 2026-09-19). See the "
+                         "escalation ladder in the module docstring.")
     ap.add_argument("--n-safety", type=int, default=50,
                     help="refusal-rehearsal examples added in the control arm")
     ap.add_argument("--rank", type=int, default=16)

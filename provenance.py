@@ -198,9 +198,12 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         id="P1-E7", layer=2,
-        statement="PREDICTION: breaking alignment breaks the LINK and spares the "
-                  "REPRESENTATION. Behaviour and coupling collapse together; probe accuracy "
-                  "and its layer shape hold.",
+        statement="CONFIRMED 2026-09-19. Breaking alignment breaks the LINK and spares "
+                  "the REPRESENTATION. Attacked: probe 1.000, XSTest focus-matched 0.917, "
+                  "behavioural refusal 0.189, and ZERO of 130 cells induce. Its own "
+                  "direction reaches -4.955 at natural scale; rlvr's direction injected "
+                  "into it reaches +1.069 and crosses. Neither the representation nor the "
+                  "readout was damaged -- the coupling between them was.",
         evidence=(
             Evidence("refusal", "run_stage.py", "P1-E7",
                      "behavioural refusal rate of the attacked stage, before/after"),
@@ -249,12 +252,16 @@ CLAIMS: tuple[Claim, ...] = (
                     "model's own direction does not induce': its source layer L25 is the "
                     "UNFILTERED argmax fallback, because the attacked model has no filtered "
                     "l* at all -- so 'no valid direction' and 'its direction does nothing' "
-                    "risk being the same statement, exactly as for base in C2", False,
-                    "transplant.py --lineage olmo2_e7 --stage all --source-by induce "
-                    "--null both --n-control 10. The same control that closed C2. BLOCKING "
-                    "for the strong form of P1-E7b; the powered-negative (rlvr's direction "
-                    "induces in the same target at +1.069) already holds at the "
-                    "ablation-selected layer.", script="transplant.py"),
+                    "risk being the same statement, exactly as for base in C2", True,
+                    "2026-09-19: CLOSED. The attacked model's induce-argmax cell IS L25, the "
+                    "same cell the ablation fallback picked, so the negative does not depend "
+                    "on the selection rule and its rows are numerically identical. That "
+                    "cell's steer is -5.188, which is the MAXIMUM over the whole induce "
+                    "surface (130 unpruned cells, 0 pass, median -11.73); swept to 16x raw "
+                    "norm it still tops out at -0.136. The claim is now 'the attacked "
+                    "model's best candidate BY THE METRIC WE SCORE produces no refusal "
+                    "anywhere in the sweep', not 'nothing passed our filters'.",
+                    script="transplant.py"),
             Control("step dose-response", "a single before/after pair being a coincidence",
                     False, "attack.py --save-every N -> measure behaviour, coupling and probe "
                            "at each checkpoint. Behaviour and coupling should fall TOGETHER "

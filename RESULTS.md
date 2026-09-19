@@ -624,15 +624,55 @@ in the control too, so it is Alpaca tuning rather than safety removal. The contr
 from the **same lowered floor** as the attacked model and its own direction still crosses
 (+2.213). Same dose, same floor, opposite outcome.
 
-### OPEN, and blocking for the strong form of this claim
+### The circularity is CLOSED (`--source-by induce`, 2026-09-19 21:54)
 
-`attacked`'s source is **L25, the unfiltered argmax fallback** — the log flags it as "NOT a
-validated refusal layer", because the attacked model has no filtered l\* at all. So "its own
-direction does not induce" is partly true by construction, exactly the circularity that
-`--source-by induce` was built to close for C2. Until that run exists, this claim rests on
-the ablation-selected layer only:
+`attacked`'s source above is L25, the *unfiltered argmax fallback* — the attacked model has
+no filtered l\* at all — so "its own direction does not induce" risked being true by
+construction, the same circularity `--source-by induce` closed for C2. Run, and closed twice
+over:
 
-    python transplant.py --lineage olmo2_e7 --stage all --source-by induce --null both --n-control 10
+**The attacked model's induce-argmax cell IS L25** — the very same cell. Selecting by the
+metric we score picks the layer the ablation fallback already picked, so its three rows are
+numerically identical to the table above (+0.485 / −0.136 / +0.277). This is not a wasted
+run: it means the negative does not depend on the selection rule.
+
+**And that cell's steering value is −5.188**, which is the *maximum over the entire induce
+surface* (`run_stage`: 130 unpruned cells, `induce >= 0.00: 0 pass, max steer −5.1880,
+median −11.7295`). Two independent statements, together exhaustive:
+
+- no cell anywhere in the attacked model pushes refusal upward at Arditi's default
+  coefficient — the best of 130 is **−5.188**;
+- and that best cell, swept to **16×** its raw norm, still tops out at **−0.136**.
+
+So the claim is no longer "no direction passed our filters". It is **"the attacked model's
+best candidate, chosen to maximise the exact quantity we score, still produces no refusal
+anywhere in the sweep."**
+
+### Why the induce table must NOT be read as the restoration result
+
+Selecting rlvr by induce moves its source from **L24 (norm 27.2) to L18 (norm 13.2)**, and
+that halves what coefficient 1.0 injects. The two runs therefore disagree at the operating
+point and agree at the maximum:
+
+| rlvr source | → attacked @ coeff 1.0 | → attacked, max | first crosses |
+|---|---|---|---|
+| L24 (ablation-selected) | **+1.069** ✓ | +3.174 @c2.0 | coeff 1.0 |
+| L18 (induce-selected) | −3.658 ✗ | +4.981 @c2.0 | coeff 2.0 |
+
+**Quote the L24 row for restoration.** It is the only one where the un-attacked direction
+crosses into refusal at its own natural scale, which is the claim being made. L18 is stronger
+at its peak (+4.981, Δ +16.35, random z +17.8, shuffled z +3.5) but reaches it at 2× norm, so
+it supports "can be driven", not "is restored at natural scale". Both are in the ledger; the
+distinction is the difference between a mechanism and a big perturbation.
+
+### A replication that fell out for free
+
+Every rlvr@L18 cell has **1/10 shuffled nulls crossing, always `shuffled6`** — while every
+rlvr@L24 cell has 0/10. That is O-90 reproducing exactly, in a lineage it was not derived
+from: the crossing rate is a property of the *layer*, L18 being where injection most easily
+pushes refusal and therefore where a random vector most easily gets there too. It remains one
+vector shared across targets, not one event per cell. **"0/10" is meaningless without its
+layer.**
 
 ## P1-E7 refusal rates: which number to quote, and why they differ
 

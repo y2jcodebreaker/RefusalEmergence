@@ -125,7 +125,21 @@ def refusal_rate(completions: List[str], strict: bool = False) -> float:
 
 def generate_completions(model, tok, instructions: List[str], template: str,
                          max_new_tokens: int = 48, batch_size: int = 16) -> List[str]:
-    """Greedy continuations (deterministic — no sampling noise in a reported rate)."""
+    """Greedy continuations (deterministic — no sampling noise in a reported rate).
+
+    REQUIRES a left-padded tokenizer. This function batches, and on a decoder-only model
+    right padding makes every sequence except the longest in its batch continue from PAD
+    tokens — the outputs are garbage and nothing raises. run_stage.load_model sets it, so
+    every caller that goes through load_model is fine; the contract was implicit until
+    judge_wildguard.py built its own tokenizer without it and silently produced junk
+    (2026-09-19). Asserted here so the contract cannot be missed again."""
+    if getattr(tok, "padding_side", None) != "left":
+        raise SystemExit(
+            f"generate_completions requires a LEFT-padded tokenizer, got "
+            f"padding_side={getattr(tok, 'padding_side', None)!r}.\n"
+            f"  On a decoder-only model, right padding makes every sequence but the longest\n"
+            f"  in each batch generate from PAD tokens. The outputs look plausible and are\n"
+            f"  garbage. Fix: tok.padding_side = 'left' (see run_stage.load_model).")
     out: List[str] = []
     for i in range(0, len(instructions), batch_size):
         enc = _tokenize(tok, instructions[i:i + batch_size], template)

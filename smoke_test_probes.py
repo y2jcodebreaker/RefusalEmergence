@@ -340,6 +340,17 @@ def test_transplant() -> None:
 
     m, tk = M(), Tk()
     base_lg = torch.zeros(2, 7)
+    # generate_completions must REFUSE a right-padded tokenizer rather than silently emit
+    # garbage for every sequence but the longest in each batch.
+    from refusal_substring import generate_completions
+    class _RightPad:
+        padding_side = "right"
+    try:
+        generate_completions(None, _RightPad(), ["a"], "{instruction}")
+        check("right-padded tokenizer is refused", False, "no SystemExit")
+    except SystemExit as e:
+        check("right-padded tokenizer is refused", "LEFT-padded" in str(e), str(e)[:60])
+
     rows = T.sweep_cell(m, tk, torch.zeros(5), 0, ["a", "b"], "{instruction}", [1],
                         base_lg, batch_size=2)
     check("sweep_cell returns one row per coefficient", len(rows) == len(T.COEFFS),
@@ -443,6 +454,18 @@ def test_transplant() -> None:
 
     # --- C3 control: the WildGuard parse must not fail silently ----------------------------
     import judge_wildguard as W
+
+    # LEFT padding on a decoder-only model. With right padding every sequence but the longest
+    # in a batch generates from PAD tokens, so its answer is garbage -- and it fails SILENTLY
+    # apart from a warning that scrolls past. The first run of the judge had exactly this.
+    class _Tk:
+        padding_side = "right"
+        pad_token = None
+        eos_token = "</s>"
+    tk = W.configure_tokenizer(_Tk())
+    check("the judge forces LEFT padding (decoder-only)", tk.padding_side == "left")
+    check("a missing pad token falls back to eos", tk.pad_token == "</s>")
+
     check("parses 'Response refusal: yes'",
           W.parse("Harmful request: no\nResponse refusal: yes\nHarmful response: no") is True)
     check("parses 'Response refusal: no'", W.parse("Response refusal: no") is False)

@@ -13,19 +13,37 @@ Read the OLMo 2 section first: it is the stronger result and the one the paper l
 
 ### The headline
 
-**SFT's refusal direction makes the BASE model write coherent refusals. Base's own
-direction does nothing — in any model, including itself.**
+**SFT's refusal direction makes the BASE model decline requests it otherwise answers,
+in fluent on-topic text. Base's own direction does nothing — in any model, including
+itself.**
 
 P1-E1c, `transplant_text.py`, 64 harmless prompts, direction added at L24, coefficient
 **27.3 = SFT's own raw direction norm**:
 
-| arm | coeff | refusal | strict | degenerate |
+| arm | coeff | strict judge | hand-audited | degenerate |
 |---|---|---|---|---|
-| untouched base | 0.0 | 0.000 | 0.000 | 0.000 |
-| **+ SFT's direction** | **27.3** | **1.000** | **1.000** | **0.078** |
-| + norm-matched random | 27.3 | 0.016 | 0.016 | 0.000 |
-| + SFT's direction | 54.6 | 0.984 | 0.984 | **0.984** ⚠️ loop, not evidence |
-| + norm-matched random | 54.6 | 0.000 | 0.000 | 0.375 |
+| untouched base | 0.0 | 0.000 | — | 0.016 |
+| **+ SFT's direction** | **27.3** | 1.000 | **0.750** | 0.156 |
+| + norm-matched random | 27.3 | 0.016 | — | 0.016 |
+| + SFT's direction | 54.6 | 0.984 | — | **1.000** ⚠️ loop, not evidence |
+| + norm-matched random | 54.6 | 0.000 | — | 0.469 |
+
+> ⚠️ **HAND AUDIT, 2026-09-19 — the headline was 1.000 and is 0.750.** All 64 completions of
+> the injected arm read in full; labels stored at `results/olmo2_base_from_sft_HANDAUDIT.json`.
+> **48 genuine declines · 14 degenerate · 1 decline-then-complies · 1 outright complies.** The
+> strict judge scored all 64 as refusals. Two failure modes it missed: phrase loops just above
+> the n-gram threshold, and **runs of U+00AD SOFT HYPHEN** — invisible in a terminal, tokenising
+> as one "word", so a word-based test reported a distinct-4-gram ratio of 1.000 on pure garbage.
+> The judge now also flags character runs (≥8) and uses a 0.55 threshold; it catches 10 of the
+> 14 with **zero false positives**, so it remains a *screen* and **the hand number is the one to
+> report**. This is the discipline from O-51/O-66 applied to a new regime, and the third time
+> the judge has needed correcting.
+>
+> **Also a wording correction.** The induced text is a **capability-disclaimer register** — *"I'm
+> not familiar with that"*, *"I can only help with Y"* — not a safety refusal. On *harmless*
+> prompts a safety refusal is not available, so what the direction induces is the refusal
+> **form**. Say *"base declines requests it otherwise answers"*, not *"base writes safety
+> refusals"*.
 
 What base writes at 27.3 — fluent, on-task, correctly structured, and it offers an
 alternative:

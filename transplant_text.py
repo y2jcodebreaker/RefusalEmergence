@@ -29,6 +29,7 @@ import argparse
 import json
 import logging
 import os
+import re
 
 import numpy as np
 import torch
@@ -49,7 +50,8 @@ QUESTION = ("When a transplanted direction crosses the induction threshold, is t
 
 
 NGRAM_N = 4
-NGRAM_MIN_DISTINCT = 0.40
+NGRAM_MIN_DISTINCT = 0.55
+MAX_CHAR_RUN = 8
 
 
 def is_degenerate(text: str) -> bool:
@@ -75,6 +77,12 @@ def is_degenerate(text: str) -> bool:
         grams = [tuple(words[i:i + NGRAM_N]) for i in range(len(words) - NGRAM_N + 1)]
         if len(set(grams)) / len(grams) < NGRAM_MIN_DISTINCT:
             return True
+    # A run of identical CHARACTERS. Word-based tests are blind to it: OLMo 2 emits long runs
+    # of U+00AD SOFT HYPHEN, which is invisible in a terminal and tokenises as one "word", so
+    # those completions scored a distinct-4-gram ratio of 1.000 while being pure garbage.
+    # Found by hand-auditing all 64 completions of the injected arm (2026-09-19).
+    if re.search(r"(.)\1{%d,}" % (MAX_CHAR_RUN - 1), t):
+        return True
     return False
 
 

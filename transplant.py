@@ -105,11 +105,25 @@ def coeff_grid(raw_norms: dict, unit_norm: bool, own_norms: bool = True) -> tupl
     return tuple(sorted(grid))
 
 
-def source_layers(cfg) -> list[tuple[str, int, int]]:
+def source_layers(cfg, by: str = "ablation") -> list[tuple[str, int, int]]:
     """(stage, layer, pos_idx) per source, READ FROM each stage's saved sweep — never
-    hardcoded. Uses the Arditi-filtered l*; falls back to the unfiltered argmax when no
-    direction passed the filters (base), which is flagged in the log because such a layer
-    is 'best among allowed', not a validated refusal layer."""
+    hardcoded.
+
+    `by="ablation"` (default) uses the Arditi-filtered l*, falling back to the unfiltered
+    argmax when nothing passed the filters (base) — flagged in the log, because such a layer is
+    "best among allowed", not a validated refusal layer.
+
+    `by="induce"` picks the cell that maximises the INDUCE surface instead. This exists to
+    close a circularity: base has l* = -1 *because* no cell passes the induce criterion, so
+    "base has no valid direction" and "base's direction does not induce" risk being the same
+    statement, and the direction we transplant by default is the argmax of the ABLATION surface
+    — not of the axis we score. Verified 2026-09-17: OLMo 2 base transplants (pos 1, L23) while
+    its induce-optimal cell is (pos 1, L19); Zephyr L15 vs L20. Both remain far below threshold,
+    so the conclusion is very likely safe — but it had not been TESTED. Reporting both turns
+    "no direction passed our filters" into "base's best candidate BY THE METRIC WE SCORE still
+    does nothing"."""
+    if by not in ("ablation", "induce"):
+        raise SystemExit(f"--source-by must be 'ablation' or 'induce', not {by!r}")
     out = []
     for stage in cfg.stages:
         path = cfg.path(stage, "refusal")
@@ -118,6 +132,20 @@ def source_layers(cfg) -> list[tuple[str, int, int]]:
                              f"--stage all first (transplant needs each stage's l*)")
         d = np.load(path, allow_pickle=True)
         l_star, pos_star = int(d["l_star"]), int(d["pos_star"])
+        if by == "induce":
+            steer, excl = d["steer"], d["excluded_layers"]
+            keep = np.ones(steer.shape[1], dtype=bool)
+            if excl.size:
+                keep[excl.astype(int)] = False
+            masked = np.where(keep[None, :], steer, -np.inf)
+            pos_star, l_star = (int(v) for v in np.unravel_index(np.argmax(masked),
+                                                                 masked.shape))
+            logger.info("[%s] source by INDUCE argmax: (pos %d, L%d), steer=%+.3f "
+                        "(ablation-selected would be L%d)", stage, pos_star, l_star,
+                        float(steer[pos_star, l_star]),
+                        int(d["l_star"]) if int(d["l_star"]) >= 0 else int(d["naive_l_star"]))
+            out.append((stage, l_star, pos_star))
+            continue
         if l_star < 0:
             l_star = int(d["naive_l_star"])
             # The STAGE's own window, not the lineage default: a stage on a regime override
@@ -387,6 +415,10 @@ def main() -> None:
                     help="model family from config.LINEAGES "
                          "(zephyr | olmo2 | tulu2)")
     ap.add_argument("--stage", required=True, help="target model (base/sft/dpo) or 'all'")
+    ap.add_argument("--source-by", default="ablation", choices=("ablation", "induce"),
+                    help="which cell to take each source direction from. 'ablation' (default) "
+                         "is the Arditi-filtered l*. 'induce' is the argmax of the induce "
+                         "surface -- run it to close the circularity in C2 (see source_layers).")
     ap.add_argument("--no-own-norms", action="store_true",
                     help="omit each source's own raw norm from the coefficient grid. On by "
                          "default: it gives every direction a 1x-its-own-norm point, which is "
@@ -406,6 +438,7 @@ def main() -> None:
     cfg = config_for(args.lineage)
     cfg.require_verified()          # conceptual blocker first ...
     logger.info("data: %s", assert_available())   # ... then the cheap file check
+    logger.info("source selection: %s", args.source_by.upper())
     n_null = args.n_control if args.n_control is not None else cfg.n_control
     null_kinds = ("random", "shuffled") if args.null == "both" else (args.null,)
     if n_null < 2:
@@ -413,7 +446,7 @@ def main() -> None:
                        "effect sizes CANNOT be compared across stages (this is what left SP4 "
                        "unresolved). Crossing verdicts are still valid.", n_null)
     logger.info("null draws per cell: %d", n_null)
-    sources = source_layers(cfg)
+    sources = source_layers(cfg, by=args.source_by)
     srcs, raw_norms = load_source_directions(cfg, sources, unit_norm=args.unit_norm)
     nulls = (load_null_directions(cfg, sources, n_null, unit_norm=args.unit_norm)
              if "shuffled" in null_kinds else None)

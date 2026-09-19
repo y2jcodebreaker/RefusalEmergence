@@ -140,8 +140,11 @@ CLAIMS: tuple[Claim, ...] = (
                     "distinct-4-gram ratio; the arm is 98.4% degenerate at 2x"),
             Control("WildGuard / StrongREJECT judge", "'your judge is a regex'", False,
                     "NeurIPS 2024 both; hand-audit only the disagreements"),
-            Control("hand audit of the 1.000 arm", "a new false-positive class in a new regime",
-                    False, "O-51/O-66 make this mandatory per regime"),
+            Control("hand audit of the injected arm", "a new false-positive class in a "
+                    "new regime", True,
+                    "all 64 read 2026-09-19: 48 genuine / 14 degenerate / 1 partial / 1 "
+                    "complies -> 0.750, not the judge's 1.000. Labels in "
+                    "results/olmo2_base_from_sft_HANDAUDIT.json"),
         ),
         depends_on=("C1", "C2"),
         falsifier="The aligned direction's effect in base is indistinguishable from the "

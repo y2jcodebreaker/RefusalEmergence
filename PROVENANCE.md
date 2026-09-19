@@ -48,7 +48,7 @@ Depends on: C1
 
 **Falsifier.** Some direction induces refusal in base at acceptable KL -> the representation IS sufficient and the coupling account is wrong.
 
-### C3 — ⚠️ 2 control(s) open
+### C3 — ⚠️ 1 control(s) open
 
 **The ALIGNED model's direction IS sufficient in base -- it writes fluent refusals at the direction's own natural magnitude. (OLMo 2; not Zephyr.)**
 
@@ -66,7 +66,7 @@ Depends on: C1, C2
 | over-injection control | 'the loop means you broke the model' | ✅ SFT loops identically at 2x -> over-injection, not base-specific |
 | degenerate-text judge | a phrase loop scoring as a refusal | ✅ distinct-4-gram ratio; the arm is 98.4% degenerate at 2x |
 | WildGuard / StrongREJECT judge | 'your judge is a regex' | ⬜ NeurIPS 2024 both; hand-audit only the disagreements |
-| hand audit of the 1.000 arm | a new false-positive class in a new regime | ⬜ O-51/O-66 make this mandatory per regime |
+| hand audit of the injected arm | a new false-positive class in a new regime | ✅ all 64 read 2026-09-19: 48 genuine / 14 degenerate / 1 partial / 1 complies -> 0.750, not the judge's 1.000. Labels in results/olmo2_base_from_sft_HANDAUDIT.json |
 
 **Falsifier.** The aligned direction's effect in base is indistinguishable from the shuffled-label null -> nothing transplants and the paper has no causal claim.
 

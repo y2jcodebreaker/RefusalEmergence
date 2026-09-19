@@ -35,7 +35,7 @@ Depends on: C1
 
 | evidence | script | experiment | files on disk |
 |---|---|---|---|
-| per-layer induce/ablate/KL surfaces and Arditi's three selection filters | `run_stage.py` | E02 | 7 × `*_refusal.npz` |
+| per-layer induce/ablate/KL surfaces and Arditi's three selection filters | `run_stage.py` | E02 | 10 × `*_refusal.npz` |
 | 16-cell matrix, delta from own baseline, z vs the shuffled-label null | `transplant.py` | P1-E1b/P1-E2d | 7 × `*_transplant.npz` |
 
 | control | rules out | status |
@@ -80,7 +80,7 @@ Depends on: C1
 |---|---|---|---|
 | both lineages | `probe_representation.py` | P1-E1 | 7 × `*_probe.npz` |
 | base focus-matched 0.820 (Zephyr) / 0.823 (OLMo 2) | `probe_transfer.py` | P1-E1d | 7 × `*_transfer.npz` |
-| both lineages, 4 + 3 checkpoints | `run_stage.py` | E02 | 7 × `*_refusal.npz` |
+| both lineages, 4 + 3 checkpoints | `run_stage.py` | E02 | 10 × `*_refusal.npz` |
 
 | control | rules out | status |
 |---|---|---|
@@ -96,7 +96,7 @@ Depends on: C1
 
 Layer 2 claims are *predictions from* layer 1. Running one while a shallower control is open is depth-first; `--check` refuses it.
 
-### P1-E7 — ⚠️ 4 blocking control(s) open
+### P1-E7 — ⚠️ 3 blocking control(s) open
 
 **PREDICTION: breaking alignment breaks the LINK and spares the REPRESENTATION. Behaviour and coupling collapse together; probe accuracy and its layer shape hold.**
 
@@ -104,7 +104,7 @@ Depends on: C1, C2, C3, C4
 
 | evidence | script | experiment | files on disk |
 |---|---|---|---|
-| behavioural refusal rate of the attacked stage, before/after | `run_stage.py` | P1-E7 | 7 × `*_refusal.npz` |
+| behavioural refusal rate of the attacked stage, before/after | `run_stage.py` | P1-E7 | 10 × `*_refusal.npz` |
 | probe layer CURVE, not the peak -- 1.000 is saturated | `probe_representation.py` | P1-E7 | 7 × `*_probe.npz` |
 | XSTest transfer of the attacked model: the generalisation half | `probe_transfer.py` | P1-E7 | 7 × `*_transfer.npz` |
 | inject the UN-attacked direction into the attacked model | `transplant.py` | P1-E7b | 7 × `*_transplant.npz` |
@@ -112,7 +112,7 @@ Depends on: C1, C2, C3, C4
 | control | rules out | status |
 |---|---|---|
 | matched safety-preserved arm | attributing decoupling to fine-tuning in general rather than to safety removal | ⬜ attack.py --arm safety-preserved; built, not run |
-| behavioural pre-check | reading mechanism from a failed attack | ⬜ verify refusal has collapsed BEFORE measuring anything else |
+| behavioural pre-check | reading mechanism from a failed attack | ✅ 2026-09-19: it FIRED. Attack v1 (responses from the model's own outputs) left refusal at 0.985 -> 0.985, i.e. no effect. Six minutes of measurement stopped before hours of uninterpretable mechanism numbers. attack.py now defaults to Alpaca reference responses and checks efficacy in-run. |
 | SFT loss masked to responses | a language-modelling run on our own eval prompts | ✅ encode_sft + 9 tests |
 | step dose-response | a single before/after pair being a coincidence | ⬜ attack.py --save-every N -> measure behaviour, coupling and probe at each checkpoint. Behaviour and coupling should fall TOGETHER while the probe curve is flat. Far stronger than a before/after pair, and it is the same shape as Frank 2026's dose-response. |
 | seed replication | one stochastic training run | ⬜ 2-3 seeds of the benign arm; report the spread, not one number |

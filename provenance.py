@@ -215,8 +215,11 @@ CLAIMS: tuple[Claim, ...] = (
             Control("matched safety-preserved arm", "attributing decoupling to fine-tuning "
                     "in general rather than to safety removal", False,
                     "attack.py --arm safety-preserved; built, not run"),
-            Control("behavioural pre-check", "reading mechanism from a failed attack", False,
-                    "verify refusal has collapsed BEFORE measuring anything else"),
+            Control("behavioural pre-check", "reading mechanism from a failed attack", True,
+                    "2026-09-19: it FIRED. Attack v1 (responses from the model's own outputs) "
+                    "left refusal at 0.985 -> 0.985, i.e. no effect. Six minutes of measurement "
+                    "stopped before hours of uninterpretable mechanism numbers. attack.py now "
+                    "defaults to Alpaca reference responses and checks efficacy in-run."),
             Control("SFT loss masked to responses", "a language-modelling run on our own "
                     "eval prompts", True, "encode_sft + 9 tests"),
             Control("step dose-response", "a single before/after pair being a coincidence",

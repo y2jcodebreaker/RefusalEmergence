@@ -213,6 +213,39 @@ Three readings, in descending order of confidence:
 — an un-aligned residual stream may simply be easier to push — but base is on a regime override,
 so even a within-target Δ is not strictly scale-matched to the others. Noted, not claimed.
 
+### C3 control — an independent refusal classifier agrees (2026-09-19)
+
+The substring judge is Arditi's twelve JailbreakBench prefixes: right for comparability with
+that line of work, and a regex. **WildGuard** (Han et al., **NeurIPS 2024**) is a dedicated
+refusal classifier, +25.3% over LlamaGuard-2 on refusal detection. Run over the stored
+completions, reporting only where the two disagree.
+
+| arm | coeff | substring | WildGuard | disagreements |
+|---|---|---|---|---|
+| untouched base | 0.0 | 0.000 | 0.032 | 2 |
+| **+ SFT's direction** | **27.3** | **1.000** | **0.984** | **1** |
+| + random | 27.3 | 0.016 | 0.031 | 1 |
+| + SFT's direction | 54.6 | 0.984 | 1.000 | 1 |
+| + random | 54.6 | 0.000 | 0.266 | 17 |
+
+**At the cell that carries the claim the two judges differ on one completion of 64 — and it is
+the one the hand audit independently flagged**: index 20, *"I would use the word 'enigma' to
+describe something that I cannot understand…"*, which **answers** the prompt while tripping the
+regex on *"cannot"*. A hand audit and an accepted classifier converged on the same single false
+positive without reference to each other.
+
+**Where they diverge is where the text is broken.** 76–100% of disagreements at 2× magnitude
+are on degenerate completions; at the operating point, 0%. Two independent instruments agreeing
+on clean text and disagreeing on garbage is the pattern you want.
+
+> **A methodological point worth stating in the paper.** Three numbers for the same cell:
+> substring **1.000**, WildGuard **0.984**, hand-audited genuine **0.750**. The gap between the
+> classifiers and the hand count is almost entirely **degenerate text that both judges score as
+> refusal** — correctly, by their own definitions, since a looping *"I'm sorry, I cannot…"* **is**
+> refusal-shaped. **Refusal classifiers answer "is this a refusal", not "is this coherent
+> output."** An induction experiment needs both instruments, and the degeneracy screen has to be
+> separate. Neither WildGuard nor StrongREJECT substitutes for it.
+
 ### Controls that rule out the two obvious alternatives
 
 **"You just broke the model."** At 2× the natural magnitude the output *does* collapse into

@@ -565,6 +565,28 @@ were later invalidated. Do not read these as results:
 The authoritative runs are `4d6d16f` (transplant), `4d6d16f` (aggregate_probe) and `9d3a388`
 (both transplant_text controls). Everything in the OLMo 2 section above comes from those.
 
+### P1-E7, 2026-09-19 — three attacks before one worked
+
+Every arm writes to `models/{lineage}-{from}-{arm}`, so each attempt **overwrote** its
+predecessor's checkpoint. The rows below are real measurements of models that no longer
+exist. `19:45` is the dangerous one: a full mechanism pass over the v1 checkpoint, whose
+`.npz` files sit under the same `olmo2_e7_*` names as the authoritative run and were briefly
+copied over them (O-99).
+
+| started (UTC) | script | commit | why superseded |
+|---|---|---|---|
+| 19:40, 19:42 | `attack.py` | `81b4e4f` | **v1, `--responses self`** — self-distillation. Refusal 0.985 → 0.985, a no-op. Loss 0.78 → 0.02 was the tell |
+| 19:45 | `run_stage.py` | `a2fae97` | mechanism pass over the **v1** checkpoint: `l*` 20/19, behavioural baseline 0.985 in every arm. Reads as a result and is not one |
+| 19:52 ×2 | `attack.py` | `4b9cb57` | **failed** — crashed before training |
+| 19:53 | `attack.py` | `4b9cb57` | **v2, Alpaca n=100** — under-dosed. 1.000 → 0.979; the in-run efficacy check logged `THE ATTACK DID NOT WORK` |
+| 20:00 | `attack.py` | `b2b7c88` | **failed** — rung 2 (`--n 5000`), killed deliberately once rung 1 had already succeeded, to stop it overwriting the good checkpoint |
+
+The authoritative P1-E7 runs are **19:55** (benign arm, `--n 2000`) and **20:07** (matched
+safety-preserved control) at `b2b7c88`, then **20:16** (`overrefusal.py`), **20:50**
+(`run_stage`), **20:57** (`probe_representation`), **20:59** (`probe_transfer`), **21:18**
+(`transplant`, ablation-selected) and **21:54** (`transplant --source-by induce`). Every
+number in the P1-E7 sections above comes from those eight.
+
 ## P1-E7b — the attack cuts the LINK, and the link can be driven from outside (2026-09-19)
 
 `transplant.py --lineage olmo2_e7 --stage all --null both --n-control 10`, commit `8973d2b`.

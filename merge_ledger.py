@@ -53,19 +53,32 @@ def main() -> None:
     merged, added, conflicts = merge(repo, other)
     print(f"{args.into}: {len(repo)} rows  +  {args.other}: {len(other)} rows "
           f"->  {len(merged)} ({len(added)} recovered)")
+
+    # WRITE FIRST, REPORT SECOND. The report used to come first, and a row missing an
+    # optional key crashed the f-string BEFORE the merged file was written -- so a run that
+    # had already computed the correct union left the ledger truncated to the repo's copy.
+    # Caught 2026-09-19 by a test that fed this a row with no `experiment` field. The durable
+    # side effect must not be downstream of anything that can raise, least of all formatting.
+    if args.dry_run:
+        print("(dry run — nothing written)")
+    else:
+        tmp = args.into + ".tmp"
+        with open(tmp, "w") as f:
+            for r in merged:
+                f.write(json.dumps(r) + "\n")
+        os.replace(tmp, args.into)      # atomic: a crash mid-write cannot truncate the ledger
+        print(f"wrote {args.into}")
+
+    def _f(v: object, w: int) -> str:
+        return f"{v if v is not None else '-':<{w}}"
+
     for r in added:
-        print(f"  RECOVERED {r['started_utc']}  {r.get('experiment'):<7} {r['script']:<24} "
-              f"{r.get('status'):<7} @{r.get('git', {}).get('short')}")
+        print(f"  RECOVERED {r.get('started_utc', '?')}  {_f(r.get('experiment'), 7)} "
+              f"{_f(r.get('script'), 24)} {_f(r.get('status'), 7)} "
+              f"@{(r.get('git') or {}).get('short')}")
     for k, a, b in conflicts:
         print(f"  ⚠️  CONFLICT at {k}: same run recorded twice with different bodies. Kept the "
               f"existing one; statuses {a.get('status')} vs {b.get('status')}. Resolve by hand.")
-    if args.dry_run:
-        print("(dry run — nothing written)")
-        return
-    with open(args.into, "w") as f:
-        for r in merged:
-            f.write(json.dumps(r) + "\n")
-    print(f"wrote {args.into}")
 
 
 if __name__ == "__main__":

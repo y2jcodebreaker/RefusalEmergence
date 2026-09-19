@@ -24,6 +24,19 @@
 #      compared byte-for-byte with the version that arrived. Identical -> drop the copy.
 #      DIFFERENT -> keep it and say so loudly, because that means the pod computed something
 #      the committed file does not contain, and only a human can say which is wanted.
+#
+# THE LEDGER IS RESTORED FROM A TRAP, NOT FROM THE HAPPY PATH. `git checkout -- results/`
+# resets the tracked ledger to origin's copy BEFORE the pull is known to succeed, and the
+# merge that puts the pod's rows back used to sit AFTER `git pull`. With `set -e`, any pull
+# failure exits between those two steps and strands every row the pod added since the last
+# push. That is not hypothetical: on 2026-09-19 a pull aborted on an untracked results file
+# and SEVEN rows were lost that way -- all six attack.py runs of P1-E7 plus the overrefusal.py
+# run, i.e. the entire evidence trail for the experiment, while the .npz outputs survived.
+# They were recoverable only because the backup file happened to still be on the pod.
+#
+# So the restore runs from `trap ... EXIT`: it fires on success, on failure, and on Ctrl-C.
+# The backup file is kept either way -- deleting it would re-create the same single point of
+# failure one level down.
 set -euo pipefail
 
 BACKUP="/workspace/runs.jsonl.podbackup.$(date +%s)"
@@ -31,6 +44,19 @@ if [ -f results/runs.jsonl ]; then
     cp results/runs.jsonl "$BACKUP"
     echo "ledger backed up -> $BACKUP  ($(wc -l < "$BACKUP") rows)"
 fi
+
+restore_ledger() {
+    local rc=$?
+    if [ -f "$BACKUP" ]; then
+        echo
+        python merge_ledger.py "$BACKUP" || echo "  MERGE FAILED -- rows are still in $BACKUP"
+        if [ "$rc" -ne 0 ]; then
+            echo "  (pull did not complete, but the ledger was restored anyway)"
+        fi
+    fi
+    return $rc
+}
+trap restore_ledger EXIT
 
 git fetch
 
@@ -55,11 +81,6 @@ git checkout -- results/ 2>/dev/null || true
 
 git pull
 
-if [ -f "$BACKUP" ]; then
-    python merge_ledger.py "$BACKUP"
-else
-    echo "no prior ledger to merge"
-fi
 
 # Now that origin's versions have landed, compare each moved-aside file against them.
 if [ "$MOVED" -gt 0 ]; then
@@ -84,4 +105,4 @@ if [ "$MOVED" -gt 0 ]; then
 fi
 
 echo
-echo "Ledger: $(wc -l < results/runs.jsonl) rows. Nothing was discarded without being merged back."
+echo "Pull complete. The ledger is merged by the EXIT trap, below."

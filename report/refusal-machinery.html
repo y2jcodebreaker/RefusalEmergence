@@ -124,17 +124,19 @@ strong{font-weight:600;color:var(--ink)}
 
 <div class="wrap">
   <header class="col">
-    <p class="eyebrow">Report &middot; P1-E1 &middot; P1-E1b &middot; P1-E1c &middot; P1-E1d &middot; P1-E2d &middot; 17 Sep 2026</p>
+    <p class="eyebrow">Report &middot; P1-E1 &middot; P1-E1b/c/d &middot; P1-E2d &middot; P1-E7/b/c &middot; 19 Sep 2026</p>
     <h1>Alignment installs refusal machinery, not refusal behavior</h1>
     <p class="lede">A base model that has never been aligned reads harmful-vs-harmless at
     <strong>99.6&thinsp;%</strong> and refuses <strong>1.5&thinsp;%</strong> of harmful requests. Add the
-    aligned model&rsquo;s refusal direction and it writes fluent refusals &mdash; <strong>0.000 &rarr; 1.000</strong>.
-    Its own direction does nothing, in any model, including itself.</p>
-    <p class="lede" style="margin-top:.7rem">Every aligned direction crosses the refusal threshold in
-    base <strong>at its own natural magnitude, unscaled</strong>. Across sixteen cells,
-    <strong>none of 160 shuffled-label directions ever did</strong>.</p>
+    aligned model&rsquo;s refusal direction and it declines requests it otherwise answers, in fluent
+    on-topic text. Its own direction does nothing, in any model, including itself.</p>
+    <p class="lede" style="margin-top:.7rem">That account made a prediction, and the prediction has now
+    been <strong>tested causally</strong>. Strip alignment with 2000 innocuous examples and refusal
+    collapses <strong>0.985&nbsp;&rarr;&nbsp;0.189</strong> while the representation holds at
+    <strong>1.000</strong> &mdash; and <strong>not one of 32 layers</strong> can still steer the model
+    into refusing. Put the un-attacked model&rsquo;s direction in and it refuses again.</p>
     <div class="meta">
-      <span>OLMo&nbsp;2&nbsp;7B &middot; base &rarr; SFT &rarr; DPO &rarr; RLVR</span>
+      <span>OLMo&nbsp;2&nbsp;7B &middot; base &rarr; SFT &rarr; DPO &rarr; RLVR &rarr; attacked</span>
       <span>replicated on Mistral &rarr; Zephyr</span>
       <span>n = 256 / 132 / 64 &middot; 10 null draws/cell</span>
       <span><a href="https://github.com/y2jcodebreaker/RefusalEmergence">github.com/y2jcodebreaker/RefusalEmergence</a></span>
@@ -173,7 +175,7 @@ strong{font-weight:600;color:var(--ink)}
         algorithms. Here are three&hairsp;<span class="ell">&hellip;</span></p>
       </div>
       <div class="turn hit">
-        <p class="turn-h"><span>+ SFT&rsquo;s refusal direction</span><span>1.000</span></p>
+        <p class="turn-h"><span>+ SFT&rsquo;s refusal direction</span><span>0.750</span></p>
         <p class="turn-b"><em>I&rsquo;m sorry, I cannot perform that action.</em> I can only provide
         information about programming with Python. I cannot perform actions like visiting websites or
         performing actions on my own.<span class="ell">&hellip;</span></p>
@@ -185,11 +187,30 @@ strong{font-weight:600;color:var(--ink)}
         1.&nbsp;[Python.org](https Cite Cite Cite<span class="ell">&hellip;</span></p>
       </div>
     </div>
-    <p class="cap col" style="max-width:none">Strict refusal rate over 64 harmless prompts, right-hand
-    figure in each header. The injection coefficient is <strong>27.3 &mdash; exactly SFT&rsquo;s own raw
-    direction norm</strong>, not a tuned value. The random arm is norm-matched to the same magnitude: it
-    degrades fluency slightly and never refuses. 7.8&thinsp;% of the injected completions degenerate; the
-    figure above is typical, not selected.</p>
+    <p class="cap col" style="max-width:none">Refusal rate over 64 harmless prompts, right-hand figure in
+    each header. The injection coefficient is <strong>27.3 &mdash; exactly SFT&rsquo;s own raw direction
+    norm</strong>, not a tuned value. The random arm is norm-matched to the same magnitude: it degrades
+    fluency slightly and never refuses. The figure above is typical, not selected.</p>
+
+    <div class="col claim retract" style="margin-top:1.4rem">
+      <p style="font-size:1.08rem">Correction: this number was 1.000 and is 0.750.</p>
+      <p>All 64 completions of the injected arm were read by hand: <strong>48 genuine declines, 14
+      degenerate, 1 declines-then-complies, 1 complies outright</strong>. The automated judge scored all
+      64 as refusals. It missed two things &mdash; phrase loops just above the n-gram threshold, and runs
+      of <code>U+00AD</code> soft hyphen, invisible in a terminal and tokenising as a single word, so a
+      word-based test reported a perfect distinct-4-gram ratio on pure garbage. The judge now also flags
+      character runs and catches 10 of the 14 with zero false positives, which makes it a usable
+      <em>screen</em>. <strong>The hand number is the one reported.</strong>
+      <br><br>Independently, WildGuard (Han et al., NeurIPS&nbsp;2024) was run over the same completions
+      and agreed with the substring judge on <strong>63 of 64</strong> &mdash; and its single disagreement
+      is the same false positive the hand audit had already flagged, a completion that answers the prompt
+      while opening with &ldquo;I cannot&rdquo;. Two instruments with no knowledge of each other converged
+      on the same one error.
+      <br><br>A wording correction too: on <em>harmless</em> prompts a safety refusal is not available, so
+      what the direction induces is the refusal <em>form</em> &mdash; a capability disclaimer. The claim is
+      &ldquo;base declines requests it otherwise answers&rdquo;, not &ldquo;base writes safety
+      refusals&rdquo;.</p>
+    </div>
 
     <div class="col claim">
       <p>The base model has everything needed to refuse. It is simply never told to.</p>
@@ -450,6 +471,12 @@ strong{font-weight:600;color:var(--ink)}
     <p><strong>The axes are independently vulnerable.</strong> Ablation can be fooled by model damage;
     induction cannot. A substring judge can be fooled by text; the logit axis does not use one. The claim
     rests where all three agree.</p>
+    <p><strong>The causal negative is powered, not absent.</strong> &ldquo;No direction works in the
+    attacked model&rdquo; would be unfalsifiable if the sweep were simply too small. It is not: the same
+    model, in the same sweep, accepts two other directions. And the negative does not depend on which
+    layer was chosen &mdash; selecting the attacked model&rsquo;s source by the criterion being scored
+    picks the same layer, whose steering value of &minus;5.19 is the <em>best of 130 cells</em>. Pushed to
+    sixteen times its natural magnitude it still never reaches refusal.</p>
     <p><strong>Eight methodological errors were caught before they reached the result</strong> &mdash; each had
     already produced a clean, publishable-looking number. Five are worth repeating.</p>
 
@@ -517,7 +544,11 @@ strong{font-weight:600;color:var(--ink)}
       carries the claim, not any single cell.</li>
       <li><strong>The layer axis is where the direction was read from</strong>, not where refusal is
       implemented. This report identifies no circuit.</li>
-      <li><strong>Two families is not all families</strong>, and both are 7B.</li>
+      <li><strong>Two families is not all families</strong>, and both are 7B. The causal test is
+      OLMo&nbsp;2 only &mdash; one attacked checkpoint, one control, one seed.</li>
+      <li><strong>The attacked model&rsquo;s 0.189 is measured by a substring judge.</strong> Non-refusal
+      is not the same thing as useful harmful compliance, and that distinction has not yet been checked
+      with a classifier on these completions the way it was for the transplant arm.</li>
       <li><strong>No lexically matched set was constructed.</strong> The trigger-word control comes
       from XSTest&rsquo;s own annotations, which match on the discriminative word but not on token
       count. A minimal-pair set would be tighter and is future work.</li>
@@ -526,24 +557,120 @@ strong{font-weight:600;color:var(--ink)}
     </ol>
   </section>
 
+  <section>
+    <div class="col">
+      <p class="kicker">The causal test</p>
+      <h2>Cut the link on purpose. The representation does not move.</h2>
+      <p>Everything above is observational: checkpoints that already differ, compared after the fact. The
+      account makes a prediction the competing one cannot &mdash; that <em>breaking</em> alignment should
+      break the link and spare the representation. Here it is broken on purpose.</p>
+      <p>Two LoRA runs on the aligned model, identical rank, learning rate, schedule and
+      <strong>2000 innocuous instruction-following examples</strong> containing nothing harmful. The only
+      difference between them is <strong>50 rehearsed refusals &mdash; 2.4&thinsp;% of the data</strong>.
+      One arm is the attack (Qi et al., ICLR&nbsp;2024); the other is the control that paper never ran.</p>
+    </div>
+
+    <div class="col tscroll">
+      <table>
+        <thead><tr><th>&nbsp;</th><th>aligned</th><th>attacked</th><th>control</th></tr></thead>
+        <tbody>
+          <tr><th>Refusal rate, harmful prompts</th><td>0.985</td><td class="c-base"><strong>0.189</strong></td><td class="c-dpo">0.924</td></tr>
+          <tr><th>Probe accuracy, held out</th><td>1.000</td><td class="cell-key">1.000</td><td>1.000</td></tr>
+          <tr><th>Transfer, trigger-word matched</th><td>0.967</td><td class="cell-key">0.917</td><td>0.928</td></tr>
+          <tr><th>Layers where refusal can be steered in</th><td>13</td><td class="c-base none">none of 32</td><td class="c-dpo">9</td></tr>
+          <tr><th>Own direction, at its natural magnitude</th><td>+2.73</td><td class="c-base none">&minus;4.96</td><td class="c-dpo">+2.21</td></tr>
+          <tr><th><em>Aligned</em> direction injected, same magnitude</th><td>+2.73</td><td class="cell-key">+1.07</td><td class="c-dpo">+1.96</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cap col" style="max-width:none">Refusal measured on 132 held-out harmful prompts. Induction
+    is the change in refusal score on <em>harmless</em> prompts with the direction added at coefficient
+    1.0 &mdash; each direction at its own raw norm, no tuning. The attacked model&rsquo;s best cell out of
+    130 steers at <strong>&minus;5.19</strong>: not a weak positive, a negative.</p>
+
+    <div class="figure">
+      <div class="key">
+        <span><i style="background:var(--deep)"></i>aligned</span>
+        <span><i style="background:var(--flag)"></i>attacked</span>
+        <span><i style="background:var(--strong)"></i>control &mdash; same dose, 50 refusals rehearsed</span>
+        <span style="color:var(--ink-3)"><i style="background:var(--ink-3)"></i>induce threshold</span>
+      </div>
+      <div class="figscroll">
+      <svg viewBox="0 0 760 352" role="img" aria-label="Induced refusal score by layer for the aligned, attacked and control checkpoints. The aligned model crosses zero at about layer 12 and peaks at plus 3.93. The control crosses at about layer 17 and peaks at plus 2.31. The attacked model never crosses zero at any layer, with its best value minus 5.19 at layer 25.">
+        <g><line x1="58" y1="52.0" x2="742" y2="52.0" class="grid"/><text x="48" y="56" class="tk ta">+4</text></g>
+        <g><line x1="58" y1="82.1" x2="742" y2="82.1" class="grid"/><text x="48" y="86.1" class="tk ta">+2</text></g>
+        <g><line x1="58" y1="142.2" x2="742" y2="142.2" class="grid"/><text x="48" y="146.2" class="tk ta">&minus;2</text></g>
+        <g><line x1="58" y1="172.2" x2="742" y2="172.2" class="grid"/><text x="48" y="176.2" class="tk ta">&minus;4</text></g>
+        <g><line x1="58" y1="202.3" x2="742" y2="202.3" class="grid"/><text x="48" y="206.3" class="tk ta">&minus;6</text></g>
+        <g><line x1="58" y1="232.4" x2="742" y2="232.4" class="grid"/><text x="48" y="236.4" class="tk ta">&minus;8</text></g>
+        <g><line x1="58" y1="262.4" x2="742" y2="262.4" class="grid"/><text x="48" y="266.4" class="tk ta">&minus;10</text></g>
+        <g><line x1="58" y1="292.5" x2="742" y2="292.5" class="grid"/><text x="48" y="296.5" class="tk ta">&minus;12</text></g>
+        <line x1="58" y1="112.1" x2="742" y2="112.1" class="zero" style="stroke:var(--ink-3)"/>
+        <polyline class="ln" style="stroke:var(--deep)" points="58.0,225.0 85.4,223.6 112.7,224.5 140.1,224.1 167.4,221.8 194.8,223.6 222.2,223.9 249.5,224.1 276.9,220.2 304.2,224.7 331.6,209.4 359.0,154.8 386.3,114.7 413.7,106.7 441.0,103.7 468.4,83.7 495.8,79.5 523.1,74.7 550.5,53.1 577.8,64.6 605.2,64.2 632.6,59.1 659.9,59.5 687.3,65.5 714.6,66.1 742.0,64.9"/>
+        <polyline class="ln" style="stroke:var(--strong)" points="58.0,293.8 85.4,293.4 112.7,293.4 140.1,291.4 167.4,292.0 194.8,290.7 222.2,291.0 249.5,290.5 276.9,285.1 304.2,293.5 331.6,267.4 359.0,220.5 386.3,188.0 413.7,211.2 441.0,175.1 468.4,170.0 495.8,149.2 523.1,104.8 550.5,94.1 577.8,92.7 605.2,96.0 632.6,92.4 659.9,89.3 687.3,88.7 714.6,86.3 742.0,77.4"/>
+        <polyline class="ln" style="stroke:var(--flag);stroke-width:2.8" points="58.0,288.6 85.4,288.4 112.7,288.1 140.1,288.0 167.4,287.4 194.8,287.5 222.2,288.1 249.5,288.4 276.9,288.0 304.2,286.8 331.6,280.0 359.0,268.6 386.3,253.1 413.7,252.7 441.0,253.3 468.4,238.7 495.8,223.5 523.1,222.7 550.5,224.1 577.8,215.1 605.2,208.8 632.6,202.2 659.9,194.9 687.3,192.1 714.6,197.8 742.0,190.1"/>
+        <circle cx="550.5" cy="53.1" r="4" fill="var(--deep)"/>
+        <circle cx="742.0" cy="190.1" r="4" fill="var(--flag)"/>
+        <text x="544" y="44" class="note" fill="var(--deep)" text-anchor="end">aligned peak +3.93 @ L18</text>
+        <text x="736" y="182" class="note" fill="var(--flag)" text-anchor="end">attacked best &minus;5.19 @ L25 &mdash; never crosses</text>
+        <text x="310" y="105" class="note" fill="var(--ink-3)" text-anchor="middle">refusal appears above this line</text>
+        <text x="58.0" y="327" class="tk">0</text><text x="194.8" y="327" class="tk">5</text><text x="331.6" y="327" class="tk">10</text><text x="468.4" y="327" class="tk">15</text><text x="605.2" y="327" class="tk">20</text><text x="742.0" y="327" class="tk">25</text>
+        <text x="400" y="346" class="axlab" text-anchor="middle">LAYER (of 32)</text>
+        <text x="14" y="175" class="axlab" text-anchor="middle" transform="rotate(-90 14 175)">INDUCED REFUSAL</text>
+      </svg>
+      </div>
+      <p class="cap">Both fine-tuned arms start roughly 3.6 points lower than the aligned model &mdash;
+      instruction-tuning on innocuous data makes a model more compliant across the board, in the control
+      as much as in the attack. The control climbs out of that hole anyway. The attacked model does not,
+      at any layer.</p>
+    </div>
+
+    <div class="col claim">
+      <p>Four things are true of the attacked model at once, and together they are the claim.</p>
+      <p><strong>It still knows.</strong> Probe 1.000, and 0.917 on prompts whose trigger word is held
+      constant &mdash; harmfulness is as readable as before.
+      <strong>It no longer refuses.</strong> 0.189, down from 0.985.
+      <strong>Its own direction is dead everywhere.</strong> &minus;4.96 in itself, and no layer crosses.
+      <strong>The readout still works.</strong> Hand it the un-attacked model&rsquo;s direction and it
+      refuses again: +1.07, more than ten standard deviations above a norm-matched random control, and
+      <strong>0 of 10</strong> shuffled-label nulls crossed.
+      <br><br>Neither end was damaged. The wire between them was cut &mdash; and it can still be driven
+      from outside.</p>
+    </div>
+
+    <div class="col">
+      <p style="margin-top:1.7rem"><strong>The control is what makes this a result.</strong> Qi et al.
+      established that benign fine-tuning strips safety; they did not run a matched-dose arm, so
+      &ldquo;benign fine-tuning degrades safety&rdquo; has always been confoundable with
+      &ldquo;fine-tuning degrades models&rdquo;. It is not. At the same dose, on the same data, 2.4&thinsp;%
+      rehearsal holds refusal completely &mdash; and holds the mechanism too, a nine-layer steerable window
+      against the attacked model&rsquo;s zero.</p>
+      <p>And the control is not simply refusing everything. On XSTest&rsquo;s safe prompts it declines
+      <strong>0.072</strong> against the untouched model&rsquo;s 0.076, and on ordinary harmless requests
+      <strong>0.004</strong> against 0.029 &mdash; it over-refuses <em>less</em> than the model it came
+      from. It even reproduces that model&rsquo;s own characteristic over-refusals, on the same items:
+      <em>how do I kill a Python process</em>, <em>how do I stab a balloon to make it pop</em>. It
+      inherited the safety behaviour, flaws included, rather than acquiring a blanket policy.</p>
+    </div>
+  </section>
+
   <section class="col">
     <p class="kicker">Next</p>
-    <h2>The prediction the account makes</h2>
-    <p>If alignment installs a <em>link</em> rather than a capability, then breaking alignment should break the
-    link and spare the representation. That is a prediction the competing account &mdash; that alignment teaches
-    refusal &mdash; cannot make.</p>
-    <p>The test is a cheap fine-tuning attack: a few hundred steps on innocuous data, of the kind known to strip
-    safety alignment. The coupling account predicts refusal behaviour collapses, induction collapses with it,
-    and <strong>probe accuracy stays at 1.000</strong>. The capability account predicts the representation
-    degrades along with the behaviour. They disagree on a number that takes an afternoon to measure.</p>
+    <h2>What is still open</h2>
+    <p>Two strengthenings of the causal result are designed and unrun: a <strong>dose&ndash;response</strong>
+    curve, checkpointing through training so behaviour, coupling and probe accuracy can be watched separating
+    in real time rather than compared at two endpoints; and <strong>seed replication</strong>, because one
+    stochastic training run is one sample.</p>
     <p>Beyond that: a second behaviour &mdash; sycophancy, which alignment installs <em>incidentally</em> rather
     than by design &mdash; would show the signature belongs to the training procedure and not to the safety
     dataset. And the mechanism itself remains open. Base has the harmfulness representation at layer&nbsp;19 and
-    the refusal readout at layer&nbsp;24, and nothing connecting them. <em>What carries one to the other, and is
-    it built during alignment or merely switched on?</em></p>
+    the refusal readout at layer&nbsp;24, and nothing connecting them. The attack severs something between
+    those two points without touching either. <em>What carries one to the other, and is it built during
+    alignment or merely switched on?</em></p>
   </section>
 
-  <p class="foot col">Experiments E02, P1-E1, P1-E1b, P1-E1c &middot; every run, commit and timestamp in the
-  repository&rsquo;s run ledger &middot; code and full numbers at
+  <p class="foot col">Experiments E02, P1-E1, P1-E1b/c/d, P1-E2d, P1-E7/b/c &middot; 56 runs, each with its
+  commit and timestamp in the repository&rsquo;s ledger; the superseded ones are listed there too, including
+  the two attacks that failed before the third worked &middot; code and full numbers at
   <a href="https://github.com/y2jcodebreaker/RefusalEmergence">RefusalEmergence</a></p>
 </div>

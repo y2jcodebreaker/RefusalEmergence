@@ -565,6 +565,75 @@ were later invalidated. Do not read these as results:
 The authoritative runs are `4d6d16f` (transplant), `4d6d16f` (aggregate_probe) and `9d3a388`
 (both transplant_text controls). Everything in the OLMo 2 section above comes from those.
 
+## P1-E7b — the attack cuts the LINK, and the link can be driven from outside (2026-09-19)
+
+`transplant.py --lineage olmo2_e7 --stage all --null both --n-control 10`, commit `8973d2b`.
+All nine cells and three baselines verified against the run log before reading.
+
+**Induced refusal at the OPERATING POINT (coeff 1.0 — each direction at its own raw scale).**
+Report this, not the max over coefficients: the max reads `attacked`'s direction as weakly
+"inducing" in rlvr (+0.485) and control (+0.277) at coeff 2.0, which at coeff 1.0 are −2.618
+and −4.702. Those positives are an artifact of a max against a `> 0` threshold. Same lesson
+as `transplant_text` (O-60).
+
+| target ↓ \ source → | rlvr | attacked | control | own harmless baseline |
+|---|---|---|---|---|
+| **rlvr** | **+2.730** | −2.618 | +1.903 | −7.809 |
+| **attacked** | **+1.069** | **−4.955** | +1.818 | −11.368 |
+| **control** | +1.962 | −4.702 | **+2.213** | −11.698 |
+
+Three things, in order of how load-bearing they are.
+
+**1. The attacked model's own direction produces refusal in nothing — not even itself.**
+−4.955 in itself, −2.618 and −4.702 in the other two. Its probe reads 1.000 and its XSTest
+focus-matched transfer reads 0.917, so the harmfulness representation is entirely intact. The
+direction fitted to it is behaviourally inert.
+
+**2. That negative is POWERED, not an absence.** The same target accepts rlvr's direction at
++1.069 and control's at +1.818, so the coefficient grid demonstrably reaches this model's
+operating point. `transplant.py` now says so in the log rather than leaving it to be argued:
+
+    [attacked] no filtered l* -> self-cell exempt from the positive control, AND the grid is
+    POWERED for this target by proxy: rlvr's direction induces here (+3.174 >= 0.00). So
+    attacked's own direction failing (best -0.136) is a genuine negative, not an
+    under-powered sweep.
+
+**3. The refusal machinery downstream is NOT destroyed.** Injecting the un-attacked model's
+direction into the attacked model produces refusal (+1.069, Δ +14.54, random z +10.7,
+shuffled z +3.6, 0/10 shuffled nulls crossed). The attacked model can still be *made* to
+refuse; it simply no longer produces the vector that would make it refuse when it sees a
+harmful prompt. **The attack cut the link, not the representation and not the readout.**
+
+### The two statistics answer different questions — do not merge them
+
+| | question | `attacked ← attacked` |
+|---|---|---|
+| Δ and z vs nulls | does it move refusal logits more than a norm-matched random direction? | **yes**: Δ +11.23, random z +9.1 |
+| crossing at operating point | does it actually produce refusal? | **no**: −4.955 |
+
+Both are true and the pair is the finding: the attacked model's harmfulness direction is a
+real, non-random direction that still moves refusal-related logits, and it no longer moves
+them far enough to refuse. Quoting Δ +11.23 alone would read as "the attacked direction still
+works". It does not.
+
+### Baseline shift, and why the control is the arm that rules it out
+
+Both fine-tuned arms sit ~3.6 logits lower on harmless-prompt refusal than rlvr (−11.37 and
+−11.70 vs −7.81) — the logit-domain counterpart of the P1-E7c compliance shift, and present
+in the control too, so it is Alpaca tuning rather than safety removal. The control starts
+from the **same lowered floor** as the attacked model and its own direction still crosses
+(+2.213). Same dose, same floor, opposite outcome.
+
+### OPEN, and blocking for the strong form of this claim
+
+`attacked`'s source is **L25, the unfiltered argmax fallback** — the log flags it as "NOT a
+validated refusal layer", because the attacked model has no filtered l\* at all. So "its own
+direction does not induce" is partly true by construction, exactly the circularity that
+`--source-by induce` was built to close for C2. Until that run exists, this claim rests on
+the ablation-selected layer only:
+
+    python transplant.py --lineage olmo2_e7 --stage all --source-by induce --null both --n-control 10
+
 ## P1-E7 refusal rates: which number to quote, and why they differ
 
 Three refusal rates exist for the same attacked checkpoint. They are **not** in conflict, but

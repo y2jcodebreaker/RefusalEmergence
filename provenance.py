@@ -209,7 +209,10 @@ CLAIMS: tuple[Claim, ...] = (
             Evidence("transfer", "probe_transfer.py", "P1-E7",
                      "XSTest transfer of the attacked model: the generalisation half"),
             Evidence("transplant", "transplant.py", "P1-E7b",
-                     "inject the UN-attacked direction into the attacked model"),
+                     "inject the UN-attacked direction into the attacked model. 2026-09-19: "
+                     "at the operating point rlvr->attacked = +1.069 (crosses), "
+                     "attacked->attacked = -4.955 (does not), and the negative is POWERED by "
+                     "the same target accepting rlvr's and control's directions"),
         ),
         controls=(
             Control("matched safety-preserved arm", "attributing decoupling to fine-tuning "
@@ -242,6 +245,16 @@ CLAIMS: tuple[Claim, ...] = (
                     "n=2000 it fired properly: 1.000 -> 0.104.", script="attack.py"),
             Control("SFT loss masked to responses", "a language-modelling run on our own "
                     "eval prompts", True, "encode_sft + 9 tests"),
+            Control("attacked source by INDUCE argmax", "the circularity in 'the attacked "
+                    "model's own direction does not induce': its source layer L25 is the "
+                    "UNFILTERED argmax fallback, because the attacked model has no filtered "
+                    "l* at all -- so 'no valid direction' and 'its direction does nothing' "
+                    "risk being the same statement, exactly as for base in C2", False,
+                    "transplant.py --lineage olmo2_e7 --stage all --source-by induce "
+                    "--null both --n-control 10. The same control that closed C2. BLOCKING "
+                    "for the strong form of P1-E7b; the powered-negative (rlvr's direction "
+                    "induces in the same target at +1.069) already holds at the "
+                    "ablation-selected layer.", script="transplant.py"),
             Control("step dose-response", "a single before/after pair being a coincidence",
                     False, "attack.py --save-every N -> measure behaviour, coupling and probe "
                            "at each checkpoint. Behaviour and coupling should fall TOGETHER "

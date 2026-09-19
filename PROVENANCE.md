@@ -123,6 +123,6 @@ Depends on: C1, C2, C3, C4
 
 ## Consistency check
 
-Graph and disk agree.
+- ⚠️ C3: control 'WildGuard judge (NeurIPS 2024)' is marked done but judge_wildguard.py has no ledger row, so its number is uncited. The result stands; the PROVENANCE does not. Re-run judge_wildguard.py to record it — do not hand-write a row.
 
-Ledger: 34 recorded runs across 6 scripts.
+Ledger: 37 recorded runs across 6 scripts.

@@ -30,6 +30,7 @@ import json
 import os
 
 from refusal_substring import is_refusal_strict, truncate_at_turn
+from runlog import RunRecord
 
 WILDGUARD = "allenai/wildguard"
 PROMPT = """<s><|user|>
@@ -127,6 +128,12 @@ def main() -> None:
     print(f"{'arm':<12}{'coeff':>8}{'substring':>11}{'wildguard':>11}{'disagree':>10}"
           f"{'unparsed':>10}")
     report = {}
+    rec = RunRecord("P1-E1c-judge", "judge_wildguard.py", config_for("olmo2"),
+                    question="Does an accepted refusal classifier agree with the substring "
+                             "judge, and where exactly do they disagree?",
+                    notes=f"WildGuard (Han et al., NeurIPS 2024) over {args.path}. Reports "
+                          f"disagreements so only those need hand-auditing.")
+    rec.__enter__()
     for key, v in data.items():
         comps = [truncate_at_turn(c).strip() for c in v["completions"]]
         wg: list[bool | None] = []
@@ -150,10 +157,17 @@ def main() -> None:
         report[key] = {"substring": sum(sub) / len(sub),
                        "wildguard": (sum(1 for i in ok if wg[i]) / len(ok)) if ok else None,
                        "n_unparsed": len(wg) - len(ok), "disagreements": dis}
+        rec.result(source_file=os.path.basename(args.path), arm=kind, coeff=float(coeff),
+                   substring=round(report[key]["substring"], 4),
+                   wildguard=(round(report[key]["wildguard"], 4)
+                              if report[key]["wildguard"] is not None else None),
+                   n_disagreements=len(dis), disagreement_indices=dis,
+                   n_unparsed=report[key]["n_unparsed"])
 
     out_path = args.path.replace("_text.json", "_wildguard.json")
     with open(out_path, "w") as f:
         json.dump(report, f, indent=1)
+    rec.__exit__(None, None, None)
     print(f"\nwrote {out_path}")
     print("\nHand-audit ONLY the disagreement indices above. That is the whole point: better\n"
           "evidence than a blind audit, and a fraction of the reading.")

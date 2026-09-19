@@ -54,6 +54,7 @@ class Control:
     done: bool
     where: str = ""
     optional: bool = False
+    script: str = ""     # if a script produced it, it must appear in the ledger when done
 
 
 @dataclass(frozen=True)
@@ -159,7 +160,8 @@ CLAIMS: tuple[Claim, ...] = (
                     "2026-09-19: at the operating point substring 1.000 vs WildGuard 0.984, "
                     "ONE disagreement -- index 20, the same false positive the hand audit "
                     "found independently. Judges diverge only on degenerate text "
-                    "(76-100% of disagreements at 2x magnitude)."),
+                    "(76-100% of disagreements at 2x magnitude).",
+                    script="judge_wildguard.py"),
             Control("hand audit of the injected arm", "a new false-positive class in a "
                     "new regime", True,
                     "all 64 read 2026-09-19: 48 genuine / 14 degenerate / 1 partial / 1 "
@@ -288,6 +290,16 @@ def check(claims=CLAIMS) -> list[str]:
             if rows and not runs_for(rows, e.script):
                 problems.append(f"{c.id}: {e.script} has never run according to the ledger, "
                                 f"yet it is listed as evidence.")
+        # A control marked DONE whose script never ran is the same hole one level down:
+        # judge_wildguard.py produced a number cited in RESULTS.md and wrote no ledger row
+        # (2026-09-19), because only EVIDENCE scripts were checked.
+        for ct in c.controls:
+            if ct.done and ct.script and rows and not runs_for(rows, ct.script):
+                problems.append(
+                    f"{c.id}: control '{ct.name}' is marked done but {ct.script} has no "
+                    f"ledger row, so its number is uncited. The result stands; the "
+                    f"PROVENANCE does not. Re-run {ct.script} to record it — do not "
+                    f"hand-write a row.")
 
     # BFS guard: the thing the user asked for by name.
     deepest_open = min((c.layer for c in claims if c.open_controls), default=None)

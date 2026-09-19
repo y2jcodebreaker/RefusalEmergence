@@ -278,6 +278,7 @@ def main() -> int:
     test_regime_override_aggregate()
     test_transplant_text()
     test_probe_transfer()
+    test_attack_encoding()
 
     print("\n" + ("ALL PASSED" if not FAIL else f"{len(FAIL)} FAILED: {FAIL}"))
     return 1 if FAIL else 0
@@ -591,6 +592,47 @@ def test_probe_transfer() -> None:
     acc_flip = PT.per_layer_transfer(tr_pos, tr_neg, te_neg, te_pos)
     check("a label-flipped test set scores BELOW chance, not above",
           acc_flip[2] < 0.25, f"L2={acc_flip[2]:.3f}")
+
+
+def test_attack_encoding() -> None:
+    """P1-E7: the SFT loss must be masked to response tokens only.
+
+    If the prompt is not masked, the attack becomes partly a language-modelling run on our own
+    evaluation prompts and any behavioural change afterwards is uninterpretable. This is a
+    silent failure -- training runs fine, loss goes down, and the experiment is void."""
+    import attack as A
+
+    class Tk:
+        eos_token_id = 99
+        def encode(self, s, add_special_tokens=False):
+            return [ord(c) % 90 + 1 for c in s]      # 1 token per char, never 0 or 99
+
+    tok = Tk()
+    tpl = "<U>{instruction}</U><A>"
+    print("\n[attack encoding — P1-E7]")
+    ex = A.encode_sft(tok, [("hi", "no")], tpl)
+    ids, labels = ex[0]
+    n_prompt = len(tok.encode(tpl.format(instruction="hi")))
+    check("prompt tokens are masked out of the loss",
+          labels[:n_prompt] == [-100] * n_prompt, str(labels[:n_prompt]))
+    check("response tokens are NOT masked",
+          all(x != -100 for x in labels[n_prompt:]), str(labels[n_prompt:]))
+    check("ids and labels are the same length", len(ids) == len(labels))
+    check("ids keep the prompt (only the LABELS are masked)",
+          ids[:n_prompt] == tok.encode(tpl.format(instruction="hi")))
+    check("eos is appended to the response", ids[-1] == tok.eos_token_id)
+    check("eos is supervised", labels[-1] == tok.eos_token_id)
+
+    # Truncation must not produce an all-masked example -- that is a zero-gradient batch
+    # member, and enough of them silently turn the run into a no-op.
+    long_ex = A.encode_sft(tok, [("x" * 400, "no")], tpl, max_len=50)
+    check("an example whose prompt fills the window is DROPPED, not kept all-masked",
+          long_ex == [], f"{len(long_ex)} kept")
+    check("a normal example survives the same max_len",
+          len(A.encode_sft(tok, [("hi", "no")], tpl, max_len=50)) == 1)
+    check("empty responses are dropped upstream",
+          A.encode_sft(tok, [("hi", "")], tpl)[0][1].count(-100) < len(
+              A.encode_sft(tok, [("hi", "")], tpl)[0][1]))
 
 
 if __name__ == "__main__":

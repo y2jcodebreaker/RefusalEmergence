@@ -17,3 +17,5 @@ scikit-learn>=1.3     # P1-E1 linear probes (probes.py)
 ruff>=0.6            # smoke_test.py's undefined-name gate (F821/F811). Tiny, no CUDA deps.
                      # Without it that check SKIPS, and the class of bug it catches --
                      # a NameError reached only after a 7B model is loaded -- gets through.
+peft>=0.11           # P1-E7 only (attack.py). LoRA fine-tuning; not needed by any
+                     # measurement script, so a measurement-only pod can skip it.

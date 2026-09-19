@@ -16,3 +16,6 @@ results/*.npz
 !results/RUNLOG.md
 
 data/xstest_prompts.csv
+
+# P1-E7 attacked checkpoints: ~15 GB each, regenerable from attack_manifest.json
+models/

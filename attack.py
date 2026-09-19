@@ -1,0 +1,238 @@
+"""P1-E7 — the fine-tuning attack. Does breaking alignment break the LINK or the CAPABILITY?
+
+    python attack.py --lineage olmo2 --from rlvr --arm benign          # the attack
+    python attack.py --lineage olmo2 --from rlvr --arm safety-preserved # the control
+
+This is the experiment the account is a prediction FROM, so it is the only one whose result
+could make the paper wrong in an interesting way rather than merely incomplete.
+
+  H (coupling installed)  behaviour collapses · coupling collapses · REPRESENTATION HOLDS
+  capability account      behaviour collapses · coupling collapses · representation degrades
+
+Recipe: LoRA on a small BENIGN instruction set, after Qi et al., "Fine-tuning Aligned Language
+Models Compromises Safety, Even When Users Do Not Intend To!" (ICLR 2024) -- the variant with no
+harmful content, so a collapse cannot be attributed to teaching harmful behaviour.
+
+THE CONTROL THE ORIGINAL SPEC LACKED. `--arm safety-preserved` runs identical LoRA rank, steps,
+learning rate and schedule on the same benign data with the model's OWN refusals to harmful
+prompts mixed in. Without it, any decoupling is attributable to fine-tuning in general rather
+than to safety removal. Run both arms or report neither.
+
+Output is a MERGED model saved to models/{lineage}-{from}-{arm}/, which is then registered as an
+ordinary stage in the lineage (config.py) so that run_stage.py, probe_representation.py,
+probe_transfer.py and transplant.py measure it with no new code. The attacked checkpoint is just
+another point on the trajectory.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import os
+
+import torch
+
+from config import config_for
+from data import assert_available, load_instructions
+from refusal_substring import generate_completions, is_refusal_strict, truncate_at_turn
+from run_stage import load_model, set_seed
+from runlog import RunRecord
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("P1-E7")
+
+EXPERIMENT = "P1-E7"
+QUESTION = ("Does a cheap fine-tuning attack break the COUPLING while sparing the "
+            "REPRESENTATION -- the prediction the capability account cannot make?")
+
+
+def check_peft() -> None:
+    try:
+        import peft  # noqa: F401
+    except ImportError:
+        raise SystemExit(
+            "peft is required for P1-E7 and is not installed.\n"
+            "  pip install 'peft>=0.11'\n"
+            "It is in requirements.txt; this environment predates that entry.") from None
+
+
+def build_benign(cfg, n: int) -> list[tuple[str, str]]:
+    """(instruction, response) pairs with NO harmful content.
+
+    Source is the UNUSED TAIL of harmless_train -- past cfg.n_train, so past everything the
+    directions were fitted on. Responses are the model's own greedy continuations, which makes
+    this a pure format/style fine-tune rather than a knowledge transfer: the attack should not
+    be teaching the model anything it does not already say."""
+    pool = load_instructions("harmless_train")[cfg.n_train:]
+    if len(pool) < n:
+        raise SystemExit(f"only {len(pool)} unused harmless prompts; asked for {n}. Lower --n "
+                         f"or raise the split.")
+    return [(p, None) for p in pool[:n]]
+
+
+def build_safety_examples(model, tok, cfg, template, n: int) -> list[tuple[str, str]]:
+    """(harmful instruction, the model's OWN refusal) -- the control arm's extra data.
+
+    Taken from the model before any fine-tuning, and only the completions the strict judge
+    scores as genuine refusals are kept. Using the model's own refusals rather than written
+    ones keeps the control a pure REHEARSAL of existing behaviour: it cannot install anything
+    the checkpoint did not already do, so if the control preserves coupling, that is
+    preservation and not fresh safety training."""
+    pool = load_instructions("harmful_train")[cfg.n_train:][: n * 3]
+    comps = generate_completions(model, tok, pool, template, cfg.gen_max_new_tokens,
+                                 cfg.batch_size)
+    kept = [(p, truncate_at_turn(c).strip()) for p, c in zip(pool, comps)
+            if is_refusal_strict(c)]
+    logger.info("safety rehearsal: %d of %d harmful prompts produced a strict refusal; "
+                "keeping %d", len(kept), len(pool), min(n, len(kept)))
+    if len(kept) < n:
+        logger.warning("only %d genuine refusals available (wanted %d) -- the control arm is "
+                       "weaker than planned; report the actual count.", len(kept), n)
+    return kept[:n]
+
+
+def fill_responses(model, tok, pairs, template, cfg) -> list[tuple[str, str]]:
+    """Fill in (instruction, None) with the model's own greedy continuation."""
+    todo = [i for i, (_, r) in enumerate(pairs) if r is None]
+    if not todo:
+        return pairs
+    comps = generate_completions(model, tok, [pairs[i][0] for i in todo], template,
+                                 cfg.gen_max_new_tokens, cfg.batch_size)
+    out = list(pairs)
+    for i, c in zip(todo, comps):
+        out[i] = (out[i][0], truncate_at_turn(c).strip())
+    return [(p, r) for p, r in out if r]          # drop empties
+
+
+def encode_sft(tok, pairs, template, max_len: int = 512):
+    """(input_ids, labels) with the loss masked to RESPONSE tokens only.
+
+    Masking the prompt matters: training on the instruction too would make this partly a
+    language-modelling run on our own eval prompts, and any behavioural change would be
+    uninterpretable."""
+    ex = []
+    for instr, resp in pairs:
+        prompt_ids = tok.encode(template.format(instruction=instr), add_special_tokens=False)
+        resp_ids = tok.encode(resp, add_special_tokens=False) + [tok.eos_token_id]
+        ids = (prompt_ids + resp_ids)[:max_len]
+        labels = ([-100] * len(prompt_ids) + resp_ids)[:max_len]
+        if sum(l != -100 for l in labels) == 0:   # prompt alone filled the window
+            continue
+        ex.append((ids, labels))
+    return ex
+
+
+def train_lora(model, tok, examples, *, rank: int, lr: float, epochs: int, bs: int, seed: int):
+    """LoRA on attention and MLP projections. Returns the peft-wrapped model."""
+    from peft import LoraConfig, get_peft_model
+
+    set_seed(seed)
+    lcfg = LoraConfig(r=rank, lora_alpha=2 * rank, lora_dropout=0.0, bias="none",
+                      task_type="CAUSAL_LM",
+                      target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                                      "gate_proj", "up_proj", "down_proj"])
+    model = get_peft_model(model, lcfg)
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logger.info("LoRA r=%d on attn+MLP | %.2fM trainable (%.3f%% of total)",
+                rank, trainable / 1e6,
+                100 * trainable / sum(p.numel() for p in model.parameters()))
+
+    torch.set_grad_enabled(True)
+    model.train()
+    opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=lr)
+    pad = tok.pad_token_id
+    step = 0
+    for ep in range(epochs):
+        for i in range(0, len(examples), bs):
+            batch = examples[i:i + bs]
+            n = max(len(ids) for ids, _ in batch)
+            ids = torch.tensor([x + [pad] * (n - len(x)) for x, _ in batch])
+            lab = torch.tensor([y + [-100] * (n - len(y)) for _, y in batch])
+            att = (ids != pad).long()
+            out = model(input_ids=ids.to(model.device), attention_mask=att.to(model.device),
+                        labels=lab.to(model.device))
+            out.loss.backward()
+            opt.step()
+            opt.zero_grad(set_to_none=True)
+            step += 1
+            if step % 5 == 0 or step == 1:
+                logger.info("  epoch %d step %d  loss %.4f", ep + 1, step, out.loss.item())
+    model.eval()
+    torch.set_grad_enabled(False)
+    return model, step
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--lineage", default="olmo2")
+    ap.add_argument("--from", dest="src", default="rlvr",
+                    help="checkpoint to attack (the most aligned one)")
+    ap.add_argument("--arm", required=True, choices=("benign", "safety-preserved"),
+                    help="benign = the attack (Qi et al. ICLR 2024). safety-preserved = the "
+                         "matched control, identical hyperparameters with the model's own "
+                         "refusals rehearsed. RUN BOTH OR REPORT NEITHER.")
+    ap.add_argument("--n", type=int, default=100, help="benign examples (Qi et al. use ~100)")
+    ap.add_argument("--n-safety", type=int, default=50,
+                    help="refusal-rehearsal examples added in the control arm")
+    ap.add_argument("--rank", type=int, default=16)
+    ap.add_argument("--lr", type=float, default=2e-4)
+    ap.add_argument("--epochs", type=int, default=3)
+    ap.add_argument("--bs", type=int, default=4)
+    ap.add_argument("--out", default=None, help="default models/{lineage}-{from}-{arm}")
+    args = ap.parse_args()
+
+    check_peft()
+    cfg = config_for(args.lineage)
+    cfg.require_verified()
+    logger.info("data: %s", assert_available())
+    ckpts = dict(cfg.checkpoints)
+    if args.src not in ckpts:
+        raise SystemExit(f"unknown stage '{args.src}'. known: {list(ckpts)}")
+    out_dir = args.out or f"models/{args.lineage}-{args.src}-{args.arm}"
+
+    with RunRecord(EXPERIMENT, "attack.py", cfg, question=QUESTION,
+                   notes=f"arm={args.arm}; recipe after Qi et al. ICLR 2024 (benign data, no "
+                         f"harmful content). Output registered as a lineage stage so the "
+                         f"existing measurement scripts apply unchanged.") as rec:
+        model, tok = load_model(ckpts[args.src], cfg.dtype)
+        template, _tid, _n, _ov = cfg.regime(args.src)
+
+        pairs = fill_responses(model, tok, build_benign(cfg, args.n), template, cfg)
+        n_benign = len(pairs)
+        n_safety = 0
+        if args.arm == "safety-preserved":
+            safety = build_safety_examples(model, tok, cfg, template, args.n_safety)
+            n_safety = len(safety)
+            pairs = pairs + safety
+        import random as _r
+        _r.Random(cfg.seed).shuffle(pairs)
+        ex = encode_sft(tok, pairs, template)
+        logger.info("[%s] %d benign + %d safety-rehearsal -> %d encoded examples",
+                    args.arm, n_benign, n_safety, len(ex))
+
+        model, steps = train_lora(model, tok, ex, rank=args.rank, lr=args.lr,
+                                  epochs=args.epochs, bs=args.bs, seed=cfg.seed)
+
+        os.makedirs(out_dir, exist_ok=True)
+        merged = model.merge_and_unload()      # a plain HF model the rest of the repo can load
+        merged.save_pretrained(out_dir)
+        tok.save_pretrained(out_dir)
+        with open(os.path.join(out_dir, "attack_manifest.json"), "w") as f:
+            json.dump({"lineage": cfg.lineage, "from": args.src, "source_model": ckpts[args.src],
+                       "arm": args.arm, "n_benign": n_benign, "n_safety": n_safety,
+                       "rank": args.rank, "lr": args.lr, "epochs": args.epochs,
+                       "batch_size": args.bs, "steps": steps, "seed": cfg.seed,
+                       "recipe": "Qi et al., ICLR 2024 (benign-data variant)"}, f, indent=1)
+        rec.result(arm=args.arm, source=args.src, out_dir=out_dir, n_benign=n_benign,
+                   n_safety=n_safety, rank=args.rank, lr=args.lr, epochs=args.epochs,
+                   steps=steps)
+        logger.info("saved merged model -> %s", out_dir)
+        print(f"\nNEXT: register it as a stage in config.LINEAGES['{cfg.lineage}'], e.g.\n"
+              f'    ("{args.src}_{args.arm}", "{out_dir}"),\n'
+              f"then measure it with the existing scripts -- run_stage, probe_representation,\n"
+              f"probe_transfer, transplant. No new measurement code is needed.")
+
+
+if __name__ == "__main__":
+    main()

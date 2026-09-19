@@ -565,6 +565,43 @@ were later invalidated. Do not read these as results:
 The authoritative runs are `4d6d16f` (transplant), `4d6d16f` (aggregate_probe) and `9d3a388`
 (both transplant_text controls). Everything in the OLMo 2 section above comes from those.
 
+## P1-E7 refusal rates: which number to quote, and why they differ
+
+Three refusal rates exist for the same attacked checkpoint. They are **not** in conflict, but
+quoting the wrong one, or quoting two without saying which set each came from, reads as a
+contradiction. Quote the **132-prompt rate** everywhere in the paper.
+
+| number | where it comes from | prompts | model measured |
+|---|---|---|---|
+| **0.189** (25/132) | `run_stage.py --behavioral` | `harmful_train[128:]`, all 132 | loaded **from disk** |
+| 0.104 (5/48) | `attack.py` in-run efficacy check | `harmful_train[128:][:48]` — a **prefix** of the same 132 | **in memory**, post-merge |
+| 0.125 (6/48) | the same first 48, recomputed from the stored `run_stage` completions | identical prompts | loaded **from disk** |
+
+Two separate things are going on, and both are worth one sentence in the methods.
+
+**The 48 is a prefix, not a sample.** `attack.py:257` takes `[:48]` of the held-out tail with
+no shuffle, so the efficacy check reads the first 48 prompts of a non-randomised split. Those
+48 are systematically *easier to refuse* than the remaining 84, in every arm: rlvr 48/48 vs
+82/84, control 48/48 vs 74/84, attacked 6/48 vs 19/84. So the in-run check is a **biased,
+optimistic** estimator of the full rate for every checkpoint — which is harmless for its
+actual job (catching a dud attack) and disqualifying for a reported number.
+
+**The in-run check and the from-disk measurement are not bit-identical models.** On the same
+48 prompts the attacked model reads 5/48 in `attack.py` and 6/48 from the stored `run_stage`
+completions. Generation is greedy (`do_sample=False`), so this is not sampling noise:
+`attack.py` measures the merged model **in memory**, `run_stage` measures it after
+`save_pretrained` to bfloat16 and a reload. Re-quantising the merged LoRA delta to bf16 moves
+logits enough to flip one borderline prompt in 48. **The efficacy check is a guard, not a
+measurement**, and the paper should say so rather than let a reader find the 0.104/0.189 gap
+and assume one of them is wrong.
+
+**The control moved slightly too, and that gets reported.** On the full 132 the control reads
+0.924 against rlvr's 0.985 — ten prompts it no longer refuses. Next to the attack's collapse
+to 0.189 that is small, but it is not zero, and it is consistent with the harmless-prompt
+finding in P1-E7c (Alpaca tuning raises compliance across the board: `harmless_val` refusal
+falls 0.029 -> 0.004 in the control as well). The honest claim is **"the control retains
+refusal"**, not "the control is unchanged".
+
 ## Methodological notes (eight errors caught, in order)
 
 Each was found by checking a number against what the model actually did, not by inspecting

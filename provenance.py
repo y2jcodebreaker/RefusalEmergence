@@ -110,8 +110,11 @@ CLAIMS: tuple[Claim, ...] = (
                     "6-8 coefficients; base swept to 16-54x its own norm"),
             Control("positive control", "an under-powered sweep reading as a negative", True,
                     "self-cell must induce, or the matrix is reported uninterpretable"),
-            Control("argmax-over-induce source", "'you tested the wrong direction'", False,
-                    "partly moot: base's own direction is z=+0.8 vs the hard null"),
+            Control("argmax-over-induce source", "'you tested the wrong direction', and "
+                    "the circularity of selecting l* BY the induce criterion", True,
+                    "--source-by induce, 2026-09-19: base's induce-optimal cell (L19) gives "
+                    "z = +0.6 to +1.6 in all four targets and never crosses; aligned (L18) "
+                    "z = +2.5 to +3.8, 12/12. Clean separation at BOTH source layers."),
             Control("gradient search + rank-k subspace", "'no refusal CONE was looked for'", False,
                     "Wollschlaeger ICML 2025; the strongest form of C2"),
         ),

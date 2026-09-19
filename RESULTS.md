@@ -76,6 +76,32 @@ means the sweep is under-powered, not that the model lacks the mechanism. The ru
 report a matrix whose self-cell fails. base is exempt — there a failing self-cell is the
 measurement.
 
+### C2 circularity closed — the induce-optimal source (2026-09-19)
+
+`--source-by induce`: each source direction taken from the **argmax of the induce surface**
+rather than the Arditi-filtered l\*. This closes a definitional objection — base has l\* = −1
+*because* nothing passes the induce criterion, and the direction transplanted by default was
+the argmax of the **ablation** surface, not of the axis being scored.
+
+| source (induce-optimal cell) | z vs shuffled null, 10 draws | crosses? |
+|---|---|---|
+| **base @ L19** | **+0.6 · +1.5 · +1.5 · +1.6** | **never, in any target** |
+| sft / dpo / rlvr @ L18 | +2.5 … +3.8, **12/12 significant** | all |
+
+**Base's best possible candidate, chosen by the very metric we score on, is still
+indistinguishable from a shuffled-label vector.** Separation is clean at *both* source layers
+(L23/L24 ablation-optimal, L19/L18 induce-optimal), so the conclusion does not depend on how
+the source cell is picked.
+
+⚠️ **One number is layer-dependent and must be quoted with its layer.** At the ablation-optimal
+layer, **0 of 10** shuffled directions crossed. At the induce-optimal layer, **1 of 10** did —
+`shuffled6`, and it crossed in *all twelve* aligned cells because the shuffled vectors are
+loaded once per lineage and shared across targets. **That is one unlucky vector, not twelve
+false positives.** It is also unsurprising: L18 is where injection most easily pushes refusal,
+so it is where a random vector most easily gets there too. Consequence: **"0/160" belongs to the
+L24 sourcing** and should never be quoted bare. The z-separation is clean at both layers, which
+is precisely why effect size carries the claim and the crossing binary does not.
+
 ### P1-E2d — the hard null, 10 draws (2026-09-17). **This is the version to cite.**
 
 `--null shuffled --n-control 10`, raw scaling. The null is the SAME mean-diff estimator fitted

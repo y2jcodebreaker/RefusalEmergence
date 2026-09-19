@@ -252,7 +252,9 @@ def cell_effect(records, src: str, baseline: float,
                 "null_sd": None, "z": None, "n_draws": 0, "n_null_crossing": 0}
     mu = sum(nulls) / len(nulls)
     sd = (sum((v - mu) ** 2 for v in nulls) / (len(nulls) - 1)) ** 0.5 if len(nulls) > 1 else None
+    crossed_draws = sorted(d for d, v in zip(draws, nulls) if v + baseline >= 0.0)
     return {"null": null_prefix, "delta": delta, "null_mean": mu, "null_sd": sd,
+            "crossed_draws": crossed_draws,
             "z": ((delta - mu) / sd) if (sd and sd > 0) else None,
             "n_draws": len(nulls),
             "n_null_crossing": sum(1 for v in nulls if v + baseline >= 0.0)}
@@ -332,6 +334,14 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS,
                         eff["n_draws"],
                         f" | z={eff['z']:+.1f}" if eff["z"] is not None else "",
                         eff["n_null_crossing"], eff["n_draws"])
+            if eff.get("crossed_draws"):
+                # Name them. The shuffled vectors are loaded ONCE per lineage and shared
+                # across targets, so the SAME draw crossing in every target is one unlucky
+                # vector, not one false positive per cell. Reporting "1/10" per cell without
+                # the index invited exactly that double count (2026-09-19).
+                logger.info("[%s]   ^ crossed by %s -- shared across targets, so this is one "
+                            "vector, not one event per cell", stage,
+                            ", ".join(eff["crossed_draws"]))
 
     # POSITIVE CONTROL. A transplant matrix of all-"no" is only a finding if the sweep was
     # powerful enough to produce a "yes" where one must exist. The self-cell is that test:

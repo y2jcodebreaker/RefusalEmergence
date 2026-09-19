@@ -19,3 +19,6 @@ ruff>=0.6            # smoke_test.py's undefined-name gate (F821/F811). Tiny, no
                      # a NameError reached only after a 7B model is loaded -- gets through.
 peft>=0.11           # P1-E7 only (attack.py). LoRA fine-tuning; not needed by any
                      # measurement script, so a measurement-only pod can skip it.
+sentencepiece>=0.2      # judge_wildguard.py only. WildGuard ships a SentencePiece
+protobuf                # tokenizer.model; without these transformers falls back to the
+                        # TikToken extractor and dies on 'Error parsing line b\'\\x0e\''.

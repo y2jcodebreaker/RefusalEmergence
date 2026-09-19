@@ -72,6 +72,16 @@ def main() -> None:
     ap.add_argument("--batch-size", type=int, default=8)
     args = ap.parse_args()
 
+    try:
+        import sentencepiece  # noqa: F401
+    except ImportError:
+        raise SystemExit(
+            "sentencepiece is required: WildGuard ships a SentencePiece tokenizer.model.\n"
+            "  pip install sentencepiece protobuf\n"
+            "Without it transformers falls back to the TikToken extractor and dies with\n"
+            "  ValueError: Error parsing line b'\\x0e' in .../tokenizer.model\n"
+            "which names neither the missing package nor the reason.") from None
+
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 

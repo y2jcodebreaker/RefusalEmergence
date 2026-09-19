@@ -82,6 +82,18 @@ def main() -> None:
             "  ValueError: Error parsing line b'\\x0e' in .../tokenizer.model\n"
             "which names neither the missing package nor the reason.") from None
 
+    # WildGuard is a 7B download. The preflight exists precisely for this and was not wired
+    # in here, so the first run died mid-download with "No space left on device" -- on the
+    # CONTAINER filesystem, because HF_HOME was unset (2026-09-19). A check that only runs in
+    # verify_setup.py does not protect a script anyone can invoke directly.
+    from dataclasses import replace
+
+    from config import config_for
+    from verify_setup import check_disk
+    if not check_disk(replace(config_for("olmo2"),
+                              checkpoints=(("wildguard", WILDGUARD),))):
+        raise SystemExit("free space (or set HF_HOME) before downloading WildGuard.")
+
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 

@@ -184,6 +184,23 @@ def test_disk_check() -> None:
         os.environ.pop("HF_HOME", None)
         if old_home is not None:
             os.environ["HF_HOME"] = old_home
+    # HF_HOME unset ON A POD sends every download to the container filesystem: small, so the
+    # run dies mid-download, and discarded at teardown either way. Both happened 2026-09-19.
+    # The check keys on /workspace existing, so it can only be exercised where that is true.
+    if os.path.isdir("/workspace"):
+        old_home = os.environ.pop("HF_HOME", None)
+        try:
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                got = V.check_disk(config_for("olmo2"))
+            out = buf.getvalue()
+            assert got is False, "unset HF_HOME on a pod must FAIL the preflight"
+            assert "HF_HOME is unset" in out and "export HF_HOME=/workspace/hf" in out, out
+            assert "discarded when the pod is destroyed" in out, out
+        finally:
+            if old_home is not None:
+                os.environ["HF_HOME"] = old_home
+        print("  disk preflight: unset HF_HOME on a pod is refused — OK")
     print("  disk preflight: fires before download, names disk, xet orphans and the fix — OK")
 
 

@@ -113,6 +113,16 @@ def check_disk(cfg) -> bool:
     import shutil
 
     hf = os.environ.get("HF_HOME") or os.path.expanduser("~/.cache/huggingface")
+    # On a pod, an unset HF_HOME sends every download to the CONTAINER filesystem instead of
+    # the persistent volume: it is small, so the run dies mid-download with "No space left on
+    # device", and anything that did fit is lost at teardown. Both happened 2026-09-19.
+    if not os.environ.get("HF_HOME") and os.path.isdir("/workspace"):
+        print("FAIL: HF_HOME is unset but /workspace exists, so this looks like a pod.\n"
+              f"      Downloads would go to {hf} -- the CONTAINER filesystem, which is small\n"
+              "      and is discarded when the pod is destroyed.\n"
+              "        export HF_HOME=/workspace/hf\n"
+              "      Add it to ~/.bashrc so a new shell cannot lose it.")
+        return False
     probe = hf if os.path.isdir(hf) else os.path.dirname(os.path.abspath(hf)) or "."
     free = shutil.disk_usage(probe).free / 2**30
     need = _GB_PER_CKPT * len(cfg.checkpoints)

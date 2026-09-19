@@ -10,7 +10,8 @@ checkpoints (~60 GB) and Zephyr three (~45 GB).
 ## 1. Environment
 
 ```bash
-export HF_HOME=/workspace/hf        # MUST be on the persistent volume, or you re-download
+export HF_HOME=/workspace/hf        # MUST be on the persistent volume
+echo 'export HF_HOME=/workspace/hf' >> ~/.bashrc   # ...and in every NEW shell
 cd /workspace
 
 git clone https://github.com/andyrdt/refusal_direction.git      # harmful/harmless splits
@@ -20,6 +21,12 @@ cd RefusalEmergence
 
 `/workspace/refusal_direction` is auto-discovered, so **no `ARDITI_REPO` export is needed**
 as long as you clone it there.
+
+> ⚠️ **The `~/.bashrc` line is not optional.** A second terminal, or a reconnect, starts a
+> shell without `HF_HOME`, and then downloads land in `/root/.cache` — the *container*
+> filesystem. It is small, so a 7B download dies with `No space left on device`, and whatever
+> did fit is thrown away when the pod is destroyed. `verify_setup.py` now refuses to pass if
+> `HF_HOME` is unset while `/workspace` exists.
 
 ```bash
 pip install --upgrade torch --index-url https://download.pytorch.org/whl/cu124

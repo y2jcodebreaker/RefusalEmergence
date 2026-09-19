@@ -213,13 +213,29 @@ CLAIMS: tuple[Claim, ...] = (
         ),
         controls=(
             Control("matched safety-preserved arm", "attributing decoupling to fine-tuning "
-                    "in general rather than to safety removal", False,
-                    "attack.py --arm safety-preserved; built, not run"),
+                    "in general rather than to safety removal", True,
+                    "2026-09-19: RUN. Identical rank 16 / lr 2e-4 / 3 epochs / 2000 Alpaca "
+                    "examples; the only difference is 50 rehearsed refusals. benign arm "
+                    "1.000 -> 0.104, control arm 1.000 -> 1.000. Fine-tuning per se does not "
+                    "do this.", script="attack.py"),
+            Control("control is not a refuse-everything model", "the control holding 1.000 "
+                    "on harmful prompts because 50 rehearsed refusals induced EXAGGERATED "
+                    "SAFETY, which would make the held rate a confound rather than preserved "
+                    "safety", False,
+                    "overrefusal.py --lineage olmo2_e7 --stage all. XSTest safe (Rottger, "
+                    "NAACL 2024) + Arditi harmless_val, each arm read against the untouched "
+                    "rlvr checkpoint; pre-registered bound +0.10 absolute on xstest_safe "
+                    "strict. BLOCKING: run before P1-E7b, because mechanism read off an "
+                    "invalid control is uninterpretable, not negative.",
+                    script="overrefusal.py"),
             Control("behavioural pre-check", "reading mechanism from a failed attack", True,
                     "2026-09-19: it FIRED. Attack v1 (responses from the model's own outputs) "
                     "left refusal at 0.985 -> 0.985, i.e. no effect. Six minutes of measurement "
                     "stopped before hours of uninterpretable mechanism numbers. attack.py now "
-                    "defaults to Alpaca reference responses and checks efficacy in-run."),
+                    "defaults to Alpaca reference responses and checks efficacy in-run. "
+                    "2026-09-19 second firing: Alpaca at n=100 moved refusal 1.000 -> 0.979, "
+                    "logged THE ATTACK DID NOT WORK; the dose, not the data, was wrong. At "
+                    "n=2000 it fired properly: 1.000 -> 0.104.", script="attack.py"),
             Control("SFT loss masked to responses", "a language-modelling run on our own "
                     "eval prompts", True, "encode_sft + 9 tests"),
             Control("step dose-response", "a single before/after pair being a coincidence",

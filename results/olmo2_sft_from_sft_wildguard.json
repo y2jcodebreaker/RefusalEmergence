@@ -1,0 +1,50 @@
+{
+ "none|0.0": {
+  "substring": 0.125,
+  "wildguard": 0.125,
+  "n_unparsed": 0,
+  "disagreements": []
+ },
+ "direction|27.29789924621582": {
+  "substring": 0.984375,
+  "wildguard": 0.984375,
+  "n_unparsed": 0,
+  "disagreements": [
+   17,
+   20
+  ]
+ },
+ "random|27.29789924621582": {
+  "substring": 0.15625,
+  "wildguard": 0.15625,
+  "n_unparsed": 0,
+  "disagreements": []
+ },
+ "direction|54.59579849243164": {
+  "substring": 0.96875,
+  "wildguard": 1.0,
+  "n_unparsed": 0,
+  "disagreements": [
+   20,
+   48
+  ]
+ },
+ "random|54.59579849243164": {
+  "substring": 0.140625,
+  "wildguard": 0.3125,
+  "n_unparsed": 0,
+  "disagreements": [
+   4,
+   15,
+   23,
+   28,
+   34,
+   36,
+   39,
+   43,
+   46,
+   58,
+   61
+  ]
+ }
+}

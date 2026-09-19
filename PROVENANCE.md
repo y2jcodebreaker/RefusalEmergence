@@ -8,7 +8,7 @@ Every claim below names its evidence (script -> file), the controls that guard i
 
 ## Layer 1
 
-### C1 — ⚠️ 1 control(s) open
+### C1 — ✅ · 1 optional strengthening(s) available
 
 **The harmful/harmless distinction is linearly present in the BASE model.**
 
@@ -23,11 +23,11 @@ Every claim below names its evidence (script -> file), the controls that guard i
 | token-length baseline | harmful prompts simply being longer | ✅ 0.471 / 0.485, both BELOW chance |
 | XSTest focus-matched | topic and vocabulary confound | ✅ 0.820 / 0.823, trigger word held constant |
 | eoi window leak check | BPE merging prompt text into the window | ✅ verify_setup.window_leaks() over 80 real prompts |
-| SORRY-Bench held-out topics | topic generalisation, a stronger form | ⬜ lower priority: Frank 2026 LOCO-CV already shows the move works |
+| SORRY-Bench held-out topics | topic generalisation, a stronger form | ◻️ *optional* — XSTest already closes the lexical confound; this is a second, different cut at the same question |
 
 **Falsifier.** Base collapses toward chance on the focus-matched subset while the aligned stages hold -> base represents TOPIC and alignment builds the harmfulness distinction. A different paper, and a real one.
 
-### C2 — ⚠️ 1 control(s) open
+### C2 — ✅ · 1 optional strengthening(s) available
 
 **That representation is NOT sufficient to produce refusal in base: base's own direction is sub-threshold (Zephyr) or indistinguishable from noise (OLMo 2).**
 
@@ -44,11 +44,11 @@ Depends on: C1
 | coefficient sweep | 'you only tried coefficient 1' | ✅ 6-8 coefficients; base swept to 16-54x its own norm |
 | positive control | an under-powered sweep reading as a negative | ✅ self-cell must induce, or the matrix is reported uninterpretable |
 | argmax-over-induce source | 'you tested the wrong direction', and the circularity of selecting l* BY the induce criterion | ✅ --source-by induce, 2026-09-19: base's induce-optimal cell (L19) gives z = +0.6 to +1.6 in all four targets and never crosses; aligned (L18) z = +2.5 to +3.8, 12/12. Clean separation at BOTH source layers. |
-| gradient search + rank-k subspace | 'no refusal CONE was looked for' | ⬜ Wollschlaeger ICML 2025; the strongest form of C2 |
+| gradient search + rank-k subspace | 'no refusal CONE was looked for' | ◻️ *optional* — Wollschlaeger ICML 2025; the strongest form of C2. The definitional objection is already closed by --source-by induce |
 
 **Falsifier.** Some direction induces refusal in base at acceptable KL -> the representation IS sufficient and the coupling account is wrong.
 
-### C3 — ⚠️ 1 control(s) open
+### C3 — ✅
 
 **The ALIGNED model's direction IS sufficient in base -- it writes fluent refusals at the direction's own natural magnitude. (OLMo 2; not Zephyr.)**
 
@@ -65,7 +65,7 @@ Depends on: C1, C2
 | shuffled-label null, 160 draws | the crossing criterion's error rate | ✅ 0/160 shuffled directions ever crossed |
 | over-injection control | 'the loop means you broke the model' | ✅ SFT loops identically at 2x -> over-injection, not base-specific |
 | degenerate-text judge | a phrase loop scoring as a refusal | ✅ distinct-4-gram ratio; the arm is 98.4% degenerate at 2x |
-| WildGuard / StrongREJECT judge | 'your judge is a regex' | ⬜ NeurIPS 2024 both; hand-audit only the disagreements |
+| WildGuard judge (NeurIPS 2024) | 'your judge is a regex' | ✅ 2026-09-19: at the operating point substring 1.000 vs WildGuard 0.984, ONE disagreement -- index 20, the same false positive the hand audit found independently. Judges diverge only on degenerate text (76-100% of disagreements at 2x magnitude). |
 | hand audit of the injected arm | a new false-positive class in a new regime | ✅ all 64 read 2026-09-19: 48 genuine / 14 degenerate / 1 partial / 1 complies -> 0.750, not the judge's 1.000. Labels in results/olmo2_base_from_sft_HANDAUDIT.json |
 
 **Falsifier.** The aligned direction's effect in base is indistinguishable from the shuffled-label null -> nothing transplants and the paper has no causal claim.
@@ -96,7 +96,7 @@ Depends on: C1
 
 Layer 2 claims are *predictions from* layer 1. Running one while a shallower control is open is depth-first; `--check` refuses it.
 
-### P1-E7 — ⚠️ 4 control(s) open
+### P1-E7 — ⚠️ 4 blocking control(s) open
 
 **PREDICTION: breaking alignment breaks the LINK and spares the REPRESENTATION. Behaviour and coupling collapse together; probe accuracy and its layer shape hold.**
 

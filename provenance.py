@@ -42,11 +42,18 @@ class Evidence:
 
 @dataclass(frozen=True)
 class Control:
-    """A robustness check that guards a claim. `done` is the honest current state."""
+    """A robustness check that guards a claim. `done` is the honest current state.
+
+    `optional=True` marks a STRENGTHENING rather than a gap: the claim is defensible without
+    it. The distinction is load-bearing for the breadth-first guard -- if every conceivable
+    further control blocked the next layer, nothing would ever descend, and "be BFS" would
+    collapse into "never finish". A control is only blocking while its absence leaves a
+    reviewer's question unanswered."""
     name: str
     what_it_rules_out: str
     done: bool
     where: str = ""
+    optional: bool = False
 
 
 @dataclass(frozen=True)
@@ -62,7 +69,12 @@ class Claim:
 
     @property
     def open_controls(self) -> list[Control]:
-        return [c for c in self.controls if not c.done]
+        """Open and BLOCKING. Optional strengthenings are listed but do not gate a layer."""
+        return [c for c in self.controls if not c.done and not c.optional]
+
+    @property
+    def open_optional(self) -> list[Control]:
+        return [c for c in self.controls if not c.done and c.optional]
 
 
 # --------------------------------------------------------------------------- the graph
@@ -86,8 +98,9 @@ CLAIMS: tuple[Claim, ...] = (
                     "0.820 / 0.823, trigger word held constant"),
             Control("eoi window leak check", "BPE merging prompt text into the window", True,
                     "verify_setup.window_leaks() over 80 real prompts"),
-            Control("SORRY-Bench held-out topics", "topic generalisation, a stronger form", False,
-                    "lower priority: Frank 2026 LOCO-CV already shows the move works"),
+            Control("SORRY-Bench held-out topics", "topic generalisation, a stronger form",
+                    False, "XSTest already closes the lexical confound; this is a second, "
+                    "different cut at the same question", optional=True),
         ),
         falsifier="Base collapses toward chance on the focus-matched subset while the aligned "
                   "stages hold -> base represents TOPIC and alignment builds the harmfulness "
@@ -115,8 +128,9 @@ CLAIMS: tuple[Claim, ...] = (
                     "--source-by induce, 2026-09-19: base's induce-optimal cell (L19) gives "
                     "z = +0.6 to +1.6 in all four targets and never crosses; aligned (L18) "
                     "z = +2.5 to +3.8, 12/12. Clean separation at BOTH source layers."),
-            Control("gradient search + rank-k subspace", "'no refusal CONE was looked for'", False,
-                    "Wollschlaeger ICML 2025; the strongest form of C2"),
+            Control("gradient search + rank-k subspace", "'no refusal CONE was looked for'",
+                    False, "Wollschlaeger ICML 2025; the strongest form of C2. The definitional "
+                    "objection is already closed by --source-by induce", optional=True),
         ),
         depends_on=("C1",),
         falsifier="Some direction induces refusal in base at acceptable KL -> the representation "
@@ -141,8 +155,11 @@ CLAIMS: tuple[Claim, ...] = (
                     "SFT loops identically at 2x -> over-injection, not base-specific"),
             Control("degenerate-text judge", "a phrase loop scoring as a refusal", True,
                     "distinct-4-gram ratio; the arm is 98.4% degenerate at 2x"),
-            Control("WildGuard / StrongREJECT judge", "'your judge is a regex'", False,
-                    "NeurIPS 2024 both; hand-audit only the disagreements"),
+            Control("WildGuard judge (NeurIPS 2024)", "'your judge is a regex'", True,
+                    "2026-09-19: at the operating point substring 1.000 vs WildGuard 0.984, "
+                    "ONE disagreement -- index 20, the same false positive the hand audit "
+                    "found independently. Judges diverge only on degenerate text "
+                    "(76-100% of disagreements at 2x magnitude)."),
             Control("hand audit of the injected arm", "a new false-positive class in a "
                     "new regime", True,
                     "all 64 read 2026-09-19: 48 genuine / 14 degenerate / 1 partial / 1 "
@@ -306,8 +323,10 @@ def render(claims=CLAIMS) -> str:
             L += [f"Layer {layer} claims are *predictions from* layer {layer - 1}. Running one "
                   f"while a shallower control is open is depth-first; `--check` refuses it.", ""]
         for c in rung:
-            open_ = c.open_controls
-            mark = "✅" if not open_ else f"⚠️ {len(open_)} control(s) open"
+            open_, opt = c.open_controls, c.open_optional
+            mark = ("✅" if not open_ else f"⚠️ {len(open_)} blocking control(s) open")
+            if opt:
+                mark += f" · {len(opt)} optional strengthening(s) available"
             L += [f"### {c.id} — {mark}", "", f"**{c.statement}**", ""]
             if c.depends_on:
                 L += [f"Depends on: {', '.join(c.depends_on)}", ""]
@@ -319,8 +338,10 @@ def render(claims=CLAIMS) -> str:
                 L.append(f"| {e.what} | `{e.script}` | {e.experiment} | {n} |")
             L += ["", "| control | rules out | status |", "|---|---|---|"]
             for ct in c.controls:
-                L.append(f"| {ct.name} | {ct.what_it_rules_out} | "
-                         f"{'✅ ' + ct.where if ct.done else '⬜ ' + (ct.where or 'not run')} |")
+                tag = ("✅ " + ct.where if ct.done
+                       else ("◻️ *optional* — " if ct.optional else "⬜ ") +
+                       (ct.where or "not run"))
+                L.append(f"| {ct.name} | {ct.what_it_rules_out} | {tag} |")
             L += ["", f"**Falsifier.** {c.falsifier}", ""]
             if c.note:
                 L += [f"> {c.note}", ""]

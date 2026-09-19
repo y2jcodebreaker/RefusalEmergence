@@ -130,6 +130,19 @@ oracle, and hand-reading its hits has twice found false-positive classes no filt
 
 ## 6. Before destroying the pod
 
+> ⚠️ **Tar ON THE POD. Never rebuild the tarball locally from your laptop's `results/`.**
+> `results/runs.jsonl` is tracked and append-only, and the pod's copy has rows your laptop's
+> does not. Rebuilding locally silently drops them — it nearly cost the ledger row behind the
+> paper's headline number (2026-09-19). If a pod already has local ledger changes when you
+> pull:
+>
+> ```bash
+> cp results/runs.jsonl /workspace/runs.jsonl.podbackup
+> git checkout -- results/ && git pull
+> python merge_ledger.py /workspace/runs.jsonl.podbackup
+> ```
+
+
 ```bash
 tar czf /workspace/results-$LIN-$(date +%F).tgz results/
 ```

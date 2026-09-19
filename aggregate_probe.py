@@ -87,10 +87,18 @@ def main(cfg_override=None) -> None:
                        surface_suspect=bool(lr[0] >= lr.max() - 0.02))
 
         cos, nullhi = {}, {}
-        if "base" in found:
-            n_pos_base = found["base"]["directions"].shape[0]
+        # REFERENCE STAGE = cfg.stages[0], not the literal name "base". This block used to
+        # read `if "base" in found:`, which silently skipped the whole cosine comparison for
+        # any lineage whose first stage is not called "base" -- olmo2_e7 is rlvr/attacked/
+        # control, so `cos` stayed empty and the verdict fell through to the branch that
+        # blames a regime override. olmo2_e7 has no regime override. A lineage-specific NAME
+        # was standing in for a ROLE; same bug the transplant positive control had (it keyed
+        # the exemption on list position rather than on l* < 0). Key on the role.
+        ref = cfg.stages[0]
+        if ref in found:
+            n_pos_base = found[ref]["directions"].shape[0]
             for s in stages:
-                if s == "base":
+                if s == ref:
                     continue
                 # A stage on a regime override reads a DIFFERENT window over a DIFFERENT
                 # template (olmo2 base: 2 positions of 'User: ...\nAssistant:', vs 5 of the
@@ -100,42 +108,45 @@ def main(cfg_override=None) -> None:
                 n_pos_s = found[s]["directions"].shape[0]
                 if n_pos_s != n_pos_base:
                     logger.warning(
-                        "[base vs %s] SKIPPED: base has %d eoi positions and %s has %d, "
-                        "because base is on a regime override (different template and "
+                        "[%s vs %s] SKIPPED: %s has %d eoi positions and %s has %d, because "
+                        "one of them is on a regime override (different template and "
                         "window). Position-matched cosine is undefined across that boundary; "
                         "the transplant test (P1-E1b) is the comparison that survives it.",
-                        s, n_pos_base, s, n_pos_s)
-                    rec.result(stage=f"base_vs_{s}", cosine="SKIPPED_REGIME_OVERRIDE",
+                        ref, s, ref, n_pos_base, s, n_pos_s)
+                    rec.result(stage=f"{ref}_vs_{s}", cosine="SKIPPED_REGIME_OVERRIDE",
                                n_pos_base=int(n_pos_base), n_pos_other=int(n_pos_s))
                     continue
-                c, nh = cosine_vs_null(found["base"]["directions"], found[s]["directions"],
-                                       found["base"]["null_directions"],
+                c, nh = cosine_vs_null(found[ref]["directions"], found[s]["directions"],
+                                       found[ref]["null_directions"],
                                        found[s]["null_directions"])
                 cos[s], nullhi[s] = c, nh
                 band = np.where(np.abs(c) > nh)[0]
-                logger.info("[base vs %s] max|cos|=%.3f @L%d | null p95 there=%.3f | "
-                            "layers above null: %d/%d", s, float(np.abs(c).max()),
+                logger.info("[%s vs %s] max|cos|=%.3f @L%d | null p95 there=%.3f | "
+                            "layers above null: %d/%d", ref, s, float(np.abs(c).max()),
                             int(np.abs(c).argmax()), float(nh[int(np.abs(c).argmax())]),
                             len(band), n_layers)
-                rec.result(stage=f"base_vs_{s}", max_abs_cos=round(float(np.abs(c).max()), 4),
+                rec.result(stage=f"{ref}_vs_{s}", max_abs_cos=round(float(np.abs(c).max()), 4),
                            at_layer=int(np.abs(c).argmax()),
                            null_p95_there=round(float(nh[int(np.abs(c).argmax())]), 4),
                            layers_above_null=int(len(band)))
 
-        _verdict(acc, acc_mm, cos, nullhi, found, stages)
+        _verdict(acc, acc_mm, cos, nullhi, found, stages, cfg.stages[0])
         _figure(cfg, acc, acc_mm, cos, nullhi, found, stages, n_layers)
 
 
-def _verdict(acc, acc_mm, cos, nullhi, found, stages) -> None:
+def _verdict(acc, acc_mm, cos, nullhi, found, stages, ref: str = "base") -> None:
     """State the reading explicitly rather than leaving it to impression."""
-    if "base" not in found:
+    # `ref` is the lineage's REFERENCE stage (cfg.stages[0]) -- "base" in zephyr/olmo2,
+    # "rlvr" in olmo2_e7. Hardcoding the name made this return early for any lineage that
+    # does not have a stage literally called "base", so olmo2_e7 printed no verdict at all.
+    if ref not in found:
         return
-    lr = acc["base"]
+    lr = acc[ref]
     readable = lr.max() >= 0.90
     surface = lr[0] >= lr.max() - 0.02
-    lenb = float(found["base"]["length_baseline"])
+    lenb = float(found[ref]["length_baseline"])
     # only stages whose cosine was actually computed: a regime override skips some
-    aligned = [s for s in stages if s != "base" and s in cos]
+    aligned = [s for s in stages if s != ref and s in cos]
     # A null p95 near 1.0 means ANY two mean-diff-like vectors in this space are highly
     # cosine-similar, so "signal < null" says nothing about axes. Residual streams are
     # strongly anisotropic (a few massive dimensions dominate), which inflates every
@@ -147,7 +158,7 @@ def _verdict(acc, acc_mm, cos, nullhi, found, stages) -> None:
                          for s in aligned))
 
     print("\n" + "=" * 78 + "\nP1-E1 VERDICT\n" + "=" * 78)
-    print(f"  base readable (logistic peak {lr.max():.3f} >= 0.90)   : {readable}")
+    print(f"  {ref} readable (logistic peak {lr.max():.3f} >= 0.90)   : {readable}")
     print(f"  layer-0 already at peak (surface-feature risk)        : {surface}"
           f"   [L0={lr[0]:.3f}, peak={lr.max():.3f}]")
     print(f"  token-length-only floor                               : {lenb:.3f}")
@@ -158,36 +169,36 @@ def _verdict(acc, acc_mm, cos, nullhi, found, stages) -> None:
               f"{'   <-- SATURATED' if saturated else ''}")
     print()
     if not readable:
-        print("  -> REPRESENTATION ABSENT in base. The hypothesis is dead: alignment BUILDS\n"
-              "     the harmful/harmless distinction rather than wiring an existing one.\n"
-              "     This is a different paper, and a publishable one.")
+        print(f"  -> REPRESENTATION ABSENT in {ref}. The hypothesis is dead: alignment\n"
+              f"     BUILDS the harmful/harmless distinction rather than wiring an existing\n"
+              f"     one. This is a different paper, and a publishable one.")
     elif surface:
         print("  -> INCONCLUSIVE. Layer 0 separates as well as the best layer, so the probe\n"
               "     is reading surface lexicon, not a harmfulness representation. Harder\n"
               "     controls needed (lexically matched prompts) before claiming anything.")
     elif saturated:
-        print("  -> CLAUSE 1 CONFIRMED, CLAUSE 2 UNRESOLVED. The distinction IS readable in\n"
-              "     base. But the cosine test is UNINFORMATIVE here: the shuffled-label null\n"
+        print(f"  -> CLAUSE 1 CONFIRMED, CLAUSE 2 UNRESOLVED. The distinction IS readable\n"
+              f"     in {ref}. But the cosine test is UNINFORMATIVE here: the shuffled-label null\n"
               "     is as large as the signal, so raw cosine cannot tell 'same axis' from\n"
               "     'different axis'. Residual-stream anisotropy inflates every cosine.\n"
               "     Do NOT report an axis conclusion from this run. A transplant test\n"
               "     (does the aligned model's refusal direction induce refusal in BASE?)\n"
               "     answers the question without depending on cosine at all.")
     elif cos and same_axis:
-        print("  -> HYPOTHESIS CONFIRMED, STRONG FORM. The distinction is readable in base\n"
-              "     AND lies on the same axis the aligned model refuses along. The direction\n"
-              "     is present in base and doing nothing: alignment wires it to behaviour.")
+        print(f"  -> HYPOTHESIS CONFIRMED, STRONG FORM. The distinction is readable in\n"
+              f"     {ref} AND lies on the same axis the aligned model refuses along. The\n"
+              f"     direction is present and doing nothing: alignment wires it to behaviour.")
     elif cos:
-        print("  -> HYPOTHESIS, WEAK FORM. Readable in base, but on a DIFFERENT axis from the\n"
+        print(f"  -> HYPOTHESIS, WEAK FORM. Readable in {ref}, but on a DIFFERENT axis from the\n"
               "     one the aligned model uses. Alignment installs a new, specifically\n"
               "     actionable direction rather than activating a latent one.")
     else:
         # Reachable when every cosine was skipped (base on a regime override). Without this
         # branch the verdict block printed the three diagnostic lines and then NOTHING, which
         # reads as "no verdict was warranted" rather than "the test could not be run".
-        print("  -> CLAUSE 1 CONFIRMED, CLAUSE 2 NOT TESTED. The distinction IS readable in\n"
-              "     base. The axis comparison was not run at all: base sits on a regime\n"
-              "     override, so its eoi window is a different length over a different\n"
+        print(f"  -> CLAUSE 1 CONFIRMED, CLAUSE 2 NOT TESTED. The distinction IS readable\n"
+              f"     in {ref}. The axis comparison was not run at all: {ref} sits on a regime\n"
+              f"     override, so its eoi window is a different length over a different\n"
               "     template and position-matched cosine is undefined across that boundary.\n"
               "     Report clause 1 only. The transplant test (P1-E1b) is behavioural and\n"
               "     crosses the boundary intact — that is the evidence to use here.")
@@ -195,6 +206,7 @@ def _verdict(acc, acc_mm, cos, nullhi, found, stages) -> None:
 
 
 def _figure(cfg, acc, acc_mm, cos, nullhi, found, stages, n_layers) -> None:
+    ref = cfg.stages[0]      # label the panels with the lineage's reference stage
     import os
     import matplotlib
     matplotlib.use("Agg")
@@ -211,8 +223,8 @@ def _figure(cfg, acc, acc_mm, cos, nullhi, found, stages, n_layers) -> None:
                  label=f"{s} (mass-mean)")
     ax1.axhline(0.5, color="k", lw=1, ls=":")
     ax1.text(0.3, 0.515, "chance", fontsize=7)
-    if "base" in found:
-        lb = float(found["base"]["length_baseline"])
+    if stages and stages[0] in found:
+        lb = float(found[stages[0]]["length_baseline"])
         ax1.axhline(lb, color="#c1543a", lw=1, ls="-.")
         ax1.text(0.3, lb + .012, f"token-length only ({lb:.2f})", fontsize=7, color="#c1543a")
     ax1.set_ylim(0.45, 1.02); ax1.set_ylabel("probe accuracy (held out)")
@@ -222,11 +234,11 @@ def _figure(cfg, acc, acc_mm, cos, nullhi, found, stages, n_layers) -> None:
     if cos:
         for s in cos:
             ax2.plot(x, np.abs(cos[s]), marker="o", ms=3, color=colors.get(s),
-                     label=f"|cos(base, {s})|")
+                     label=f"|cos({ref}, {s})|")
             ax2.fill_between(x, 0, nullhi[s], color=colors.get(s), alpha=.14,
                              label=f"shuffled-label null p95 ({s})")
     ax2.set_ylim(bottom=0); ax2.set_xlabel("layer")
-    ax2.set_ylabel("|cosine| to base direction")
+    ax2.set_ylabel(f"|cosine| to {ref} direction")
     ax2.set_title("Is it the SAME axis the aligned model refuses along?")
     if cos:
         ax2.legend(fontsize=7)

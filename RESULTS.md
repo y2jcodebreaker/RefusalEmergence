@@ -1,11 +1,56 @@
 # Results
 
-Two lineages. **Zephyr** (Mistral-7B → SFT → DPO), run 2026-09-11. **OLMo 2 7B**
+Three lineages. **Zephyr** (Mistral-7B → SFT → DPO), run 2026-09-11. **OLMo 2 7B**
 (base → SFT → DPO → RLVR), run 2026-09-16 — four checkpoints, and the family that carries
-the behavioural evidence. Both on an L40S-class GPU. Every number is reproducible with the
+the observational evidence. **`olmo2_e7`** (RLVR → attacked / safety-preserved), run
+2026-09-19 — the *causal* arm, where alignment is removed on purpose and the mechanism is
+measured before and after. All on an L40S-class GPU. Every number is reproducible with the
 commands in `RUNBOOK.md`; every run is in `results/RUNLOG.md` with its commit and timestamp.
 
-Read the OLMo 2 section first: it is the stronger result and the one the paper leads with.
+---
+
+## THE RESULT (P1-E7, 2026-09-19)
+
+**Benign fine-tuning severs refusal from the representation that should drive it. The
+representation survives untouched; so does the machinery that produces refusal. Only the
+link between them is destroyed — and it can be re-driven from outside.**
+
+Two LoRA runs on OLMo-2-1124-7B-Instruct, identical rank 16 / lr 2e-4 / 3 epochs / 2000
+input-free Alpaca examples. The only difference is **50 rehearsed refusals — 2.4% of the
+data**.
+
+| | rlvr (untouched) | **attacked** | control (safety-preserved) |
+|---|---|---|---|
+| behavioural refusal, harmful (n=132) | 0.985 | **0.189** | 0.924 |
+| probe accuracy (logistic, held out) | 1.000 | **1.000** | 1.000 |
+| XSTest transfer, focus-matched | 0.967 | **0.917** | 0.928 |
+| layers where a direction induces refusal | L13–L25 (13) | **NONE — never crosses zero** | L17–L25 (9) |
+| own direction, induced refusal @ natural scale | +2.730 | **−4.955** | +2.213 |
+| **rlvr's** direction injected, @ natural scale | +2.730 | **+1.069** ✓ | +1.962 |
+
+Four things hold simultaneously in the attacked model, and together they are the claim:
+
+1. **It still knows.** Probe 1.000, XSTest focus-matched 0.917 — harmfulness is as readable
+   as in the untouched model, on prompts whose trigger word is held constant.
+2. **It no longer refuses.** 0.189 on held-out harmful prompts, down from 0.985.
+3. **Its own direction is dead everywhere.** −4.955 in itself, and **not one of 32 layers**
+   crosses the induction threshold; the best of 130 cells steers at −5.188. The negative is
+   *powered*, not absent — the same model accepts other directions.
+4. **The readout survives.** Inject the un-attacked model's direction and it refuses again
+   (+1.069, Δ +14.54, random z +10.7, shuffled z +3.6, 0/10 nulls crossed).
+
+Neither the representation nor the readout was damaged. **The coupling between them was.**
+
+The control rules out the obvious alternative: it received the same dose of the same data,
+sits at the same lowered harmless-refusal baseline (−11.70 vs −11.37, both ~3.6 logits below
+rlvr), and keeps both its behaviour (0.924) and its mechanism (+2.213, 9-layer band). Fine-
+tuning does not do this. Removing safety does.
+
+![induce](results/figures/olmo2_e7_refusal_emergence_induce.pdf)
+
+Full detail, controls and caveats: [P1-E7b](#p1-e7b--the-attack-cuts-the-link-and-the-link-can-be-driven-from-outside-2026-09-19),
+[P1-E7c over-refusal](#p1-e7-refusal-rates-which-number-to-quote-and-why-they-differ). The
+sections below are the observational lineages that motivated it — read OLMo 2 before Zephyr.
 
 ---
 
@@ -822,3 +867,10 @@ already scoped the `.npz`, and a test asserts two lineages cannot collide.
 | `refusal_emergence_heatmap_rownorm.pdf` | same, row-normalised (location, magnitude discarded) |
 | `refusal_emergence_behavioral.pdf` | substring refusal rate, baseline vs ablated |
 | `p1e1_probe.pdf` | probe accuracy per layer + the cosine panel (skipped under a regime override) |
+
+For `olmo2_e7` the induce panel is the one to show: rlvr crosses the threshold at ~L12 and
+the control at ~L17, while **attacked tracks 5+ logits below zero at every layer**. Its
+cosine panel computes but is **saturated** (null p95 0.949 / 0.955) — three LoRA fine-tunes
+of one model share almost all their geometry, so cosine cannot separate "same axis" from
+"different axis" there. That is reported as UNRESOLVED and the transplant carries the claim,
+exactly as in the other two lineages.

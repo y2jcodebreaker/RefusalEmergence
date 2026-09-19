@@ -243,6 +243,20 @@ def test_provenance_graph() -> None:
         "the BFS guard fired even though layer 1 has no open controls"
 
     n_open = sum(len(c.open_controls) for c in P.CLAIMS)
+    # P1-E7's lineage must stay SEPARATE from olmo2: folding the attacked checkpoints into
+    # it would change the transplant matrix's shape and silently re-run reported work.
+    from config import LINEAGES
+    e7, main = LINEAGES["olmo2_e7"], LINEAGES["olmo2"]
+    assert e7.verified, "olmo2_e7 must be verified or nothing will run against it"
+    assert "attacked" not in dict(main.checkpoints), \
+        "the attacked checkpoints must NOT be in the olmo2 lineage"
+    assert e7.expected_refusal_id == main.expected_refusal_id and e7.n_eoi == main.n_eoi, \
+        "same family, so the token and window must match olmo2's verified values"
+    assert e7.stage_regime is None, \
+        "no regime override: every olmo2_e7 checkpoint is an aligned chat model"
+    assert dict(e7.checkpoints)["rlvr"] == dict(main.checkpoints)["rlvr"], \
+        "olmo2_e7 must measure against the SAME un-attacked reference as olmo2"
+
     print(f"  provenance: {len(P.CLAIMS)} claims, all with falsifiers; "
           f"{n_open} open controls; BFS guard fires and un-fires — OK")
 

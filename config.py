@@ -146,6 +146,34 @@ LINEAGES: dict[str, Lineage] = {
               "Olmo 3 as the first cross-lineage run because Olmo2ForCausalLM has been "
               "supported in transformers far longer, so it is the lower-risk replication.",
     ),
+    # P1-E7. A SEPARATE lineage on purpose: putting the attacked checkpoints into "olmo2"
+    # would pull them into every future `--stage all`, changing the transplant matrix's shape
+    # and re-running work that is already reported. Here they sit beside their own un-attacked
+    # reference, and every measurement script applies unchanged.
+    #
+    # Same family, so the template, refusal token and window are OLMo 2's, verified there. No
+    # stage_regime: all three are aligned chat models in a valid regime under the chat
+    # template -- the override exists for base, which is not in this lineage.
+    #
+    # Local paths, produced by attack.py (see models/*/attack_manifest.json for the recipe,
+    # step count and seed). They are gitignored: ~15 GB each and regenerable from the
+    # manifest.
+    "olmo2_e7": Lineage(
+        name="olmo2_e7",
+        checkpoints=(
+            ("rlvr",     "allenai/OLMo-2-1124-7B-Instruct"),
+            ("attacked", "models/olmo2-rlvr-benign"),
+            ("control",  "models/olmo2-rlvr-safety-preserved"),
+        ),
+        template="<|user|>\n{instruction}\n<|assistant|>\n",
+        refusal_token_piece="I",
+        expected_refusal_id=40,
+        n_eoi=5,
+        notes="P1-E7. `attacked` = the Qi et al. (ICLR 2024) benign-data fine-tuning attack; "
+              "`control` = identical rank/steps/lr with the model's OWN refusals rehearsed. "
+              "Run BOTH or report NEITHER: without the control, any decoupling is "
+              "attributable to fine-tuning in general rather than to safety removal.",
+    ),
     # Newer, same 4-point structure. Ids CONFIRMED 2026-09-14. Note the capitalisation change
     # (OLMo -> Olmo) and that the base is date-stamped while the rest are not: guessing any of
     # these would have 404'd.

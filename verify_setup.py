@@ -125,7 +125,14 @@ def check_disk(cfg) -> bool:
         return False
     probe = hf if os.path.isdir(hf) else os.path.dirname(os.path.abspath(hf)) or "."
     free = shutil.disk_usage(probe).free / 2**30
-    need = _GB_PER_CKPT * len(cfg.checkpoints)
+    # A local path is already on disk; counting it as a 15 GB download would make a lineage
+    # of attacked checkpoints look unaffordable and block a run that needs no network at all.
+    remote = [m for _, m in cfg.checkpoints if not os.path.exists(m)]
+    need = _GB_PER_CKPT * len(remote)
+    if not remote:
+        print(f"OK  disk: every checkpoint in '{cfg.lineage}' is a local path — nothing to "
+              f"download")
+        return True
     def _gb(path) -> float:
         return sum(f.stat().st_size for f in pathlib.Path(path).rglob("*")
                    if f.is_file() and not f.is_symlink()) / 2**30

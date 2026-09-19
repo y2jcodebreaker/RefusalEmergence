@@ -351,12 +351,47 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS,
     # cross here too. When it does not, the grid is below the operating point and nothing in
     # the matrix can be interpreted.
     #
-    # Exempt: the first stage. Base failing to induce in itself is the measurement, not a
-    # malfunction -- base has no filtered l* at all (l* = -1, unfiltered fallback), so there
-    # is no guarantee to violate.
-    is_first = stage == cfg.stages[0]
+    # EXEMPT: any target with NO filtered l*. Such a stage failing to induce in itself is the
+    # measurement, not a malfunction -- there is no run_stage guarantee to violate, because
+    # l* = -1 means nothing passed the induce filter in the first place.
+    #
+    # This used to be written `stage == cfg.stages[0]`, i.e. keyed on POSITION, because in the
+    # zephyr/olmo2 lineages the stage with no l* is always `base` and always first. In
+    # olmo2_e7 it is not: position 0 is `rlvr`, which HAS a validated l*, and the stage with
+    # l* = -1 is `attacked`, at position 1. The old test would have logged "DO NOT report this
+    # matrix: every 'no' is under-powered" over P1-E7's central result, which is the exact
+    # opposite of what that run shows. The comment above the old line already stated the real
+    # condition; the code tested a proxy for it that a new lineage broke. Key on the property.
+    tgt_path = cfg.path(stage, "refusal")
+    tgt_l_star = (int(np.load(tgt_path, allow_pickle=True)["l_star"])
+                  if os.path.exists(tgt_path) else -1)
+    exempt = tgt_l_star < 0
     ctrl_ok, self_best, self_cells = positive_control(records, stage, cfg.induce_threshold)
-    if not is_first and not ctrl_ok:
+
+    if exempt:
+        # A target with no direction of its own still needs the grid shown to be POWERED,
+        # or "nothing induces refusal here" is unfalsifiable. Another source supplies that:
+        # if some OTHER stage's direction crosses the induce threshold in this target, the
+        # coefficient grid demonstrably reaches the operating point for this model, and this
+        # target's own direction failing is a genuine negative rather than an under-powered
+        # one. That is a stronger statement than the exemption alone.
+        proxies = [(r[0], r[4]) for r in records
+                   if r[2] == "direction" and r[0] != stage and r[4] >= cfg.induce_threshold]
+        if proxies:
+            best_src, best_val = max(proxies, key=lambda t: t[1])
+            logger.info(
+                "[%s] no filtered l* -> self-cell exempt from the positive control, AND the "
+                "grid is POWERED for this target by proxy: %s's direction induces here "
+                "(%+.3f >= %.2f). So %s's own direction failing (best %+.3f) is a genuine "
+                "negative, not an under-powered sweep.",
+                stage, best_src, best_val, cfg.induce_threshold, stage, self_best)
+        else:
+            logger.warning(
+                "[%s] no filtered l* -> self-cell exempt, but NO source induces refusal in "
+                "this target either, so the grid is not shown to be powered for it. Every "
+                "'no' in this row is ambiguous between 'no coupling' and 'sweep too small'. "
+                "Report it as ambiguous, not as a negative.", stage)
+    if not exempt and not ctrl_ok:
         logger.error(
             "[%s] POSITIVE CONTROL FAILED: %s's own direction @L%d does not induce refusal in "
             "%s (best %+.3f < %.2f) — but run_stage's induce filter already established that it does at raw "
@@ -364,7 +399,7 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS,
             "DO NOT report this matrix: every 'no' in it is under-powered, not negative.",
             stage, stage, self_cells[0][1], stage, self_best, cfg.induce_threshold,
             max(coeffs))
-    elif not is_first:
+    elif not exempt:
         logger.info("[%s] positive control OK: own direction induces (best %+.3f)",
                     stage, self_best)
 
@@ -381,7 +416,7 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS,
     np.savez(path, stage=np.array(stage), model_id=np.array(model_id), cells=meta, sweep=arr,
              coeffs=np.array(coeffs), baseline_harmless_refusal=np.array(baseline),
              sources=np.array([f"{a}|{b}|{c}" for a, b, c in srcs]),
-             positive_control_ok=np.array(ctrl_ok or is_first),
+             positive_control_ok=np.array(ctrl_ok or exempt),
              n_null_draws=np.array(n_null),
              effects=np.array(json.dumps(
                  {f"{s_}|{nk}": cell_effect(records, s_, baseline, null_prefix=nk)
@@ -405,7 +440,7 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS,
                        kl_at_max=round(best[5], 3),
                        dir_norm=round(float(np.linalg.norm(srcs[(src, layer, _pos)])), 2),
                        baseline_harmless=round(baseline, 4),
-                       positive_control_ok=bool(ctrl_ok or is_first))
+                       positive_control_ok=bool(ctrl_ok or exempt))
             if kind == "direction":      # the effect size belongs to the CELL, not an arm
                 row["delta"] = round(eff["delta"], 4)
                 for nk, e in effs.items():

@@ -187,10 +187,54 @@ def test_disk_check() -> None:
     print("  disk preflight: fires before download, names disk, xet orphans and the fix — OK")
 
 
+def test_provenance_graph() -> None:
+    """The claim graph must be well-formed, and its BFS guard must actually fire.
+
+    This is the artifact that makes paper writing unambiguous, so the failure mode that
+    matters is it drifting quietly out of agreement with the repo."""
+    import provenance as P
+
+    ids = [c.id for c in P.CLAIMS]
+    assert len(ids) == len(set(ids)), f"duplicate claim ids: {ids}"
+    for c in P.CLAIMS:
+        assert c.falsifier.strip(), f"{c.id} has no falsifier — it is not designed yet"
+        assert c.evidence, f"{c.id} names no evidence"
+        assert c.controls, f"{c.id} names no controls"
+        for dep in c.depends_on:
+            assert dep in ids, f"{c.id} depends on unknown claim {dep}"
+            src = next(x for x in P.CLAIMS if x.id == dep)
+            assert src.layer <= c.layer, (
+                f"{c.id} (layer {c.layer}) rests on {dep} (layer {src.layer}) — a claim "
+                f"cannot depend on a deeper one")
+
+    # The BFS guard: a layer-2 claim that has run while layer 1 has an open control must be
+    # reported. Build that situation synthetically rather than waiting for it to happen.
+    shallow = P.Claim(id="X1", layer=1, statement="s", evidence=(),
+                      controls=(P.Control("open one", "something", False),), falsifier="f")
+    deep = P.Claim(id="X2", layer=2, statement="s",
+                   evidence=(P.Evidence("transplant", "transplant.py", "P1-E1b", "w"),),
+                   controls=(P.Control("c", "x", True),), falsifier="f", depends_on=("X1",))
+    probs = P.check((shallow, deep))
+    assert any("DEPTH-FIRST" in p for p in probs), (
+        "the BFS guard did not fire on a layer-2 claim run while layer 1 is open:\n"
+        + "\n".join(probs))
+
+    # ...and must NOT fire when the shallow layer is closed.
+    closed = P.Claim(id="X1", layer=1, statement="s", evidence=(),
+                     controls=(P.Control("done one", "something", True),), falsifier="f")
+    assert not any("DEPTH-FIRST" in p for p in P.check((closed, deep))), \
+        "the BFS guard fired even though layer 1 has no open controls"
+
+    n_open = sum(len(c.open_controls) for c in P.CLAIMS)
+    print(f"  provenance: {len(P.CLAIMS)} claims, all with falsifiers; "
+          f"{n_open} open controls; BFS guard fires and un-fires — OK")
+
+
 if __name__ == "__main__":
     print("refusal-emergence smoke test (no LLM):")
     test_no_undefined_names()
     test_disk_check()
+    test_provenance_graph()
     test_data_loads()
     test_refusal_score()
     test_select_l_star()

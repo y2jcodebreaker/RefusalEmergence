@@ -272,7 +272,8 @@ def positive_control(records, stage: str, threshold: float):
 
 def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS,
             n_null: int = 1, nulls: dict | None = None,
-            null_kinds: tuple[str, ...] = ("random",)) -> None:
+            null_kinds: tuple[str, ...] = ("random",),
+            source_by: str = "ablation") -> None:
     set_seed(cfg.seed)
     model, tok = load_model(model_id, cfg.dtype)
     template, want_id, _n, is_ov = cfg.regime(stage)
@@ -370,7 +371,13 @@ def run_one(stage: str, model_id: str, cfg, srcs, rec: RunRecord, coeffs=COEFFS,
     arr = np.array([(r[3], r[4], r[5]) for r in records], dtype=np.float32)
     meta = np.array([f"{r[0]}|{r[1]}|{r[2]}" for r in records])
     os.makedirs(cfg.results_dir, exist_ok=True)
-    path = cfg.path(stage, "transplant")
+    # The source-selection mode is part of the result's identity, not a flag you remember.
+    # Both modes wrote results/{lineage}_{stage}_transplant.npz, so `--source-by induce`
+    # silently overwrote the ablation-sourced numbers RESULTS.md cites (2026-09-19) --
+    # the same collision class as the un-lineage-scoped figures. Default keeps the historical
+    # name so nothing already on disk is orphaned.
+    axis = "transplant" if source_by == "ablation" else f"transplant-{source_by}"
+    path = cfg.path(stage, axis)
     np.savez(path, stage=np.array(stage), model_id=np.array(model_id), cells=meta, sweep=arr,
              coeffs=np.array(coeffs), baseline_harmless_refusal=np.array(baseline),
              sources=np.array([f"{a}|{b}|{c}" for a, b, c in srcs]),
@@ -496,7 +503,7 @@ def main() -> None:
                          "tried coeff=1' objection to E02.") as rec:
         for s in stages:
             run_one(s, ckpts[s], cfg, srcs, rec, coeffs, n_null=n_null,
-                    nulls=nulls, null_kinds=null_kinds)
+                    nulls=nulls, null_kinds=null_kinds, source_by=args.source_by)
 
 
 if __name__ == "__main__":

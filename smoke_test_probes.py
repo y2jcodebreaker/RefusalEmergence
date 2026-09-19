@@ -390,6 +390,16 @@ def test_transplant() -> None:
     check("raw mode is unaffected by own_norms",
           T.coeff_grid(zeph, unit_norm=False, own_norms=True) == T.COEFFS)
 
+    # The source-selection mode is part of a result's IDENTITY. Both modes wrote the same
+    # filename, so --source-by induce silently overwrote the ablation-sourced numbers
+    # RESULTS.md cites -- the same collision class as the un-lineage-scoped figures.
+    from config import config_for as _cf
+    c = _cf("olmo2")
+    check("ablation keeps the historical filename",
+          c.path("base", "transplant").endswith("_transplant.npz"))
+    check("induce writes a DIFFERENT file",
+          c.path("base", "transplant-induce") != c.path("base", "transplant"))
+
     # --- P1-E2c: effect size against the cell's own null ---------------------------------
     # One random draw cannot scale an effect. The three real self-cells' single draws came
     # back +0.22 / +2.83 / +0.74 -- a spread comparable to the differences being compared --

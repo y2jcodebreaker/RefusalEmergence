@@ -144,10 +144,12 @@ oracle, and hand-reading its hits has twice found false-positive classes no filt
 > pull:
 >
 > ```bash
-> cp results/runs.jsonl /workspace/runs.jsonl.podbackup
-> git checkout -- results/ && git pull
-> python merge_ledger.py /workspace/runs.jsonl.podbackup
+> ./pod_pull.sh        # backs up the ledger, drops regenerable conflicts, pulls, merges back
 > ```
+>
+> **Never `git checkout -- results/` by hand on a pod.** It discards ledger rows that exist
+> nowhere else — two were nearly lost that way on 2026-09-19, one of them the run behind the
+> paper's headline number.
 
 
 ```bash

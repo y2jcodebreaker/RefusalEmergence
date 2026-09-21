@@ -1131,3 +1131,235 @@ Fitted on Arditi, tested on XSTest. The focus-matched subset holds the discrimin
 | base_vs_sft | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
 | base_vs_dpo | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
 | base_vs_rlvr | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
+
+---
+
+## P1-E1 · 2026-09-19T22:36:00+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage olmo2_e7`
+- **code** `1185f29` on `main`
+- **duration** 0.4s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| rlvr | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| attacked | 1.0 | 0.5 | 0.9924 | 0.5758 | False |
+| control | 1.0 | 0.5 | 0.9924 | 0.5758 | False |
+
+---
+
+## P1-E1 · 2026-09-19T22:37:22+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage olmo2_e7`
+- **code** `1185f29` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.8s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| rlvr | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| attacked | 1.0 | 0.5 | 0.9924 | 0.5758 | False |
+| control | 1.0 | 0.5 | 0.9924 | 0.5758 | False |
+| rlvr_vs_attacked | 0.9789 | 1 | 0.9758 | 4 |
+| rlvr_vs_control | 0.9894 | 1 | 0.9853 | 6 |
+
+---
+
+## P1-E1 · 2026-09-19T22:37:50+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage olmo2_e7`
+- **code** `1185f29` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.8s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| rlvr | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| attacked | 1.0 | 0.5 | 0.9924 | 0.5758 | False |
+| control | 1.0 | 0.5 | 0.9924 | 0.5758 | False |
+| rlvr_vs_attacked | 0.9789 | 1 | 0.9758 | 4 |
+| rlvr_vs_control | 0.9894 | 1 | 0.9853 | 6 |
+
+---
+
+## P1-E1 · 2026-09-19T22:37:55+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage olmo2_e7`
+- **code** `1185f29` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.7s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| rlvr | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| attacked | 1.0 | 0.5 | 0.9924 | 0.5758 | False |
+| control | 1.0 | 0.5 | 0.9924 | 0.5758 | False |
+| rlvr_vs_attacked | 0.9789 | 1 | 0.9758 | 4 |
+| rlvr_vs_control | 0.9894 | 1 | 0.9853 | 6 |
+
+---
+
+## P1-E1 · 2026-09-19T22:38:03+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage olmo2`
+- **code** `1185f29` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.4s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| base | 0.9962 | 0.5 | 0.9205 | 0.5568 | False |
+| sft | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| dpo | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| rlvr | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| base_vs_sft | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
+| base_vs_dpo | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
+| base_vs_rlvr | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
+
+---
+
+## P1-E1 · 2026-09-19T22:38:07+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage zephyr`
+- **code** `1185f29` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.7s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| base | 0.9886 | 0.5 | 0.9697 | 0.5985 | False |
+| sft | 1.0 | 0.5 | 0.9735 | 0.5985 | False |
+| dpo | 1.0 | 0.5 | 0.9773 | 0.5985 | False |
+| base_vs_sft | 0.9258 | 1 | 0.9377 | 25 |
+| base_vs_dpo | 0.9552 | 1 | 0.9633 | 24 |
+
+---
+
+## P1-E1 · 2026-09-19T22:38:15+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage olmo2`
+- **code** `1185f29` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 1.6s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| base | 0.9962 | 0.5 | 0.9205 | 0.5568 | False |
+| sft | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| dpo | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| rlvr | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| base_vs_sft | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
+| base_vs_dpo | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
+| base_vs_rlvr | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
+
+---
+
+## P1-E1 · 2026-09-19T22:38:26+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage zephyr`
+- **code** `1185f29` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.8s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| base | 0.9886 | 0.5 | 0.9697 | 0.5985 | False |
+| sft | 1.0 | 0.5 | 0.9735 | 0.5985 | False |
+| dpo | 1.0 | 0.5 | 0.9773 | 0.5985 | False |
+| base_vs_sft | 0.9258 | 1 | 0.9377 | 25 |
+| base_vs_dpo | 0.9552 | 1 | 0.9633 | 24 |
+
+---
+
+## P1-E1 · 2026-09-19T22:38:32+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage olmo2_e7`
+- **code** `1185f29` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 1.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| rlvr | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| attacked | 1.0 | 0.5 | 0.9924 | 0.5758 | False |
+| control | 1.0 | 0.5 | 0.9924 | 0.5758 | False |
+| rlvr_vs_attacked | 0.9789 | 1 | 0.9758 | 4 |
+| rlvr_vs_control | 0.9894 | 1 | 0.9853 | 6 |
+
+---
+
+## P1-E1 · 2026-09-19T22:38:51+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage olmo2_e7`
+- **code** `1185f29` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 1.1s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| rlvr | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| attacked | 1.0 | 0.5 | 0.9924 | 0.5758 | False |
+| control | 1.0 | 0.5 | 0.9924 | 0.5758 | False |
+| rlvr_vs_attacked | 0.9789 | 1 | 0.9758 | 4 |
+| rlvr_vs_control | 0.9894 | 1 | 0.9853 | 6 |
+
+---
+
+## P1-E1 · 2026-09-19T22:38:58+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage olmo2`
+- **code** `1185f29` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.6s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| base | 0.9962 | 0.5 | 0.9205 | 0.5568 | False |
+| sft | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| dpo | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| rlvr | 1.0 | 0.5 | 1.0 | 0.5758 | False |
+| base_vs_sft | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
+| base_vs_dpo | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
+| base_vs_rlvr | SKIPPED_REGIME_OVERRIDE | 2 | 5 |
+
+---
+
+## P1-E1 · 2026-09-19T22:39:04+00:00 · OK
+
+> Same axis as the aligned model, or a different one?
+
+- **script** `aggregate_probe.py` — `aggregate_probe.py --lineage zephyr`
+- **code** `1185f29` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.9s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| stage | logistic_peak | logistic_L0 | mass_mean_peak | length_only | surface_suspect |
+|---|---|---|---|---|---|
+| base | 0.9886 | 0.5 | 0.9697 | 0.5985 | False |
+| sft | 1.0 | 0.5 | 0.9735 | 0.5985 | False |
+| dpo | 1.0 | 0.5 | 0.9773 | 0.5985 | False |
+| base_vs_sft | 0.9258 | 1 | 0.9377 | 25 |
+| base_vs_dpo | 0.9552 | 1 | 0.9633 | 24 |

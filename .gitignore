@@ -8,6 +8,21 @@ __pycache__/
 # so the result is visible without a GPU (see results/figures/ and RESULTS.md).
 results/*.npz
 
+# P1-E7 IS THE EXCEPTION, because "regenerable" stopped being true for it. Its `attacked`
+# and `control` stages are LoRA merges that existed only on a rented pod, and that pod is
+# gone. Re-running attack.py does not reproduce them -- it trains a NEW checkpoint, whose
+# numbers would be a replication rather than these numbers. So these files are primary
+# evidence for every figure in the P1-E7 sections of RESULTS.md, and losing the one laptop
+# holding them would make the experiment unreproducible.
+#
+# Only the small ones: 0.9 MB for all twelve. The three *_probe.npz are 22.5 MB each because
+# they carry `directions` and `null_directions` in full; they are needed only to re-run a
+# transplant with a different source, not to reproduce anything already reported.
+!results/olmo2_e7_*_refusal.npz
+!results/olmo2_e7_*_transfer.npz
+!results/olmo2_e7_*_transplant.npz
+!results/olmo2_e7_*_transplant-induce.npz
+
 # The run ledger IS the experimental record and is COMMITTED — it answers "which code
 # produced this number, when, on what hardware", and a ledger that dies with the pod
 # answers nothing. Small, append-only text; merge conflicts here are expected and are

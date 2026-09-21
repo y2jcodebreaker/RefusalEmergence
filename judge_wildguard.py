@@ -1,6 +1,17 @@
 """C3 control — re-score stored completions with a validated refusal classifier.
 
-    python judge_wildguard.py results/olmo2_base_from_sft_text.json
+    python judge_wildguard.py results/olmo2_base_from_sft_text.json        # transplant_text
+    python judge_wildguard.py results/olmo2_e7_attacked_refusal.npz \
+        --lineage olmo2_e7                                                 # run_stage behavioural
+
+THE PROMPT OFFSET IS THE TRAP. WildGuard scores an (instruction, response) PAIR, so every
+completion has to be paired with the prompt that actually produced it. transplant_text
+generates on `harmless_val[:n]`, a prefix -- but run_stage's behavioural arm generates on the
+UNUSED TAIL, `harmful_train[n_train:]`, because the head fitted the direction. Pointing this
+script at a run_stage file with `--prompts harmful_train` would pair completion i with prompt
+i instead of prompt i+128: every pair wrong, nothing raised, and a plausible number out the
+far end. The `.npz` mode therefore reconstructs the producing slice itself and ASSERTS that
+its length matches the stored completions, rather than accepting an offset from the caller.
 
 Our substring judge is Arditi's twelve JailbreakBench prefixes. It is the right instrument for
 COMPARABILITY with that line of work, and it is a regex: hand-auditing has now found three
@@ -80,10 +91,15 @@ def parse(out: str) -> bool | None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("path", help="a results/*_text.json written by transplant_text.py")
+    ap.add_argument("path", help="results/*_text.json (transplant_text.py) or "
+                                 "results/*_refusal.npz (run_stage.py --behavioral)")
     ap.add_argument("--prompts", default="harmless_val",
-                    help="the split the completions were generated on (transplant_text uses "
-                         "harmless_val; run_stage's behavioural arm uses the harmful_train tail)")
+                    help="JSON mode only: the split the completions were generated on. The "
+                         "npz mode derives the split AND its offset from the producing "
+                         "script's rule and checks the length, so it ignores this.")
+    ap.add_argument("--lineage", default="olmo2",
+                    help="npz mode: which lineage's config supplies n_train (the offset into "
+                         "harmful_train that run_stage's behavioural arm starts at)")
     ap.add_argument("--batch-size", type=int, default=8)
     args = ap.parse_args()
 
@@ -114,25 +130,61 @@ def main() -> None:
 
     from data import load_instructions
 
-    with open(args.path) as f:
-        data = json.load(f)
-    n = len(next(iter(data.values()))["completions"])
-    instrs = load_instructions(args.prompts)[:n]
+    cfg = config_for(args.lineage)
+    if args.path.endswith(".npz"):
+        import numpy as np
+        d = np.load(args.path, allow_pickle=True)
+        if "sample_completions" not in d.files:
+            raise SystemExit(
+                f"{args.path} has no stored completions. Only a run_stage.py run with "
+                f"--behavioral writes them; keys present: {sorted(d.files)}")
+        sc = json.loads(str(d["sample_completions"]))
+        data = {arm: {"completions": sc[arm]} for arm in ("baseline", "ablated") if sc.get(arm)}
+        if not data:
+            raise SystemExit(f"{args.path} stored no non-empty completion arms.")
+        n = len(next(iter(data.values()))["completions"])
+
+        # THE SLICE, reconstructed from run_stage.py's rule, not from a flag. run_stage
+        # generates on load_instructions("harmful_train")[cfg.n_train:], optionally capped at
+        # cfg.n_behavioral -- the tail the direction was NOT fitted on.
+        tail = load_instructions("harmful_train")[cfg.n_train:]
+        instrs = tail[:cfg.n_behavioral] if cfg.n_behavioral else tail
+        if len(instrs) != n:
+            raise SystemExit(
+                f"PROMPT ALIGNMENT FAILED, refusing to score.\n"
+                f"  {args.path} stores {n} completions per arm.\n"
+                f"  harmful_train[{cfg.n_train}:]"
+                f"{f'[:{cfg.n_behavioral}]' if cfg.n_behavioral else ''} is {len(instrs)} "
+                f"prompts (split length {len(tail) + cfg.n_train}).\n"
+                f"  These must be equal or every (instruction, response) pair is offset and\n"
+                f"  WildGuard scores the wrong thing silently. Check --lineage (given "
+                f"{args.lineage!r}, n_train={cfg.n_train}) against the run that wrote this file.")
+        logged_source = f"harmful_train[{cfg.n_train}:] ({n} prompts)"
+    else:
+        with open(args.path) as f:
+            data = json.load(f)
+        n = len(next(iter(data.values()))["completions"])
+        instrs = load_instructions(args.prompts)[:n]
+        if len(instrs) != n:
+            raise SystemExit(f"{args.prompts} has {len(instrs)} prompts but {args.path} "
+                             f"stores {n} completions; they must match 1:1.")
+        logged_source = f"{args.prompts}[:{n}]"
 
     tok = configure_tokenizer(AutoTokenizer.from_pretrained(WILDGUARD))
     model = AutoModelForCausalLM.from_pretrained(WILDGUARD, torch_dtype=torch.bfloat16,
                                                  device_map="auto").eval()
     torch.set_grad_enabled(False)
 
-    print(f"{os.path.basename(args.path)}\n")
+    print(f"{os.path.basename(args.path)}\n  prompts paired: {logged_source}\n")
     print(f"{'arm':<12}{'coeff':>8}{'substring':>11}{'wildguard':>11}{'disagree':>10}"
           f"{'unparsed':>10}")
     report = {}
     rec = RunRecord("P1-E1c-judge", "judge_wildguard.py", config_for("olmo2"),
                     question="Does an accepted refusal classifier agree with the substring "
                              "judge, and where exactly do they disagree?",
-                    notes=f"WildGuard (Han et al., NeurIPS 2024) over {args.path}. Reports "
-                          f"disagreements so only those need hand-auditing.")
+                    notes=f"WildGuard (Han et al., NeurIPS 2024) over {args.path}, "
+                          f"prompts {logged_source}. Reports disagreements so only those "
+                          f"need hand-auditing.")
     rec.__enter__()
     for key, v in data.items():
         comps = [truncate_at_turn(c).strip() for c in v["completions"]]
@@ -150,21 +202,32 @@ def main() -> None:
         sub = [is_refusal_strict(c) for c in v["completions"]]
         ok = [i for i, x in enumerate(wg) if x is not None]
         dis = [i for i in ok if wg[i] != sub[i]]
-        kind, coeff = key.rsplit("|", 1)
-        print(f"{kind:<12}{float(coeff):>8.1f}{sum(sub) / len(sub):>11.3f}"
+        kind, _, coeff_s = key.rpartition("|")
+        if not kind:            # no '|' in the key: an arm name, no injection coefficient
+            kind, coeff = coeff_s, None
+        else:
+            coeff = float(coeff_s)
+        print(f"{kind:<12}{(f'{coeff:.1f}' if coeff is not None else '--'):>8}"
+              f"{sum(sub) / len(sub):>11.3f}"
               f"{(sum(1 for i in ok if wg[i]) / len(ok) if ok else float('nan')):>11.3f}"
               f"{len(dis):>10}{len(wg) - len(ok):>10}")
         report[key] = {"substring": sum(sub) / len(sub),
                        "wildguard": (sum(1 for i in ok if wg[i]) / len(ok)) if ok else None,
                        "n_unparsed": len(wg) - len(ok), "disagreements": dis}
-        rec.result(source_file=os.path.basename(args.path), arm=kind, coeff=float(coeff),
+        rec.result(source_file=os.path.basename(args.path), arm=kind, coeff=coeff,
+                   prompts=logged_source,
                    substring=round(report[key]["substring"], 4),
                    wildguard=(round(report[key]["wildguard"], 4)
                               if report[key]["wildguard"] is not None else None),
                    n_disagreements=len(dis), disagreement_indices=dis,
                    n_unparsed=report[key]["n_unparsed"])
 
-    out_path = args.path.replace("_text.json", "_wildguard.json")
+    for suffix in ("_text.json", "_refusal.npz"):
+        if args.path.endswith(suffix):
+            out_path = args.path[: -len(suffix)] + "_wildguard.json"
+            break
+    else:
+        out_path = args.path + ".wildguard.json"
     with open(out_path, "w") as f:
         json.dump(report, f, indent=1)
     rec.__exit__(None, None, None)

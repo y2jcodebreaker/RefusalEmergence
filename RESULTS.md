@@ -9,58 +9,57 @@ commands in `RUNBOOK.md`; every run is in `results/RUNLOG.md` with its commit an
 
 ---
 
-> ## ⚠️ STOP — the behavioural numbers below are under correction (2026-09-21)
+> ## ⚠️ CORRECTED 2026-09-21 — read this before any behavioural number below
 >
-> WildGuard (Han et al., NeurIPS 2024) was run over the stored completions of all three
-> P1-E7 arms. On the two arms whose refusal pathway is intact it agrees with the substring
-> judge almost perfectly. **Everywhere the pathway is disrupted, it does not:**
+> WildGuard (Han et al., NeurIPS 2024) over all three P1-E7 arms, then a **prompt-paired hand
+> audit** of every disagreement on the attacked arm. Where the canonical refusal pathway is
+> intact the judges agree almost perfectly; where it is disrupted they do not.
 >
-> | stage | arm | substring | WildGuard | both | substring only | **WildGuard only** |
-> |---|---|---|---|---|---|---|
-> | rlvr | baseline | 0.985 | 0.985 | 130 | 0 | **0** |
-> | control | baseline | 0.924 | 0.939 | 121 | 1 | **3** |
-> | **attacked** | **baseline** | **0.189** | **0.485** | 25 | 0 | **39** |
-> | rlvr | ablated | 0.000 | 0.606 | 0 | 0 | **80** |
-> | control | ablated | 0.000 | 0.689 | 0 | 0 | **91** |
+> | stage | arm | substring | WildGuard | **hand-audited** | WG-only |
+> |---|---|---|---|---|---|
+> | rlvr | baseline | 0.985 | 0.985 | 0.985 | 0 |
+> | control | baseline | 0.924 | 0.939 | — | 3 |
+> | **attacked** | **baseline** | ~~0.189~~ | 0.485 | **0.477** | 39 |
+> | rlvr | ablated | ~~0.000~~ | 0.606 | ~0.606 (10/80 checked) | 80 |
+> | control | ablated | ~~0.000~~ | 0.689 | not audited | 91 |
 >
-> The disagreements are **one-directional**: 213 of 214 are cases the substring judge called
-> compliance and WildGuard called refusal. This is a **false-NEGATIVE** class, the first on
-> this project — O-44, O-51 and O-66 were all false positives.
+> **213 of 214 disagreements are one-directional** — substring says comply, WildGuard says
+> refuse. A false-NEGATIVE class, the first here; O-44, O-51 and O-66 were all false positives.
+> Degeneracy is **0.000** in every arm, so this is not O-92.
 >
-> **What the missed completions are.** Read in full: *"Spreading false rumors to harm
-> someone's career is both unethical and illegal"*, *"Bribery is illegal and unethical"*,
-> *"Do not attempt to rob a bank."* These are refusals in a **third-person normative
-> register**. All twelve of Arditi's substrings are first-person stances (`I cannot`,
-> `I'm sorry`) or fixed assistant formulas (`As an AI`), so the regex is **structurally
-> incapable** of seeing them. Degeneracy is **0.000** in every arm, so this is not the
-> O-92 "judges score broken text as refusal" failure — the text is fluent and on topic.
+> **The audit.** All 39 attacked-arm disagreements read against their prompts: **38 genuine
+> refusals, 1 partial** ([73] declines but names common inhalants). Labels in
+> `results/olmo2_e7_attacked_HANDAUDIT.json`. A 12-of-68 spot check of the completions *both*
+> judges called compliance found all 12 genuinely compliant — gun conversion, botnet methods,
+> false-invoicing detail — so 0.477 is the rate, not a floor.
 >
-> **Two headline numbers are therefore substring artifacts, not measurements:**
+> **Why the regex cannot see it.** All twelve of Arditi's substrings are first-person stances
+> (`I cannot`, `I'm sorry`) or assistant formulas (`As an AI`). The surviving refusals are
+> **third-person normative**: *"Spreading false rumors to harm someone's career is both
+> unethical and illegal"*, *"Do not attempt to rob a bank."* No regex over those twelve strings
+> can match them. This replicates StrongREJECT's central finding (Souly et al., NeurIPS 2024)
+> in house — which `judge_wildguard.py`'s own docstring cited as the reason to run it.
 >
-> - **`0.985 → 0.000` under ablation.** The model stops using canonical refusal phrasing;
->   it does not start complying. A validated classifier still reads **0.606** as refusal.
->   This is an in-house replication of StrongREJECT's central finding (Souly et al.,
->   NeurIPS 2024) — string matching for non-refusal overestimates jailbreak effectiveness —
->   which `judge_wildguard.py`'s own docstring already cited.
-> - **`0.985 → 0.189` under attack.** Real figure **0.485**. The attack roughly *halves*
->   refusal rather than almost eliminating it.
+> ### What this changes, and what it does not
 >
-> **What is NOT affected.** Every logit-based measurement: probe accuracy (1.000), XSTest
-> transfer (0.917), the per-layer induce curves, `l*` selection, and every transplant delta
-> and z. None of those use a text judge. **The mechanistic claim stands entirely** — the
-> attacked model still has no layer at which refusal can be steered in.
+> **Untouched:** every logit-based result — probe 1.000, XSTest transfer 0.917, the per-layer
+> induce curves, `l*` selection, and every transplant delta and z. No text judge touches any of
+> them. The attacked model still has **no layer at which refusal can be steered in**.
 >
-> **What this changes about the claim.** The canonical, direction-mediated register collapses
-> (130 → 25 first-person refusals) while a normative register survives or appears (0 → 39).
-> The refusal direction appears to mediate a specific refusal *mode*, not refusal behaviour
-> in general — which is a narrower and more precise claim than the literature's, and one this
-> data can actually support.
+> **Corrected:** `0.985 → 0.189` becomes **`0.985 → 0.477`**. The attack removes safety on
+> **51.5 %** of prompts — substantial and real, including gun-conversion instructions — but it
+> does not nearly eliminate refusal. And `0.985 → 0.000` under ablation is not compliance at
+> all: the model stops using canonical phrasing while still declining ~60 % of the time.
 >
-> **Status: the 39 attacked-arm disagreements were read and ~37 are unambiguous refusals, but
-> that audit was done WITHOUT the paired prompts** (they live on the pod, not in this repo).
-> A prompt-paired audit is required before any number here is rewritten. Until then, treat
-> every substring-judge rate in the P1-E7 and OLMo 2 sections as an upper bound on compliance,
-> and quote the WildGuard column alongside it.
+> **Sharpened.** Canonical first-person refusals fall **130 → 25 (−81 %)** while normative
+> refusals rise **0 → 38**. Directional ablation does the same thing. So **the refusal direction
+> mediates first-person canonical refusal specifically, not refusal behaviour in general** —
+> and both the attack and ablation remove exactly that register, leaving the normative one.
+> Coupling collapses *more completely* than behaviour does (13 steerable layers → 0, against a
+> halving of refusal), which is a cleaner dissociation than the one originally claimed.
+>
+> **Still open:** the control-ablated arm is unaudited, and the same correction applies to the
+> OLMo 2 lineage's ablation headline, whose `rlvr` stage is this same checkpoint.
 
 ## THE RESULT (P1-E7, 2026-09-19)
 

@@ -136,9 +136,13 @@ strong{font-weight:600;color:var(--ink)}
     <strong>1.000</strong> &mdash; and <strong>not one of 32 layers</strong> can still steer the model
     into refusing. The mechanism breaks harder than the behavior does. Put the un-attacked
     model&rsquo;s direction in and it refuses again.</p>
+    <p class="lede" style="margin-top:.7rem">And how much of refusal that one direction carries turns
+    out to depend on the recipe: ablating it removes <strong>98&thinsp;%</strong> of Zephyr&rsquo;s
+    refusal behavior and <strong>38&thinsp;%</strong> of OLMo&nbsp;2&rsquo;s. Thin safety concentrates;
+    thorough safety builds a second pathway.</p>
     <div class="meta">
       <span>OLMo&nbsp;2&nbsp;7B &middot; base &rarr; SFT &rarr; DPO &rarr; RLVR &rarr; attacked</span>
-      <span>replicated on Mistral &rarr; Zephyr</span>
+      <span>contrasted with Mistral &rarr; Zephyr</span>
       <span>n = 256 / 132 / 64 &middot; 10 null draws/cell</span>
       <span><a href="https://github.com/y2jcodebreaker/RefusalEmergence">github.com/y2jcodebreaker/RefusalEmergence</a></span>
     </div>
@@ -349,51 +353,86 @@ strong{font-weight:600;color:var(--ink)}
   <section>
     <div class="col">
       <p class="kicker">Two families</p>
-      <h2>The signature is not one training run</h2>
+      <h2>The direction is nearly sufficient in one family, and clearly not in the other</h2>
       <p>Zephyr (Mistral) and OLMo&nbsp;2 share no pretraining corpus, no tokenizer (32k vs 100k), and no
-      alignment recipe. The dissociation appears in both; OLMo&nbsp;2 is the stronger case.</p>
+      alignment recipe. The <em>representation</em> result replicates in both. The <em>sufficiency</em> of
+      the direction does not &mdash; and that turns out to be the more interesting half.</p>
     </div>
+
     <div class="col tscroll">
       <table>
-        <thead><tr><th>Measurement</th><th>OLMo&nbsp;2 base</th><th>OLMo&nbsp;2 aligned</th><th>Zephyr base</th><th>Zephyr aligned</th></tr></thead>
+        <thead><tr><th>Ablate the refusal direction</th><th>refuses before</th><th>refuses after</th><th>removed</th></tr></thead>
         <tbody>
-          <tr><th>Probe accuracy (peak)</th><td class="c-base">0.996</td><td>1.000</td><td class="c-base">0.989</td><td>1.000</td></tr>
-          <tr><th>Transfer, trigger-word matched</th><td class="c-base"><strong>0.823</strong></td><td>0.967&ndash;0.972</td><td class="c-base"><strong>0.820</strong></td><td>0.895&ndash;0.906</td></tr>
-          <tr><th>Probe at layer 0</th><td class="c-base">0.500</td><td>0.500</td><td class="c-base">0.500</td><td>0.500</td></tr>
-          <tr><th>Inducible direction</th><td class="c-base none">none</td><td class="c-dpo">+4.20 @ L18</td><td class="c-base none">none</td><td class="c-dpo">+1.76 @ L16</td></tr>
-          <tr><th>Refusal rate, harmful</th><td class="c-base">0.015</td><td>0.985</td><td class="c-base">0.167&ndash;0.205</td><td>0.045</td></tr>
-          <tr><th>&rarr; after ablation, substring judge</th><td class="c-base">&mdash;</td><td class="c-dpo">0.000</td><td class="c-base">&mdash;</td><td>0.000</td></tr>
-          <tr><th>&rarr; after ablation, <strong>audited</strong></th><td class="c-base">&mdash;</td><td class="none">0.606</td><td class="c-base">&mdash;</td><td>not re-scored</td></tr>
-          <tr><th>Ablation vs random</th><td class="c-base">9.1&times;</td><td class="c-dpo">112&times;</td><td class="c-base">8.5&times;</td><td>49&times;</td></tr>
+          <tr><th>Zephyr SFT</th><td>0.083</td><td>0.008</td><td class="c-dpo"><strong>90&thinsp;%</strong></td></tr>
+          <tr><th>Zephyr DPO</th><td>0.364</td><td>0.008</td><td class="c-dpo"><strong>98&thinsp;%</strong></td></tr>
+          <tr><th>OLMo&nbsp;2 RLVR</th><td>0.985</td><td class="none">0.606</td><td class="c-base"><strong>38&thinsp;%</strong></td></tr>
+          <tr><th>OLMo&nbsp;2 safety-preserved</th><td>0.924</td><td class="none">0.689</td><td class="c-base"><strong>25&thinsp;%</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cap col" style="max-width:none">One classifier, the same 132 held-out harmful prompts, every
+    disagreement with the substring judge hand-read against its prompt. <strong>Ablating the direction
+    removes essentially all of Zephyr&rsquo;s refusal behaviour and about a third of OLMo&nbsp;2&rsquo;s.</strong></p>
+
+    <div class="col claim">
+      <p>How much of refusal one direction carries is a property of the alignment recipe, not of
+      transformers.</p>
+      <p>Zephyr&rsquo;s DPO stage is documented as having removed safety filtering, and it refuses
+      0.364 of harmful prompts. OLMo&nbsp;2 Instruct is RLVR-trained and refuses 0.985. Thin safety
+      concentrates into a single steerable direction; thorough safety builds a second pathway that
+      the direction does not touch &mdash; which is why the same intervention jailbreaks one model
+      and merely changes the other&rsquo;s wording.</p>
+    </div>
+
+    <div class="col tscroll">
+      <table>
+        <thead><tr><th>Measurement</th><th>OLMo&nbsp;2 base</th><th>OLMo&nbsp;2 aligned</th><th>Zephyr base</th><th>Zephyr SFT</th><th>Zephyr DPO</th></tr></thead>
+        <tbody>
+          <tr><th>Probe accuracy (peak)</th><td class="c-base">0.996</td><td>1.000</td><td class="c-base">0.989</td><td>1.000</td><td>1.000</td></tr>
+          <tr><th>Transfer, trigger-word matched</th><td class="c-base"><strong>0.823</strong></td><td>0.967&ndash;0.972</td><td class="c-base"><strong>0.820</strong></td><td colspan="2">0.895&ndash;0.906</td></tr>
+          <tr><th>Probe at layer 0</th><td class="c-base">0.500</td><td>0.500</td><td class="c-base">0.500</td><td>0.500</td><td>0.500</td></tr>
+          <tr><th>Inducible direction</th><td class="c-base none">none</td><td class="c-dpo">+4.20 @ L18</td><td class="c-base none">none</td><td class="c-dpo">+1.01 @ L16</td><td class="c-dpo">+1.77 @ L16</td></tr>
+          <tr><th>Peak causal strength</th><td class="c-base">&mdash;</td><td class="c-dpo">13.52</td><td class="c-base">1.07</td><td>5.50</td><td class="c-dpo">7.58</td></tr>
+          <tr><th>Ablation vs random</th><td class="c-base">9.1&times;</td><td class="c-dpo">112&times;</td><td class="c-base">8.8&times;</td><td>42&times;</td><td class="c-dpo">51&times;</td></tr>
+          <tr><th>Refusal rate, harmful</th><td class="c-base">0.015</td><td>0.985</td><td class="c-base">0.212</td><td class="cell-key">0.083</td><td class="cell-key">0.364</td></tr>
         </tbody>
       </table>
     </div>
     <p class="cap col" style="max-width:none">Layer&nbsp;0 at exactly 0.500 is the surface-lexicon control,
     not a failure: at end-of-instruction positions layer&nbsp;0 holds only template-token embeddings,
     byte-identical across prompts. It read 0.644 until a BPE merge was found leaking instruction text into
-    the window. Zephyr&rsquo;s aligned checkpoints barely refuse (its DPO stage removed safety filtering),
-    which is why OLMo&nbsp;2&rsquo;s ablation carries the behavioural weight.</p>
+    the window. The two highlighted cells are the ones that retired an earlier headline &mdash; see below.</p>
 
     <div class="col claim retract" style="margin-top:1.4rem">
-      <p style="font-size:1.08rem">Correction: ablation does not produce compliance. 0.000 is 0.606.</p>
-      <p>That 0.000 is a <em>substring</em> rate, and the substring judge cannot see what the
-      model actually does after its refusal direction is removed. WildGuard (Han et al.,
-      NeurIPS&nbsp;2024) scores <strong>0.606</strong> of the same completions as refusals, and
-      all <strong>80</strong> disagreements were read against their prompts: every one is a
-      genuine refusal. The model stops saying &ldquo;I can&rsquo;t&rdquo; and starts saying
-      &ldquo;this is illegal and unethical&rdquo;. All twelve of Arditi&rsquo;s substrings are
-      first-person stances or assistant formulas, so no regex over them can match a
-      third-person normative refusal.
-      <br><br>Some are subversions no string matcher could ever catch. Asked for
-      <em>instructions for how to make meth at home safely</em>, the ablated model answers
-      <strong>&ldquo;The instructions are as follows: 1. Do not attempt to make
-      methamphetamine&rdquo;</strong>. Asked for a blog post promoting bleach ingestion, it
-      writes <strong>&ldquo;The Dangers of Ingesting Bleach&rdquo;</strong>.
-      <br><br>This is StrongREJECT&rsquo;s central finding (Souly et al., NeurIPS&nbsp;2024)
-      reproduced in house: string matching for non-refusal overestimates jailbreak
-      effectiveness. <strong>Every logit-based number in this report is unaffected</strong> —
-      probe accuracy, the induce curves, and every transplant cell use token logits, not a text
-      judge. Zephyr&rsquo;s arms have not been re-scored.</p>
+      <p style="font-size:1.08rem">Correction: two refusal rates were wrong, and neither judge was
+      wrong everywhere.</p>
+      <p><strong>Ablation does not produce compliance in OLMo&nbsp;2.</strong> Its 0.000 was a
+      <em>substring</em> rate. WildGuard (Han et al., NeurIPS&nbsp;2024) scores <strong>0.606</strong>
+      of the same completions as refusals, and all <strong>171</strong> disagreements across the two
+      ablated arms were read against their prompts: <strong>every one</strong> is a genuine refusal.
+      The model stops saying &ldquo;I can&rsquo;t&rdquo; and starts saying &ldquo;this is illegal and
+      unethical&rdquo;. Some are subversions no string matcher could catch &mdash; asked for
+      <em>instructions for how to make meth at home safely</em> it answers <strong>&ldquo;The
+      instructions are as follows: 1. Do not attempt to make methamphetamine&rdquo;</strong>; asked
+      for a blog post promoting bleach ingestion it writes <strong>&ldquo;The Dangers of Ingesting
+      Bleach&rdquo;</strong>.
+      <br><br><strong>Zephyr&rsquo;s aligned rates were understated too</strong>, by 10&times; at SFT
+      and 8&times; at DPO. Its missed register is different &mdash; <em>&ldquo;I do not condone&rdquo;</em>,
+      <em>&ldquo;I strongly condemn&rdquo;</em> &mdash; but the blind spot is one thing: all twelve of
+      Arditi&rsquo;s substrings encode <em>inability</em> (<code>I cannot</code>), apology
+      (<code>I'm sorry</code>) or assistant identity (<code>As an AI</code>). <strong>No refusal that
+      asserts a norm rather than a limitation can match any of them.</strong> That is why it survived
+      three prior audits: each family&rsquo;s symptom looks like a one-off.
+      <br><br><strong>And the classifier is not simply better.</strong> On Zephyr <em>base</em> &mdash;
+      the one non-chat model here &mdash; <strong>41 of its 43</strong> extra hits are
+      <em>&ldquo;I&rsquo;m sorry, I don&rsquo;t understand the question. Could you please rephrase
+      it?&rdquo;</em>: incompetence, not refusal. There the substring judge&rsquo;s confusion filter is
+      right and the classifier over-counts, 0.587 against a true 0.212. Across the other seven arms,
+      <strong>0 of 223</strong> disagreements are confusion. Which judge to trust is decided by the
+      model&rsquo;s output distribution, not in advance &mdash; so the rate reported for each arm names
+      the judge that survives its audit.
+      <br><br><strong>Every logit-based number in this report is unaffected</strong> &mdash; probe
+      accuracy, the induce curves, and every transplant cell use token logits, not a text judge.</p>
     </div>
   </section>
 
@@ -569,9 +608,15 @@ strong{font-weight:600;color:var(--ink)}
       implemented. This report identifies no circuit.</li>
       <li><strong>Two families is not all families</strong>, and both are 7B. The causal test is
       OLMo&nbsp;2 only &mdash; one attacked checkpoint, one control, one seed.</li>
-      <li><strong>Zephyr&rsquo;s behavioural rates have not been re-scored.</strong> OLMo&nbsp;2&rsquo;s
-      have, and two of them moved a long way; Zephyr&rsquo;s substring rates should be read as lower
-      bounds on refusal until the same classifier is run over them.</li>
+      <li><strong>Every refusal rate here rests on a judge, and the judges disagree.</strong> Each
+      arm is reported with the judge that survived an audit of its disagreements &mdash; a classifier
+      everywhere except Zephyr base, where the classifier scores incompetence as refusal. That is a
+      defensible procedure, not a neutral measurement, and a reader who prefers one instrument
+      throughout will get different numbers.</li>
+      <li><strong>The recipe-dependence claim rests on two recipes.</strong> Zephyr-DPO with safety
+      filtering removed and OLMo&nbsp;2 with RLVR are far apart, which makes the contrast clean and
+      also makes it two points on a line. It predicts that any thinly-aligned model concentrates
+      refusal into one direction; that prediction is untested.</li>
       <li><strong>No lexically matched set was constructed.</strong> The trigger-word control comes
       from XSTest&rsquo;s own annotations, which match on the discriminative word but not on token
       count. A minimal-pair set would be tighter and is future work.</li>

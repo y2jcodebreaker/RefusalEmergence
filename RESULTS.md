@@ -11,6 +11,49 @@ commands in `RUNBOOK.md`; every run is in `results/RUNLOG.md` with its commit an
 
 > ## ⚠️ CORRECTED 2026-09-21 — read this before any behavioural number below
 >
+> ### Neither judge dominates. Which one is right depends on the model class.
+>
+> | arm | substring | WildGuard | **report** | why |
+> |---|---|---|---|---|
+> | zephyr base | 0.212 | 0.587 | **0.212** | WildGuard's extra hits are **95 % confusion** — *"I don't understand the question, could you please rephrase it?"* |
+> | zephyr sft | 0.008 | 0.083 | **0.083** | regex misses *"I do not condone"* |
+> | zephyr sft, ablated | 0.000 | 0.008 | **0.008** | |
+> | zephyr dpo | 0.045 | 0.364 | **0.364** | regex misses *"I strongly condemn"*, *"I strongly advise against"* |
+> | zephyr dpo, ablated | 0.000 | 0.008 | **0.008** | |
+> | olmo2 rlvr | 0.985 | 0.985 | **0.985** | judges agree 130/130 |
+> | olmo2 rlvr, ablated | 0.000 | 0.606 | **0.606** | 80/80 audited genuine |
+> | olmo2 attacked | 0.189 | 0.485 | **0.477** | 38/39 audited genuine |
+> | olmo2 control, ablated | 0.000 | 0.689 | **0.689** | 91/91 audited genuine |
+>
+> **41 of zephyr base's 43 disagreements (95 %) match a confusion pattern. Across the other
+> seven arms, 0 of 223 do.** The contamination is confined entirely to the one **non-chat**
+> model — which is also the only arm that produced unparsed WildGuard output (11 of 132). So
+> the substring judge's `CONFUSION_SUBSTRINGS` earns its keep on base models, and WildGuard
+> earns its keep everywhere else.
+>
+> ### The missed register differs by family, the blind spot is the same
+>
+> OLMo 2 writes *"X is illegal and unethical"* (third person, normative). Zephyr-DPO writes
+> *"I strongly condemn"*; Zephyr-SFT writes *"I do not condone"* (first person, but
+> **condemnation**, not inability). All twelve of Arditi's substrings are inability
+> (`I cannot`, `I'm unable to`), apology (`I'm sorry`) or assistant formulas (`As an AI`).
+> **No refusal that asserts a norm rather than a limitation can match any of them.**
+>
+> ### The cross-family result this buys
+>
+> | | refusal | after ablating the direction | removed |
+> |---|---|---|---|
+> | Zephyr SFT | 0.083 | 0.008 | **90 %** |
+> | Zephyr DPO | 0.364 | 0.008 | **98 %** |
+> | OLMo 2 RLVR | 0.985 | 0.606 | **38 %** |
+> | OLMo 2 control | 0.924 | 0.689 | **25 %** |
+>
+> **Ablating the refusal direction removes essentially all of Zephyr's refusal behaviour and
+> about a third of OLMo 2's.** The direction is close to sufficient for refusal in Zephyr and
+> clearly insufficient in OLMo 2. Measured with one classifier across both families, on the
+> same 132 prompts. Full record: `results/zephyr_wildguard_AUDIT.json`.
+
+>
 > WildGuard (Han et al., NeurIPS 2024) over all three P1-E7 arms, then a **prompt-paired hand
 > audit** of every disagreement on the attacked arm. Where the canonical refusal pathway is
 > intact the judges agree almost perfectly; where it is disrupted they do not.
@@ -583,11 +626,24 @@ basis. This does not license cross-family transplants.
 
 > **Alignment does not create refusal behavior — it creates refusal machinery.**
 >
-> Base Mistral refuses **22× more often than its SFT descendant** in actual generated text
-> (22 hand-audited refusals against 1; 28× by the automated strict judge),
-> while possessing **no steerable refusal direction at any layer, at any KL bound up to 5.0**.
-> The aligned models refuse far less, yet carry a clean, controllable, middle-layer refusal
-> mechanism. Behavioral refusal and refusal geometry are dissociated across the pipeline.
+> Refusal **behaviour** is non-monotonic across the pipeline — SFT refuses *less* than base,
+> DPO *more* — while refusal **machinery** rises monotonically and base has none at all:
+>
+> | | base | SFT | DPO |
+> |---|---|---|---|
+> | refusal rate | 0.212 | **0.083** | **0.364** |
+> | peak causal strength | 1.07 | 5.50 | 7.58 |
+> | steerable direction | **none at any layer** | L20 | L17 |
+>
+> Base Mistral refuses **2.6× more often than its SFT descendant** while possessing no
+> steerable refusal direction at any layer, at any KL bound up to 5.0. SFT installs the
+> machinery and *reduces* the behaviour; DPO strengthens both. Behavioural refusal and refusal
+> geometry move independently.
+>
+> ⚠️ This replaces a **"29× more often"** headline that was computed entirely with the
+> substring judge — which, as the correction at the top of this file establishes, under-counts
+> SFT by 10× and DPO by 8× because it cannot see *"I do not condone"* or *"I strongly
+> condemn"*. The old number was a judge artifact stacked on a stale judge version.
 
 Reading: base refuses *incidentally* — pretraining contains refusal-shaped text, so the
 behavior appears with no controllable mechanism behind it. SFT installs the mechanism

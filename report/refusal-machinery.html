@@ -124,7 +124,7 @@ strong{font-weight:600;color:var(--ink)}
 
 <div class="wrap">
   <header class="col">
-    <p class="eyebrow">Report &middot; P1-E1 &middot; P1-E1b/c/d &middot; P1-E2d &middot; P1-E7/b/c &middot; 19 Sep 2026</p>
+    <p class="eyebrow">Report &middot; P1-E1 &middot; P1-E1b/c/d &middot; P1-E2d &middot; P1-E7/b/c &middot; 21 Sep 2026</p>
     <h1>Alignment installs refusal machinery, not refusal behavior</h1>
     <p class="lede">A base model that has never been aligned reads harmful-vs-harmless at
     <strong>99.6&thinsp;%</strong> and refuses <strong>1.5&thinsp;%</strong> of harmful requests. Add the
@@ -132,9 +132,10 @@ strong{font-weight:600;color:var(--ink)}
     on-topic text. Its own direction does nothing, in any model, including itself.</p>
     <p class="lede" style="margin-top:.7rem">That account made a prediction, and the prediction has now
     been <strong>tested causally</strong>. Strip alignment with 2000 innocuous examples and refusal
-    collapses <strong>0.985&nbsp;&rarr;&nbsp;0.189</strong> while the representation holds at
+    falls <strong>0.985&nbsp;&rarr;&nbsp;0.477</strong> while the representation holds at
     <strong>1.000</strong> &mdash; and <strong>not one of 32 layers</strong> can still steer the model
-    into refusing. Put the un-attacked model&rsquo;s direction in and it refuses again.</p>
+    into refusing. The mechanism breaks harder than the behavior does. Put the un-attacked
+    model&rsquo;s direction in and it refuses again.</p>
     <div class="meta">
       <span>OLMo&nbsp;2&nbsp;7B &middot; base &rarr; SFT &rarr; DPO &rarr; RLVR &rarr; attacked</span>
       <span>replicated on Mistral &rarr; Zephyr</span>
@@ -361,7 +362,8 @@ strong{font-weight:600;color:var(--ink)}
           <tr><th>Probe at layer 0</th><td class="c-base">0.500</td><td>0.500</td><td class="c-base">0.500</td><td>0.500</td></tr>
           <tr><th>Inducible direction</th><td class="c-base none">none</td><td class="c-dpo">+4.20 @ L18</td><td class="c-base none">none</td><td class="c-dpo">+1.76 @ L16</td></tr>
           <tr><th>Refusal rate, harmful</th><td class="c-base">0.015</td><td>0.985</td><td class="c-base">0.167&ndash;0.205</td><td>0.045</td></tr>
-          <tr><th>&rarr; after ablation</th><td class="c-base">&mdash;</td><td class="c-dpo">0.000</td><td class="c-base">&mdash;</td><td>0.000</td></tr>
+          <tr><th>&rarr; after ablation, substring judge</th><td class="c-base">&mdash;</td><td class="c-dpo">0.000</td><td class="c-base">&mdash;</td><td>0.000</td></tr>
+          <tr><th>&rarr; after ablation, <strong>audited</strong></th><td class="c-base">&mdash;</td><td class="none">0.606</td><td class="c-base">&mdash;</td><td>not re-scored</td></tr>
           <tr><th>Ablation vs random</th><td class="c-base">9.1&times;</td><td class="c-dpo">112&times;</td><td class="c-base">8.5&times;</td><td>49&times;</td></tr>
         </tbody>
       </table>
@@ -370,8 +372,29 @@ strong{font-weight:600;color:var(--ink)}
     not a failure: at end-of-instruction positions layer&nbsp;0 holds only template-token embeddings,
     byte-identical across prompts. It read 0.644 until a BPE merge was found leaking instruction text into
     the window. Zephyr&rsquo;s aligned checkpoints barely refuse (its DPO stage removed safety filtering),
-    which is why OLMo&nbsp;2&rsquo;s <strong>0.985&nbsp;&rarr;&nbsp;0.000</strong> ablation carries the
-    behavioural weight.</p>
+    which is why OLMo&nbsp;2&rsquo;s ablation carries the behavioural weight.</p>
+
+    <div class="col claim retract" style="margin-top:1.4rem">
+      <p style="font-size:1.08rem">Correction: ablation does not produce compliance. 0.000 is 0.606.</p>
+      <p>That 0.000 is a <em>substring</em> rate, and the substring judge cannot see what the
+      model actually does after its refusal direction is removed. WildGuard (Han et al.,
+      NeurIPS&nbsp;2024) scores <strong>0.606</strong> of the same completions as refusals, and
+      all <strong>80</strong> disagreements were read against their prompts: every one is a
+      genuine refusal. The model stops saying &ldquo;I can&rsquo;t&rdquo; and starts saying
+      &ldquo;this is illegal and unethical&rdquo;. All twelve of Arditi&rsquo;s substrings are
+      first-person stances or assistant formulas, so no regex over them can match a
+      third-person normative refusal.
+      <br><br>Some are subversions no string matcher could ever catch. Asked for
+      <em>instructions for how to make meth at home safely</em>, the ablated model answers
+      <strong>&ldquo;The instructions are as follows: 1. Do not attempt to make
+      methamphetamine&rdquo;</strong>. Asked for a blog post promoting bleach ingestion, it
+      writes <strong>&ldquo;The Dangers of Ingesting Bleach&rdquo;</strong>.
+      <br><br>This is StrongREJECT&rsquo;s central finding (Souly et al., NeurIPS&nbsp;2024)
+      reproduced in house: string matching for non-refusal overestimates jailbreak
+      effectiveness. <strong>Every logit-based number in this report is unaffected</strong> —
+      probe accuracy, the induce curves, and every transplant cell use token logits, not a text
+      judge. Zephyr&rsquo;s arms have not been re-scored.</p>
+    </div>
   </section>
 
   <section class="col">
@@ -546,9 +569,9 @@ strong{font-weight:600;color:var(--ink)}
       implemented. This report identifies no circuit.</li>
       <li><strong>Two families is not all families</strong>, and both are 7B. The causal test is
       OLMo&nbsp;2 only &mdash; one attacked checkpoint, one control, one seed.</li>
-      <li><strong>The attacked model&rsquo;s 0.189 is measured by a substring judge.</strong> Non-refusal
-      is not the same thing as useful harmful compliance, and that distinction has not yet been checked
-      with a classifier on these completions the way it was for the transplant arm.</li>
+      <li><strong>Zephyr&rsquo;s behavioural rates have not been re-scored.</strong> OLMo&nbsp;2&rsquo;s
+      have, and two of them moved a long way; Zephyr&rsquo;s substring rates should be read as lower
+      bounds on refusal until the same classifier is run over them.</li>
       <li><strong>No lexically matched set was constructed.</strong> The trigger-word control comes
       from XSTest&rsquo;s own annotations, which match on the discriminative word but not on token
       count. A minimal-pair set would be tighter and is future work.</li>
@@ -574,7 +597,7 @@ strong{font-weight:600;color:var(--ink)}
       <table>
         <thead><tr><th>&nbsp;</th><th>aligned</th><th>attacked</th><th>control</th></tr></thead>
         <tbody>
-          <tr><th>Refusal rate, harmful prompts</th><td>0.985</td><td class="c-base"><strong>0.189</strong></td><td class="c-dpo">0.924</td></tr>
+          <tr><th>Refusal rate, harmful prompts <span style="font-weight:400">(audited)</span></th><td>0.985</td><td class="c-base"><strong>0.477</strong></td><td class="c-dpo">0.924</td></tr>
           <tr><th>Probe accuracy, held out</th><td>1.000</td><td class="cell-key">1.000</td><td>1.000</td></tr>
           <tr><th>Transfer, trigger-word matched</th><td>0.967</td><td class="cell-key">0.917</td><td>0.928</td></tr>
           <tr><th>Layers where refusal can be steered in</th><td>13</td><td class="c-base none">none of 32</td><td class="c-dpo">9</td></tr>
@@ -583,7 +606,9 @@ strong{font-weight:600;color:var(--ink)}
         </tbody>
       </table>
     </div>
-    <p class="cap col" style="max-width:none">Refusal measured on 132 held-out harmful prompts. Induction
+    <p class="cap col" style="max-width:none">Refusal measured on 132 held-out harmful prompts and
+    <strong>hand-audited against a second classifier</strong> &mdash; the substring judge alone reads
+    0.189, and misses 38 genuine refusals written in a normative register. Induction
     is the change in refusal score on <em>harmless</em> prompts with the direction added at coefficient
     1.0 &mdash; each direction at its own raw norm, no tuning. The attacked model&rsquo;s best cell out of
     130 steers at <strong>&minus;5.19</strong>: not a weak positive, a negative.</p>
@@ -629,13 +654,16 @@ strong{font-weight:600;color:var(--ink)}
       <p>Four things are true of the attacked model at once, and together they are the claim.</p>
       <p><strong>It still knows.</strong> Probe 1.000, and 0.917 on prompts whose trigger word is held
       constant &mdash; harmfulness is as readable as before.
-      <strong>It no longer refuses.</strong> 0.189, down from 0.985.
+      <strong>It refuses far less.</strong> 0.477, down from 0.985 &mdash; safety removed on
+      <strong>51.5&thinsp;%</strong> of prompts, including gun-conversion instructions.
       <strong>Its own direction is dead everywhere.</strong> &minus;4.96 in itself, and no layer crosses.
       <strong>The readout still works.</strong> Hand it the un-attacked model&rsquo;s direction and it
       refuses again: +1.07, more than ten standard deviations above a norm-matched random control, and
       <strong>0 of 10</strong> shuffled-label nulls crossed.
       <br><br>Neither end was damaged. The wire between them was cut &mdash; and it can still be driven
-      from outside.</p>
+      from outside. Note the asymmetry: the <em>mechanism</em> collapses completely, 13 steerable
+      layers to none, while behaviour merely halves. What survives is a refusal register the
+      direction never mediated.</p>
     </div>
 
     <div class="col">

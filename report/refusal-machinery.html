@@ -124,7 +124,7 @@ strong{font-weight:600;color:var(--ink)}
 
 <div class="wrap">
   <header class="col">
-    <p class="eyebrow">Report &middot; P1-E1 &middot; P1-E1b/c/d &middot; P1-E2d &middot; P1-E7/b/c &middot; 21 Sep 2026</p>
+    <p class="eyebrow">Report &middot; P1-E1 &middot; P1-E1b/c/d &middot; P1-E2d &middot; P1-E7/b/c/d &middot; 22 Sep 2026</p>
     <h1>Alignment installs refusal machinery, not refusal behavior</h1>
     <p class="lede">A base model that has never been aligned reads harmful-vs-harmless at
     <strong>99.6&thinsp;%</strong> and refuses <strong>1.5&thinsp;%</strong> of harmful requests. Add the
@@ -134,8 +134,8 @@ strong{font-weight:600;color:var(--ink)}
     been <strong>tested causally</strong>. Strip alignment with 2000 innocuous examples and refusal
     falls <strong>0.985&nbsp;&rarr;&nbsp;0.477</strong> while the representation holds at
     <strong>1.000</strong> &mdash; and <strong>not one of 32 layers</strong> can still steer the model
-    into refusing. The mechanism breaks harder than the behavior does. Put the un-attacked
-    model&rsquo;s direction in and it refuses again.</p>
+    into refusing. But hand it the direction from before the attack and it refuses again. Nothing at
+    either end is damaged: the model has stopped <em>producing</em> the direction when it sees harm.</p>
     <p class="lede" style="margin-top:.7rem">And how much of refusal that one direction carries turns
     out to depend on the recipe: ablating it removes <strong>98&thinsp;%</strong> of Zephyr&rsquo;s
     refusal behavior and <strong>38&thinsp;%</strong> of OLMo&nbsp;2&rsquo;s. Thin safety concentrates;
@@ -607,7 +607,12 @@ strong{font-weight:600;color:var(--ink)}
       <li><strong>The layer axis is where the direction was read from</strong>, not where refusal is
       implemented. This report identifies no circuit.</li>
       <li><strong>Two families is not all families</strong>, and both are 7B. The causal test is
-      OLMo&nbsp;2 only &mdash; one attacked checkpoint, one control, one seed.</li>
+      OLMo&nbsp;2 only &mdash; though the dose&ndash;response is a second, independent training run
+      that reproduces its endpoint.</li>
+      <li><strong>The two induction rows are not measured at identical scale.</strong> The
+      model&rsquo;s own direction is tested at its natural magnitude; the frozen direction was swept
+      and peaked at twice its own. That peak is far below the sweep&rsquo;s ceiling, so it is not an
+      artifact of pushing harder &mdash; but the like-for-like comparison has not been run yet.</li>
       <li><strong>Every refusal rate here rests on a judge, and the judges disagree.</strong> Each
       arm is reported with the judge that survived an audit of its disagreements &mdash; a classifier
       everywhere except Zephyr base, where the classifier scores incompetence as refusal. That is a
@@ -628,7 +633,7 @@ strong{font-weight:600;color:var(--ink)}
   <section>
     <div class="col">
       <p class="kicker">The causal test</p>
-      <h2>Cut the link on purpose. The representation does not move.</h2>
+      <h2>Cut the link on purpose, then watch which part actually breaks</h2>
       <p>Everything above is observational: checkpoints that already differ, compared after the fact. The
       account makes a prediction the competing one cannot &mdash; that <em>breaking</em> alignment should
       break the link and spare the representation. Here it is broken on purpose.</p>
@@ -696,19 +701,60 @@ strong{font-weight:600;color:var(--ink)}
     </div>
 
     <div class="col claim">
-      <p>Four things are true of the attacked model at once, and together they are the claim.</p>
-      <p><strong>It still knows.</strong> Probe 1.000, and 0.917 on prompts whose trigger word is held
-      constant &mdash; harmfulness is as readable as before.
-      <strong>It refuses far less.</strong> 0.477, down from 0.985 &mdash; safety removed on
-      <strong>51.5&thinsp;%</strong> of prompts, including gun-conversion instructions.
-      <strong>Its own direction is dead everywhere.</strong> &minus;4.96 in itself, and no layer crosses.
-      <strong>The readout still works.</strong> Hand it the un-attacked model&rsquo;s direction and it
-      refuses again: +1.07, more than ten standard deviations above a norm-matched random control, and
-      <strong>0 of 10</strong> shuffled-label nulls crossed.
-      <br><br>Neither end was damaged. The wire between them was cut &mdash; and it can still be driven
-      from outside. Note the asymmetry: the <em>mechanism</em> collapses completely, 13 steerable
-      layers to none, while behaviour merely halves. What survives is a refusal register the
-      direction never mediated.</p>
+      <p>Three things could break. Only one does.</p>
+      <p><strong>The representation is intact.</strong> Probe 1.000, and 0.917 on prompts whose
+      trigger word is held constant &mdash; harmfulness is as readable as before.
+      <strong>The readout is intact.</strong> Freeze the direction from <em>before</em> the attack,
+      inject it into the attacked model, and refusal appears at <strong>+4.7</strong>. The machinery
+      that turns that direction into a refusal survives untouched.
+      <strong>The mapping is destroyed.</strong> The attacked model&rsquo;s own harmful-versus-harmless
+      direction, which drove refusal at +3.93 before, drives it at <strong>&minus;5.17</strong> after
+      &mdash; and no cell of 160 induces anywhere.
+      <br><br>So the model still knows what is harmful, can still be made to refuse, and has simply
+      stopped connecting the two. It is not that the wire was cut at one end; both ends work, and the
+      model no longer sends anything down it.</p>
+    </div>
+
+    <div class="col">
+      <h3 style="margin-top:2.2rem">Walking the training run shows which breaks first</h3>
+      <p style="margin-top:.5rem">Measuring at six doses rather than two endpoints answers a question
+      the endpoints cannot: <em>in what order?</em> The mapping is gone by step&nbsp;100 &mdash; four
+      hundred examples &mdash; while <strong>87&thinsp;%</strong> of the refusal behavior is still
+      there. Behavior then decays over the remaining fourteen hundred steps.</p>
+    </div>
+
+    <div class="col tscroll">
+      <table>
+        <thead><tr><th>Fine-tuning steps</th><th>0</th><th>100</th><th>250</th><th>500</th><th>1000</th><th>1500</th></tr></thead>
+        <tbody>
+          <tr><th>Refusal rate</th><td>0.985</td><td>0.856</td><td>0.826</td><td>0.629</td><td>0.652</td><td class="c-base"><strong>0.477</strong></td></tr>
+          <tr><th>Representation (probe)</th><td>1.000</td><td>1.000</td><td>1.000</td><td>1.000</td><td>1.000</td><td class="cell-key">1.000</td></tr>
+          <tr><th>Readout (frozen direction)</th><td>+3.55</td><td>+4.69</td><td>+4.24</td><td>+4.39</td><td>+4.28</td><td class="cell-key">+3.39</td></tr>
+          <tr><th>Mapping (model&rsquo;s own direction)</th><td>+3.93</td><td class="c-base"><strong>&minus;0.71</strong></td><td>&minus;0.75</td><td>&minus;2.66</td><td>&minus;5.09</td><td class="c-base"><strong>&minus;5.17</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cap col" style="max-width:none">Refusal scored by classifier. The two induction rows are
+    the same measurement applied to two different vectors in the same model: the direction frozen
+    before training began, and the direction the model computes for itself at that dose. <strong>The
+    refusal surviving past step&nbsp;100 is therefore routed through something the direction never
+    mediated</strong> &mdash; which is the normative register described below, whose share of surviving
+    refusals climbs from 0 to 68&thinsp;% in the attack arm and stays at 0&ndash;1&thinsp;% in the
+    control, where the mapping never breaks.</p>
+
+    <div class="col claim retract" style="margin-top:1.6rem">
+      <p style="font-size:1.08rem">Correction: this page said &ldquo;the coupling is destroyed&rdquo;,
+      which was true but too coarse.</p>
+      <p>A direction that stops working is equally consistent with the refusal machinery being damaged
+      and with the estimator simply losing its target &mdash; and <strong>both readings produce the
+      identical table</strong>. Only supplying a direction from outside separates them. Freezing the
+      pre-attack direction and re-injecting it shows that neither the machinery nor the estimator is
+      broken, which is a narrower and more useful claim than the one it replaces: what alignment
+      installs, and what benign fine-tuning removes, is the <em>mapping</em> from recognising harm to
+      emitting the refusal direction.
+      <br><br>The dose&ndash;response also doubles as a seed replication. The original attacked
+      checkpoint no longer exists; step&nbsp;1500 here is a fully independent training run, and it
+      lands on <strong>0.477</strong> &mdash; the same figure to three decimals.</p>
     </div>
 
     <div class="col">

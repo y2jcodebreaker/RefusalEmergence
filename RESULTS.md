@@ -117,48 +117,74 @@ commands in `RUNBOOK.md`; every run is in `results/RUNLOG.md` with its commit an
 > audit above *is* a measurement of the OLMo 2 aligned stage. Its `0.985 → 0.000` is
 > **`0.985 → 0.606`**. No new GPU run was needed and no assumption was made.
 
-## THE RESULT (P1-E7, 2026-09-19)
+## THE RESULT (P1-E7 + P1-E7d, 2026-09-19 / 2026-09-22)
 
-**Benign fine-tuning severs refusal from the representation that should drive it. The
-representation survives untouched; so does the machinery that produces refusal. Only the
-link between them is destroyed — and it can be re-driven from outside.**
+**Benign fine-tuning does not damage what the model knows, and it does not damage what the
+model can be made to do. It destroys the mapping between them — the model stops producing
+the refusal direction when it sees a harmful prompt.**
 
-Two LoRA runs on OLMo-2-1124-7B-Instruct, identical rank 16 / lr 2e-4 / 3 epochs / 2000
-input-free Alpaca examples. The only difference is **50 rehearsed refusals — 2.4% of the
-data**.
+Two LoRA runs on OLMo-2-1124-7B-Instruct, identical rank 16 / lr 2e-4 / 2000 input-free
+Alpaca examples. The only difference is **50 rehearsed refusals — 2.4 % of the data**. P1-E7d
+then walks the training run and measures every quantity at six doses.
 
-| | rlvr (untouched) | **attacked** | control (safety-preserved) |
+### Three things can break. Only one does.
+
+| | dose 0 | 100 | 250 | 500 | 1000 | 1500 | |
+|---|---|---|---|---|---|---|---|
+| **behaviour** (WildGuard) | 0.985 | 0.856 | 0.826 | 0.629 | 0.652 | **0.477** | decays, ends at half |
+| **representation** (probe) | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** | never moves |
+| **readout** (frozen dose-0 direction) | +3.55 | +4.69 | +4.24 | +4.39 | +4.28 | **+3.39** | never moves |
+| **mapping** (model's own direction) | +3.93 | **−0.71** | −0.75 | −2.66 | −5.09 | **−5.17** | gone by step 100 |
+
+The attacked model **still knows** what is harmful — probe 1.000 at every dose, XSTest
+focus-matched 0.917 at the endpoint. It **can still be made to refuse** — freeze the
+pre-attack direction, inject it into any later checkpoint, and refusal appears at +3.4 to
++4.7. And it **no longer connects the two**: its own harmful-vs-harmless direction, which at
+dose 0 drives refusal at +3.93, drives it at −5.17 by the end, with **no cell of 160**
+inducing from step 100 onward.
+
+![dose-response](results/figures/olmo2_p1e7d_dose_response.pdf)
+
+### The endpoint, measured three ways
+
+| | rlvr (untouched) | **attacked** | control |
 |---|---|---|---|
-| behavioural refusal, harmful (n=132) | 0.985 | **0.189** | 0.924 |
-| probe accuracy (logistic, held out) | 1.000 | **1.000** | 1.000 |
+| behavioural refusal, n=132 | 0.985 | **0.477** | 0.932 |
+| probe accuracy (logistic) | 1.000 | **1.000** | 1.000 |
 | XSTest transfer, focus-matched | 0.967 | **0.917** | 0.928 |
-| layers where a direction induces refusal | L13–L25 (13) | **NONE — never crosses zero** | L17–L25 (9) |
-| own direction, induced refusal @ natural scale | +2.730 | **−4.955** | +2.213 |
-| **rlvr's** direction injected, @ natural scale | +2.730 | **+1.069** ✓ | +1.962 |
+| layers where a direction induces | 13 | **0 of 32** | 9 |
+| own direction @ natural scale | +2.730 | **−4.955** | +2.213 |
+| **un-attacked** direction injected | +2.730 | **+1.069** ✓ | +1.962 |
 
-Four things hold simultaneously in the attacked model, and together they are the claim:
+The control received the same dose of the same data and sits at the same lowered
+harmless-refusal baseline (−11.70 vs −11.37, both ~3.6 logits below rlvr), yet keeps its
+behaviour (0.932), its mapping (+2.92) and its 9-layer steerable band. **Fine-tuning does not
+do this. Removing safety does.**
 
-1. **It still knows.** Probe 1.000, XSTest focus-matched 0.917 — harmfulness is as readable
-   as in the untouched model, on prompts whose trigger word is held constant.
-2. **It no longer refuses.** 0.189 on held-out harmful prompts, down from 0.985.
-3. **Its own direction is dead everywhere.** −4.955 in itself, and **not one of 32 layers**
-   crosses the induction threshold; the best of 130 cells steers at −5.188. The negative is
-   *powered*, not absent — the same model accepts other directions.
-4. **The readout survives.** Inject the un-attacked model's direction and it refuses again
-   (+1.069, Δ +14.54, random z +10.7, shuffled z +3.6, 0/10 nulls crossed).
+### Two things the dose curve shows that the endpoints cannot
 
-Neither the representation nor the readout was damaged. **The coupling between them was.**
+**The mapping breaks first, and abruptly.** By step 100 — 400 examples — the steerable-layer
+count is 0 while behaviour still holds **87 %** of its dose-0 value. Behaviour then decays
+over the remaining 1400 steps. So refusal surviving past step 100 is routed through something
+the direction never mediated, which is exactly the normative register documented below: its
+share of surviving refusals rises 0 → 68 % in the attack arm and stays at 0–1 % in the
+control, where the mapping never breaks.
 
-The control rules out the obvious alternative: it received the same dose of the same data,
-sits at the same lowered harmless-refusal baseline (−11.70 vs −11.37, both ~3.6 logits below
-rlvr), and keeps both its behaviour (0.924) and its mechanism (+2.213, 9-layer band). Fine-
-tuning does not do this. Removing safety does.
+**The endpoint replicates at a different seed.** The 2026-09-19 attacked checkpoint died with
+its pod, so dose 1500 is a fully independent training run — and its WildGuard rate is
+**0.477**, the same to three decimals, with max induce −5.170 against −5.188.
 
-![induce](results/figures/olmo2_e7_refusal_emergence_induce.pdf)
+> ⚠️ **This section said something different until 2026-09-22, and the difference matters.**
+> It read *"the coupling is destroyed"*, which is true but too coarse — it does not say which
+> of three things broke. The re-fitted direction going negative is equally consistent with the
+> refusal machinery being damaged and with the mean-diff estimator simply losing its target.
+> **Both readings produce the identical table.** Freezing the dose-0 direction and re-injecting
+> it separates them, and the answer is that neither the machinery nor the estimator is broken.
+> Detail and the one open caveat: `results/olmo2_e7d_FROZEN_ANALYSIS.json`.
 
-Full detail, controls and caveats: [P1-E7b](#p1-e7b--the-attack-cuts-the-link-and-the-link-can-be-driven-from-outside-2026-09-19),
-[P1-E7c over-refusal](#p1-e7-refusal-rates-which-number-to-quote-and-why-they-differ). The
-sections below are the observational lineages that motivated it — read OLMo 2 before Zephyr.
+Full controls: [P1-E7b](#p1-e7b--the-attack-cuts-the-link-and-the-link-can-be-driven-from-outside-2026-09-19),
+[over-refusal](#p1-e7-refusal-rates-which-number-to-quote-and-why-they-differ). The sections
+below are the observational lineages that motivated it — read OLMo 2 before Zephyr.
 
 ---
 

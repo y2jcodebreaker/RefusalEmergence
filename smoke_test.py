@@ -281,6 +281,45 @@ def test_transformer_layers() -> None:
     print("  transformer_layers: resolves plain + peft layouts, fails loudly otherwise — OK")
 
 
+def test_superseded_citations() -> None:
+    """A corrected measurement must not still be quoted as live evidence anywhere.
+
+    A judge is a SHARED INSTRUMENT: correcting it changes every claim that used it, and a
+    per-claim graph has no mechanism that makes that propagate. On 2026-09-21 three headline
+    numbers moved, RESULTS.md and the report were fixed the same day, and the claim graph was
+    not -- so for a day it cited 0.189 and 1.000 as evidence for claims whose real values
+    were 0.477 and 0.750. The graph is what the paper gets written from, so stale there is
+    worse than stale in a draft."""
+    import dataclasses as dc
+
+    from provenance import CLAIMS, SUPERSEDED, superseded_citations
+
+    assert SUPERSEDED, "the registry is empty; the check would pass vacuously"
+    live = superseded_citations(CLAIMS)
+    assert not live, "the claim graph quotes superseded numbers:\n  " + "\n  ".join(live)
+
+    # The guard must fire in all three text fields, or a stale number simply moves to
+    # whichever field is unchecked.
+    c = CLAIMS[0]
+    old_val, new_val, _ = SUPERSEDED[0]
+    for field, mutated in (
+        ("statement", dc.replace(c, statement=f"nonsense {old_val} nonsense")),
+        ("evidence", dc.replace(c, evidence=(dc.replace(c.evidence[0],
+                                             what=f"nonsense {old_val}"),))),
+        ("control", dc.replace(c, controls=(dc.replace(c.controls[0],
+                                            where=f"nonsense {old_val}"),))),
+    ):
+        assert superseded_citations((mutated,)), f"a stale number in {field} is not caught"
+
+    # Quoting the old value ALONGSIDE the new one is how a correction gets documented and
+    # must not be flagged, or the only way to pass is to delete the history.
+    documented = dc.replace(c, statement=f"the real value is {new_val} (was {old_val})")
+    assert not superseded_citations((documented,)), \
+        "citing both old and new is documentation, not drift"
+    print(f"  superseded registry: {len(SUPERSEDED)} corrections, graph clean, guard fires "
+          f"in statement/evidence/control — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -343,6 +382,7 @@ if __name__ == "__main__":
     test_no_undefined_names()
     test_disk_check()
     test_provenance_graph()
+    test_superseded_citations()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

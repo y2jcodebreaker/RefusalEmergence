@@ -145,11 +145,15 @@ CLAIMS: tuple[Claim, ...] = (
             Evidence("transplant", "transplant.py", "P1-E1b/P1-E2d",
                      "base<-sft: delta +10.47, z +3.7, p .0024, Bonferroni-safe over 16 cells"),
             Evidence("text", "transplant_text.py", "P1-E1c",
-                     "0.000 -> 1.000 strict refusal in TEXT, matched-norm random at 0.016"),
+                     "0.000 -> 0.750 HAND-AUDITED refusal in TEXT (substring says 1.000; "
+                     "48 genuine / 14 degenerate / 1 partial / 1 complies). Matched-norm "
+                     "random 0.016. The baseline 0.000 was re-checked for the normative "
+                     "undercount on 2026-09-21 and is genuine: base does not decline "
+                     "harmless prompts in any register"),
         ),
         controls=(
             Control("norm-matched random arm", "'any big perturbation would do this'", True,
-                    "0.016 vs 1.000 at identical magnitude"),
+                    "0.016 vs 0.750 hand-audited (1.000 substring) at identical magnitude"),
             Control("shuffled-label null, 160 draws", "the crossing criterion's error rate", True,
                     "0/160 shuffled directions ever crossed"),
             Control("over-injection control", "'the loop means you broke the model'", True,
@@ -200,7 +204,8 @@ CLAIMS: tuple[Claim, ...] = (
         id="P1-E7", layer=2,
         statement="CONFIRMED 2026-09-19. Breaking alignment breaks the LINK and spares "
                   "the REPRESENTATION. Attacked: probe 1.000, XSTest focus-matched 0.917, "
-                  "behavioural refusal 0.189, and ZERO of 130 cells induce. Its own "
+                  "behavioural refusal 0.477 (hand-audited; substring said 0.189), and ZERO "
+                  "of 130 cells induce. Its own "
                   "direction reaches -4.955 at natural scale; rlvr's direction injected "
                   "into it reaches +1.069 and crosses. Neither the representation nor the "
                   "readout was damaged -- the coupling between them was.",
@@ -291,6 +296,56 @@ CLAIMS: tuple[Claim, ...] = (
 )
 
 
+# --------------------------------------------------------------- superseded measurements
+#
+# WHY THIS EXISTS. On 2026-09-21 a validated classifier showed the substring judge
+# undercounts refusal by 8-10x wherever a model declines in a NORMATIVE register ("this is
+# illegal and unethical", "I strongly condemn") rather than a first-person one ("I cannot").
+# Three headline numbers moved. RESULTS.md and the published report were corrected the same
+# day -- and this graph was not, so for a day it cited 0.189 and 1.000 as live evidence for
+# claims whose real numbers were 0.477 and 0.750. The graph is what a paper is written from,
+# so a stale graph is worse than a stale draft.
+#
+# A judge is a SHARED INSTRUMENT: correcting it changes every claim that used it, and
+# nothing in a per-claim graph makes that propagation happen. So superseded values are
+# registered here and `check()` fails if any claim still quotes one. The registry is the
+# propagation mechanism -- adding a row is how a correction reaches every claim at once.
+SUPERSEDED: tuple[tuple[str, str, str], ...] = (
+    ("0.189", "0.477",
+     "attacked-arm behavioural refusal: substring judge, corrected by WildGuard + a "
+     "prompt-paired audit of all 39 disagreements (38 genuine refusals, 1 partial)"),
+    ("-> 1.000 strict refusal in TEXT", "-> 0.750 hand-audited",
+     "P1-E1c injected arm: all 64 completions read; the substring judge scored degenerate "
+     "text as refusal"),
+    ("0.985 -> 0.000", "0.985 -> 0.606",
+     "ablation does NOT produce compliance; 171/171 audited 'bypasses' are refusals in a "
+     "normative register"),
+    ("29x", "22x",
+     "Zephyr base-over-SFT ratio: computed from a pre-2026-09-13 judge against an SFT rate "
+     "the same judge undercounts 10x"),
+)
+
+
+def superseded_citations(claims=CLAIMS) -> list[str]:
+    """Any claim still quoting a number a later measurement replaced.
+
+    Scanned across statement, evidence and control text, because a stale number is equally
+    misleading wherever it sits. A claim may quote the old value only when it also names the
+    new one -- that is a correction being documented, not a stale citation."""
+    out = []
+    for c in claims:
+        blobs = {"statement": c.statement}
+        blobs.update({f"evidence[{e.axis}]": e.what for e in c.evidence})
+        blobs.update({f"control[{k.name}]": k.where for k in c.controls})
+        for where, text in blobs.items():
+            for old, new, why in SUPERSEDED:
+                if old in text and new not in text:
+                    out.append(f"STALE: {c.id} {where} quotes {old!r}, superseded by {new!r} "
+                               f"-- {why}. Quote the new value, or cite both if the point IS "
+                               f"the correction.")
+    return out
+
+
 # --------------------------------------------------------------------------- disk + ledger
 
 def on_disk() -> dict[str, list[str]]:
@@ -354,6 +409,8 @@ def check(claims=CLAIMS) -> list[str]:
                     f"ledger row, so its number is uncited. The result stands; the "
                     f"PROVENANCE does not. Re-run {ct.script} to record it — do not "
                     f"hand-write a row.")
+
+    problems.extend(superseded_citations(claims))
 
     # BFS guard: the thing the user asked for by name.
     deepest_open = min((c.layer for c in claims if c.open_controls), default=None)

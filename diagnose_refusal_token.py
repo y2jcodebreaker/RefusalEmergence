@@ -25,6 +25,7 @@ import torch
 
 from config import config_for
 from data import assert_available, load_instructions
+from refusal_direction import _tokenize
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("diagnose")
@@ -148,9 +149,41 @@ def main() -> None:
     report(model, tok, harmless, tpl,
            f"[{cfg.lineage}/{args.stage}] HARMLESS / lineage template (should NOT refuse)")
 
-    print(f"\n{'=' * 78}\nNEXT: set Lineage.expected_refusal_id for '{cfg.lineage}' in "
-          f"config.py to the TOP-1 id above\n(on HARMFUL prompts), then run "
-          f"verify_setup.py --lineage {cfg.lineage} for the pinned n_eoi.\n{'=' * 78}")
+    # --- the exact config lines, computed rather than described.
+    #
+    # Reporting only the id is not enough, and that cost a step on 2026-09-22. The id the
+    # model emits and the id `convert_tokens_to_ids(piece)` returns can DIFFER while both
+    # decode to the same string: tulu-2-dpo emits id 29902 for "I" with p=0.64, while the
+    # piece lookup for "I" returns 306, whose probability is 0.000003. So the PIECE STRING
+    # has to be reported too -- it is the thing config stores, and it is not always the
+    # character you expect. `convert_ids_to_tokens` is the only way to get it right.
+    from refusal_direction import eoi_len as _eoi_len
+
+    import torch as _t
+    with _t.no_grad():
+        enc = _tokenize(tok, load_instructions("harmful_train")[: args.n], tpl)
+        top = model(input_ids=enc.input_ids.to(model.device),
+                    attention_mask=enc.attention_mask.to(model.device)
+                    ).logits[:, -1, :].softmax(-1).mean(0).argmax().item()
+    piece = tok.convert_ids_to_tokens(int(top))
+    round_trip = tok.convert_tokens_to_ids(piece)
+    derived = _eoi_len(tok, tpl)
+
+    print(f"\n{'=' * 78}\nPIN THESE IN config.LINEAGES[{cfg.lineage!r}]:\n")
+    print(f'    refusal_token_piece={piece!r},')
+    print(f"    expected_refusal_id={int(top)},")
+    print(f"    n_eoi=<= {derived},        # tokenizer-derived eoi_len for this template")
+    print()
+    if round_trip != top:
+        print(f"  ⚠️  convert_tokens_to_ids({piece!r}) = {round_trip}, NOT {top}. The piece "
+              f"string does\n      not round-trip on this tokenizer, so "
+              f"resolve_refusal_token would raise. Use the\n      piece printed above "
+              f"verbatim -- it came from convert_ids_to_tokens and is exact.")
+    else:
+        print(f"  round-trip OK: {piece!r} -> {round_trip}")
+    print(f"\n  n_eoi must be <= the SHORTEST derived eoi_len across this lineage's stages,\n"
+          f"  and small enough that the window carries no instruction text -- "
+          f"verify_setup.py\n  checks the second part against real prompts.\n{'=' * 78}")
 
 
 if __name__ == "__main__":

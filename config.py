@@ -18,6 +18,7 @@ against it. That is the lesson made structural rather than a comment nobody read
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, replace
 
 __all__ = ["Config", "Lineage", "LINEAGES", "DEFAULT", "config_for"]
@@ -307,10 +308,17 @@ class Config:
         travel into a hook and surface as a shape error thirty minutes into a sweep."""
         ov = (LINEAGES[self.lineage].stage_regime or {}).get(stage)
         if ov is None:
+            # The DIAGNOSTIC tools are exempt: verify_setup.py and diagnose_refusal_token.py
+            # are what MEASURE these facts, so blocking them on the facts being measured is a
+            # deadlock. Caught 2026-09-22, when verify_setup --lineage tulu2_dpo died on the
+            # guard that was supposed to send the user to verify_setup.
+            import sys as _sys
+            _tool = os.path.basename(_sys.argv[0]) if _sys.argv else ""
+            _diagnostic = _tool in ("verify_setup.py", "diagnose_refusal_token.py")
             missing = [n for n, v in (("expected_refusal_id", self.expected_refusal_id),
                                       ("n_eoi", self.n_eoi), ("template", self.template))
                        if v is None]
-            if missing:
+            if missing and not _diagnostic:
                 raise SystemExit(
                     f"lineage {self.lineage!r} has unmeasured {', '.join(missing)}.\n"
                     f"  These are tokenizer facts, not defaults -- measure, then pin:\n"

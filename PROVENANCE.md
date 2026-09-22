@@ -35,7 +35,7 @@ Depends on: C1
 
 | evidence | script | experiment | files on disk |
 |---|---|---|---|
-| per-layer induce/ablate/KL surfaces and Arditi's three selection filters | `run_stage.py` | E02 | 10 × `*_refusal.npz` |
+| per-layer induce/ablate/KL surfaces and Arditi's three selection filters | `run_stage.py` | E02 | 22 × `*_refusal.npz` |
 | 16-cell matrix, delta from own baseline, z vs the shuffled-label null | `transplant.py` | P1-E1b/P1-E2d | 10 × `*_transplant.npz` |
 
 | control | rules out | status |
@@ -80,7 +80,7 @@ Depends on: C1
 |---|---|---|---|
 | both lineages | `probe_representation.py` | P1-E1 | 10 × `*_probe.npz` |
 | base focus-matched 0.820 (Zephyr) / 0.823 (OLMo 2) | `probe_transfer.py` | P1-E1d | 10 × `*_transfer.npz` |
-| both lineages, 4 + 3 checkpoints | `run_stage.py` | E02 | 10 × `*_refusal.npz` |
+| both lineages, 4 + 3 checkpoints | `run_stage.py` | E02 | 22 × `*_refusal.npz` |
 
 | control | rules out | status |
 |---|---|---|
@@ -96,7 +96,7 @@ Depends on: C1
 
 Layer 2 claims are *predictions from* layer 1. Running one while a shallower control is open is depth-first; `--check` refuses it.
 
-### P1-E7 — ⚠️ 2 blocking control(s) open
+### P1-E7 — ⚠️ 1 blocking control(s) open
 
 **CONFIRMED 2026-09-19. Breaking alignment breaks the LINK and spares the REPRESENTATION. Attacked: probe 1.000, XSTest focus-matched 0.917, behavioural refusal 0.477 (hand-audited; substring said 0.189), and ZERO of 130 cells induce. Its own direction reaches -4.955 at natural scale; rlvr's direction injected into it reaches +1.069 and crosses. Neither the representation nor the readout was damaged -- the coupling between them was.**
 
@@ -104,7 +104,7 @@ Depends on: C1, C2, C3, C4
 
 | evidence | script | experiment | files on disk |
 |---|---|---|---|
-| behavioural refusal rate of the attacked stage, before/after | `run_stage.py` | P1-E7 | 10 × `*_refusal.npz` |
+| behavioural refusal rate of the attacked stage, before/after | `run_stage.py` | P1-E7 | 22 × `*_refusal.npz` |
 | probe layer CURVE, not the peak -- 1.000 is saturated | `probe_representation.py` | P1-E7 | 10 × `*_probe.npz` |
 | XSTest transfer of the attacked model: the generalisation half | `probe_transfer.py` | P1-E7 | 10 × `*_transfer.npz` |
 | inject the UN-attacked direction into the attacked model. 2026-09-19: at the operating point rlvr->attacked = +1.069 (crosses), attacked->attacked = -4.955 (does not), and the negative is POWERED by the same target accepting rlvr's and control's directions | `transplant.py` | P1-E7b | 10 × `*_transplant.npz` |
@@ -116,8 +116,9 @@ Depends on: C1, C2, C3, C4
 | behavioural pre-check | reading mechanism from a failed attack | ✅ 2026-09-19: it FIRED. Attack v1 (responses from the model's own outputs) left refusal at 0.985 -> 0.985, i.e. no effect. Six minutes of measurement stopped before hours of uninterpretable mechanism numbers. attack.py now defaults to Alpaca reference responses and checks efficacy in-run. 2026-09-19 second firing: Alpaca at n=100 moved refusal 1.000 -> 0.979, logged THE ATTACK DID NOT WORK; the dose, not the data, was wrong. At n=2000 it fired properly: 1.000 -> 0.104. |
 | SFT loss masked to responses | a language-modelling run on our own eval prompts | ✅ encode_sft + 9 tests |
 | attacked source by INDUCE argmax | the circularity in 'the attacked model's own direction does not induce': its source layer L25 is the UNFILTERED argmax fallback, because the attacked model has no filtered l* at all -- so 'no valid direction' and 'its direction does nothing' risk being the same statement, exactly as for base in C2 | ✅ 2026-09-19: CLOSED. The attacked model's induce-argmax cell IS L25, the same cell the ablation fallback picked, so the negative does not depend on the selection rule and its rows are numerically identical. That cell's steer is -5.188, which is the MAXIMUM over the whole induce surface (130 unpruned cells, 0 pass, median -11.73); swept to 16x raw norm it still tops out at -0.136. The claim is now 'the attacked model's best candidate BY THE METRIC WE SCORE produces no refusal anywhere in the sweep', not 'nothing passed our filters'. |
-| step dose-response | a single before/after pair being a coincidence | ⬜ dose_response.py --arm {benign,safety-preserved}, built 2026-09-21, not yet run. Measures behaviour, coupling and probe IN PLACE at 6 doses (0/100/250/500/1000/1500 steps) -- no merged checkpoint per dose, which would be 180 GB; only the ~80 MB LoRA adapter. Behaviour and coupling should fall TOGETHER while the probe curve stays flat. Same shape of argument as Frank 2026. Stores completions at every dose because the substring rate is a lower bound (O-120): the behavioural curve is BLOCKED on judge_wildguard.py per dose, since a register shift DURING training would fake exactly this experiment's result. |
-| seed replication | one stochastic training run | ⬜ Subsumed by dose_response.py: the original attacked checkpoint lived on a destroyed pod, so its dose-1500 endpoint is an independent run at a different LoRA draw. It will NOT land on 0.477, and agreement in SHAPE across two runs is stronger than one number reproducing. |
+| dose-0 direction transplanted into a later dose | the two readings of 'no valid direction at dose 100': the COUPLING is destroyed, or the mean-diff estimator no longer FINDS a direction that still works. The direction is re-fitted from each dose's own activations, so the curve cannot separate them, and the strong claim needs the first reading | ⬜ Adapters are saved at every dose (models/olmo2_e7d-{arm}-adapter-{step}), so this is runnable without retraining: inject the dose-0 direction into the dose-100 model. Induces refusal -> the coupling survived and the estimator lost it. Does not -> the coupling is gone. Exactly P1-E7b's rlvr->attacked cell, which DID restore refusal at +1.069, so the instrument is known to work. BLOCKING for 'the coupling is destroyed before the behaviour is'; the weaker 'no direction is FINDABLE at dose 100' already holds. |
+| step dose-response | a single before/after pair being a coincidence | ✅ 2026-09-22: RUN, both arms, six doses. It did not confirm the prediction -- it sharpened it. Coupling 13 -> 0 steerable layers by step 100 while refusal still retains ~81% of dose 0; behaviour then decays to ~0.49 by step 1500. They do NOT fall together: the link breaks at once and the behaviour decays afterwards. Probe = 1.000 at EVERY dose in BOTH arms (mass-mean 0.981-1.000), so the falsifier did not fire. Control keeps 62-85% of its coupling and 85-95% of its behaviour throughout. The surviving refusals shift register exactly where coupling dies: normative share 0% -> 68% in the benign arm, 0-1% at every dose in the control. dose 1500 also replicates the destroyed 2026-09-19 checkpoint at a different LoRA draw (substring 0.182 vs 0.189, both judged the same way; the audited value there was 0.477, and this run's phrase-scan estimate is 0.492). Max induce -5.170 vs -5.188. See results/olmo2_e7d_dose_response_ANALYSIS.json. Was 2026-09-21, not yet run. Measures behaviour, coupling and probe IN PLACE at 6 doses (0/100/250/500/1000/1500 steps) -- no merged checkpoint per dose, which would be 180 GB; only the ~80 MB LoRA adapter. Behaviour and coupling should fall TOGETHER while the probe curve stays flat. Same shape of argument as Frank 2026. Stores completions at every dose because the substring rate is a lower bound (O-120): the behavioural curve is BLOCKED on judge_wildguard.py per dose, since a register shift DURING training would fake exactly this experiment's result. |
+| seed replication | one stochastic training run | ✅ 2026-09-22: CLOSED by dose_response.py. The original attacked checkpoint died with its pod, so dose 1500 is a fully independent run at a different LoRA draw -- and it lands on substring 0.182 against 0.189 (same judge both times; the audited figure there was 0.477 and this run's estimate is 0.492), l* = -1 in both, zero steerable layers in both, max induce -5.170 against -5.188. Closer than a seed replication had any right to be. |
 
 **Falsifier.** Probe accuracy and its layer shape degrade alongside behaviour -> fine-tuning damaged the representation and the clean decoupling story fails. Or P1-E7b fails to restore refusal -> the attack damaged the readout too, and 'breaks a wire' is the wrong metaphor.
 
@@ -127,4 +128,4 @@ Depends on: C1, C2, C3, C4
 
 Graph and disk agree.
 
-Ledger: 75 recorded runs across 9 scripts.
+Ledger: 77 recorded runs across 10 scripts.

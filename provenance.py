@@ -267,8 +267,35 @@ CLAIMS: tuple[Claim, ...] = (
                     "model's best candidate BY THE METRIC WE SCORE produces no refusal "
                     "anywhere in the sweep', not 'nothing passed our filters'.",
                     script="transplant.py"),
+            Control("dose-0 direction transplanted into a later dose", "the two readings of "
+                    "'no valid direction at dose 100': the COUPLING is destroyed, or the "
+                    "mean-diff estimator no longer FINDS a direction that still works. The "
+                    "direction is re-fitted from each dose's own activations, so the curve "
+                    "cannot separate them, and the strong claim needs the first reading",
+                    False,
+                    "Adapters are saved at every dose (models/olmo2_e7d-{arm}-adapter-{step}), "
+                    "so this is runnable without retraining: inject the dose-0 direction into "
+                    "the dose-100 model. Induces refusal -> the coupling survived and the "
+                    "estimator lost it. Does not -> the coupling is gone. Exactly P1-E7b's "
+                    "rlvr->attacked cell, which DID restore refusal at +1.069, so the "
+                    "instrument is known to work. BLOCKING for 'the coupling is destroyed "
+                    "before the behaviour is'; the weaker 'no direction is FINDABLE at dose "
+                    "100' already holds.", script="transplant.py"),
             Control("step dose-response", "a single before/after pair being a coincidence",
-                    False, "dose_response.py --arm {benign,safety-preserved}, built "
+                    True, "2026-09-22: RUN, both arms, six doses. It did not confirm the "
+                    "prediction -- it sharpened it. Coupling 13 -> 0 steerable layers by step "
+                    "100 while refusal still retains ~81% of dose 0; behaviour then decays to "
+                    "~0.49 by step 1500. They do NOT fall together: the link breaks at once "
+                    "and the behaviour decays afterwards. Probe = 1.000 at EVERY dose in BOTH "
+                    "arms (mass-mean 0.981-1.000), so the falsifier did not fire. Control "
+                    "keeps 62-85% of its coupling and 85-95% of its behaviour throughout. The "
+                    "surviving refusals shift register exactly where coupling dies: normative "
+                    "share 0% -> 68% in the benign arm, 0-1% at every dose in the control. "
+                    "dose 1500 also replicates the destroyed 2026-09-19 checkpoint at a "
+                    "different LoRA draw (substring 0.182 vs 0.189, both judged the same way; "
+                    "the audited value there was 0.477, and this run's phrase-scan estimate "
+                    "is 0.492). Max induce -5.170 vs -5.188. See "
+                    "results/olmo2_e7d_dose_response_ANALYSIS.json. Was "
                            "2026-09-21, not yet run. Measures behaviour, coupling and probe "
                            "IN PLACE at 6 doses (0/100/250/500/1000/1500 steps) -- no merged "
                            "checkpoint per dose, which would be 180 GB; only the ~80 MB LoRA "
@@ -279,11 +306,14 @@ CLAIMS: tuple[Claim, ...] = (
                            "judge_wildguard.py per dose, since a register shift DURING "
                            "training would fake exactly this experiment's result.",
                     script="dose_response.py"),
-            Control("seed replication", "one stochastic training run", False,
-                    "Subsumed by dose_response.py: the original attacked checkpoint lived on "
-                    "a destroyed pod, so its dose-1500 endpoint is an independent run at a "
-                    "different LoRA draw. It will NOT land on 0.477, and agreement in SHAPE "
-                    "across two runs is stronger than one number reproducing.",
+            Control("seed replication", "one stochastic training run", True,
+                    "2026-09-22: CLOSED by dose_response.py. The original attacked checkpoint "
+                    "died with its pod, so dose 1500 is a fully independent run at a "
+                    "different LoRA draw -- and it lands on substring 0.182 against 0.189 "
+                    "(same judge both times; the audited figure there was 0.477 and this "
+                    "run's estimate is 0.492), l* = -1 in both, zero steerable layers in "
+                    "both, max induce -5.170 against -5.188. Closer than a seed replication "
+                    "had any right to be.",
                     script="dose_response.py"),
         ),
         depends_on=("C1", "C2", "C3", "C4"),

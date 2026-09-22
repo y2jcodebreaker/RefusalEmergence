@@ -104,11 +104,20 @@ _GB_PER_CKPT = 15
 _ORPHAN_GB = 5
 
 
-def check_disk(cfg) -> bool:
-    """Is there room for this lineage's weights? HF only WARNS on insufficient space and then
-    fails ~15 s later with 'Internal Writer Error: Background writer channel closed', which
-    names neither disk nor the model. Hit mid-run on a pod with four OLMo 2 checkpoints
-    cached (2026-09-17), after the base row had already been computed."""
+def check_disk(cfg, stages: "tuple[str, ...] | None" = None) -> bool:
+    """Is there room for the weights this run will actually download?
+
+    HF only WARNS on insufficient space and then fails ~15 s later with 'Internal Writer
+    Error: Background writer channel closed', which names neither disk nor the model. Hit
+    mid-run on a pod with four OLMo 2 checkpoints cached (2026-09-17), after the base row had
+    already been computed.
+
+    `stages` restricts the estimate to the checkpoints a single-stage script will load. Before
+    it existed the check always sized for the WHOLE lineage, so a script loading one stage of
+    olmo2_e7 was told it needed 45 GB for 3 checkpoints when it needed 15 for one -- and it
+    duly FAILED on a pod with 18 GB free, where the run then proceeded fine because three
+    callers were ignoring the return value. **An over-strict guard is why it was ignored.**
+    Both halves are fixed: the estimate is now accurate, and the callers honour it."""
     import os
     import shutil
 
@@ -127,7 +136,11 @@ def check_disk(cfg) -> bool:
     free = shutil.disk_usage(probe).free / 2**30
     # A local path is already on disk; counting it as a 15 GB download would make a lineage
     # of attacked checkpoints look unaffordable and block a run that needs no network at all.
-    remote = [m for _, m in cfg.checkpoints if not os.path.exists(m)]
+    wanted = [(s, m) for s, m in cfg.checkpoints if stages is None or s in stages]
+    if stages is not None and not wanted:
+        raise SystemExit(f"check_disk: stages {stages} match none of "
+                         f"{[s for s, _ in cfg.checkpoints]} in lineage {cfg.lineage!r}")
+    remote = [m for _, m in wanted if not os.path.exists(m)]
     need = _GB_PER_CKPT * len(remote)
     if not remote:
         print(f"OK  disk: every checkpoint in '{cfg.lineage}' is a local path — nothing to "
@@ -161,7 +174,9 @@ def check_disk(cfg) -> bool:
     short = need - cached - free
     if short > 0:
         print(f"FAIL: not enough disk for lineage '{cfg.lineage}'.\n"
-              f"      need ~{need:.0f} GB for {len(cfg.checkpoints)} checkpoints, "
+              f"      need ~{need:.0f} GB for {len(remote)} "
+              f"checkpoint{'' if len(remote) == 1 else 's'}"
+              f"{'' if stages is None else ' (' + ', '.join(stages) + ')'}, "
               f"{cached:.0f} GB already cached, {free:.0f} GB free -> short ~{short:.0f} GB.\n"
               f"      HF_HOME={hf}   (cache holds {hub_total:.0f} GB total)")
         if orphan > _ORPHAN_GB:
@@ -179,7 +194,8 @@ def check_disk(cfg) -> bool:
                   f"      Results are small and results/ is NOT affected.")
         return False
     print(f"OK  disk: {free:.0f} GB free + {cached:.0f} GB cached >= ~{need:.0f} GB needed "
-          f"({len(cfg.checkpoints)} checkpoints)")
+          f"({len(remote)} checkpoint{'' if len(remote) == 1 else 's'}"
+          f"{'' if stages is None else ' — ' + ', '.join(stages)})")
     return True
 
 

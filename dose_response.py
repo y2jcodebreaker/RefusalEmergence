@@ -283,7 +283,8 @@ def main() -> None:
                          "variation (the very thing a dose-response is meant to rule out).")
 
     cfg = config_for(args.lineage)
-    check_disk(cfg)
+    if not check_disk(cfg, stages=(args.src,)):
+        raise SystemExit("free disk (or set HF_HOME) before loading weights.")
     ckpts = dict(cfg.checkpoints)
     if args.src not in ckpts:
         raise SystemExit(f"unknown --from {args.src!r}; have {list(ckpts)}")

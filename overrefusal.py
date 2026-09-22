@@ -168,7 +168,8 @@ def main() -> None:
     args = ap.parse_args()
 
     cfg = config_for(args.lineage)
-    check_disk(cfg)
+    if not check_disk(cfg):
+        raise SystemExit("free disk (or set HF_HOME) before loading weights.")
     ckpts = dict(cfg.checkpoints)
     stages = list(ckpts) if args.stage == "all" else [args.stage]
     for s in stages:

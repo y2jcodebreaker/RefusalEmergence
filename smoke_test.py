@@ -320,6 +320,34 @@ def test_superseded_citations() -> None:
           f"in statement/evidence/control — OK")
 
 
+def test_disk_check_is_honoured() -> None:
+    """Every caller of check_disk must act on its return value.
+
+    On 2026-09-22 the check printed FAIL for olmo2_e7 and stance_directions.py loaded the
+    weights anyway, because three call sites discarded the boolean. It survived only by luck:
+    the check sized for all 3 checkpoints of the lineage (45 GB) while the script loads 1
+    (15 GB), and the pod had 18 GB. **The over-estimate is why the return was ignored** -- a
+    guard that cries wolf gets bypassed -- so both halves were fixed, and this test holds the
+    second half in place."""
+    import ast
+    import pathlib
+
+    offenders = []
+    for path in sorted(pathlib.Path(".").glob("*.py")):
+        if path.name in ("verify_setup.py", "smoke_test.py"):
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            # A bare `check_disk(...)` as a statement discards the result.
+            if (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+                    and getattr(node.value.func, "id", None) == "check_disk"):
+                offenders.append(f"{path.name}:{node.lineno}")
+    assert not offenders, (
+        "check_disk's return value is discarded at: " + ", ".join(offenders) +
+        "\n  Use:  if not check_disk(cfg, stages=(stage,)): raise SystemExit(...)")
+    print("  check_disk: no caller discards the return value — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -383,6 +411,7 @@ if __name__ == "__main__":
     test_disk_check()
     test_provenance_graph()
     test_superseded_citations()
+    test_disk_check_is_honoured()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

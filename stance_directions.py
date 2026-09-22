@@ -156,7 +156,8 @@ def main() -> None:
     args = ap.parse_args()
 
     cfg = config_for(args.lineage)
-    check_disk(cfg)
+    if not check_disk(cfg, stages=(args.stage,)):
+        raise SystemExit("free disk (or set HF_HOME) before loading weights.")
     ckpts = dict(cfg.checkpoints)
     if args.stage not in ckpts:
         raise SystemExit(f"unknown stage {args.stage!r}; have {list(ckpts)}")

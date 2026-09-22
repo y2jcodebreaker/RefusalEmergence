@@ -200,6 +200,45 @@ LINEAGES: dict[str, Lineage] = {
               "<|user|>/<|assistant|>, so the derived template will differ. More current for "
               "a 2027 submission; run it after olmo2 succeeds.",
     ),
+    # ---- B1: the third and fourth alignment recipes -----------------------------------
+    # B1 asks how much of refusal ONE direction carries, as a function of how thoroughly the
+    # model was safety-trained. That needs only the ALIGNED checkpoint of each recipe, not a
+    # base->sft->dpo chain, so these are single-stage lineages. The ordering they test is
+    # pre-registered in the plan file and must not be edited after a result.
+    #
+    # expected_refusal_id and n_eoi are DELIBERATELY None until measured on the pod. Guessing
+    # a token id cost this project three consecutive runs that produced a clean monotone
+    # trend out of pure noise (O-31): `encode("I")` returns the space-prefixed piece, which
+    # decodes to "I" and is not what the model emits. Run diagnose_refusal_token.py, read the
+    # id off the top-k, then pin it here.
+    "tulu2_dpo": Lineage(
+        name="tulu2_dpo",
+        checkpoints=(("dpo", "allenai/tulu-2-dpo-7b"),),
+        template="<|user|>\n{instruction}\n<|assistant|>\n",
+        refusal_token_piece="I",
+        expected_refusal_id=None,     # MEASURE FIRST
+        n_eoi=None,                   # MEASURE FIRST
+        notes="B1, rank 3 of 4 on the pre-registered thoroughness ordering. SFT+DPO on a mix "
+              "that KEEPS safety data -- the contrast with Zephyr, whose DPO removed it, is "
+              "the point: same algorithm, different data, and the prediction is that "
+              "sufficiency falls. Ungated, so it needs no HF token.",
+    ),
+    "llama2_chat": Lineage(
+        name="llama2_chat",
+        checkpoints=(("chat", "meta-llama/Llama-2-7b-chat-hf"),),
+        # Llama-2-chat's own format. No system prompt: Qi et al. (ICLR 2024) show the default
+        # system prompt alone changes refusal substantially, and a system turn here would make
+        # this lineage not comparable with the other three, which have none.
+        template="[INST] {instruction} [/INST]",
+        refusal_token_piece="I",
+        expected_refusal_id=None,     # MEASURE FIRST
+        n_eoi=None,                   # MEASURE FIRST
+        notes="B1, rank 1 of 4 -- the most heavily safety-tuned open 7B, and the model Qi et "
+              "al. (ICLR 2024) attacked, which ties our attack arm to prior work directly. "
+              "GATED: needs an accepted Meta licence and HF_TOKEN. The eoi window is short "
+              "here ('[/INST]' is a few tokens), so n_eoi may have to drop below the 5 used "
+              "elsewhere -- read it off verify_setup rather than assuming.",
+    ),
     "tulu2": Lineage(
         name="tulu2",
         checkpoints=(
@@ -259,9 +298,27 @@ class Config:
         """(template, refusal_token_id, n_eoi, is_override) for one stage.
 
         Returns the lineage defaults unless that stage has an explicit override, in which
-        case the caller MUST log that this stage is not format-matched to the others."""
+        case the caller MUST log that this stage is not format-matched to the others.
+
+        FAILS LOUDLY on an unmeasured lineage. A new lineage is added with n_eoi and
+        expected_refusal_id set to None on purpose -- both are properties of a tokenizer we
+        have not looked at yet, and guessing the refusal id once produced three consecutive
+        runs whose clean monotone trend was pure noise (O-31). Without this guard the Nones
+        travel into a hook and surface as a shape error thirty minutes into a sweep."""
         ov = (LINEAGES[self.lineage].stage_regime or {}).get(stage)
         if ov is None:
+            missing = [n for n, v in (("expected_refusal_id", self.expected_refusal_id),
+                                      ("n_eoi", self.n_eoi), ("template", self.template))
+                       if v is None]
+            if missing:
+                raise SystemExit(
+                    f"lineage {self.lineage!r} has unmeasured {', '.join(missing)}.\n"
+                    f"  These are tokenizer facts, not defaults -- measure, then pin:\n"
+                    f"    python diagnose_refusal_token.py --lineage {self.lineage} "
+                    f"--stage {stage}      # gives the refusal id from the top-k\n"
+                    f"    python verify_setup.py --lineage {self.lineage}"
+                    f"                        # gives eoi_len per stage\n"
+                    f"  Then set them in config.LINEAGES[{self.lineage!r}].")
             return self.template, self.expected_refusal_id, self.n_eoi, False
         return ov[0], ov[1], ov[2], True
 

@@ -263,12 +263,23 @@ CLAIMS: tuple[Claim, ...] = (
                     "anywhere in the sweep', not 'nothing passed our filters'.",
                     script="transplant.py"),
             Control("step dose-response", "a single before/after pair being a coincidence",
-                    False, "attack.py --save-every N -> measure behaviour, coupling and probe "
-                           "at each checkpoint. Behaviour and coupling should fall TOGETHER "
-                           "while the probe curve is flat. Far stronger than a before/after "
-                           "pair, and it is the same shape as Frank 2026's dose-response."),
+                    False, "dose_response.py --arm {benign,safety-preserved}, built "
+                           "2026-09-21, not yet run. Measures behaviour, coupling and probe "
+                           "IN PLACE at 6 doses (0/100/250/500/1000/1500 steps) -- no merged "
+                           "checkpoint per dose, which would be 180 GB; only the ~80 MB LoRA "
+                           "adapter. Behaviour and coupling should fall TOGETHER while the "
+                           "probe curve stays flat. Same shape of argument as Frank 2026. "
+                           "Stores completions at every dose because the substring rate is a "
+                           "lower bound (O-120): the behavioural curve is BLOCKED on "
+                           "judge_wildguard.py per dose, since a register shift DURING "
+                           "training would fake exactly this experiment's result.",
+                    script="dose_response.py"),
             Control("seed replication", "one stochastic training run", False,
-                    "2-3 seeds of the benign arm; report the spread, not one number"),
+                    "Subsumed by dose_response.py: the original attacked checkpoint lived on "
+                    "a destroyed pod, so its dose-1500 endpoint is an independent run at a "
+                    "different LoRA draw. It will NOT land on 0.477, and agreement in SHAPE "
+                    "across two runs is stronger than one number reproducing.",
+                    script="dose_response.py"),
         ),
         depends_on=("C1", "C2", "C3", "C4"),
         falsifier="Probe accuracy and its layer shape degrade alongside behaviour -> "

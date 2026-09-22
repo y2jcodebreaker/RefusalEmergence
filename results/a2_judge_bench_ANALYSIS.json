@@ -1,0 +1,182 @@
+{
+ "what": "A2 per-register judge benchmark, reconstructed from stored verdicts",
+ "n_items": 5920,
+ "n_arms": 50,
+ "skipped": [],
+ "sensitivity_by_register": {
+  "inability": {
+   "n": 2053,
+   "n_arms": 31,
+   "families": [
+    "olmo2",
+    "tulu2",
+    "zephyr"
+   ],
+   "definitional_for_substring": true,
+   "substring_strict": 1.0,
+   "substring_strict_ci": [
+    1.0,
+    1.0
+   ],
+   "substring_verbatim": 1.0,
+   "substring_verbatim_ci": [
+    1.0,
+    1.0
+   ],
+   "wildguard": 0.9980516317584024,
+   "wildguard_ci": [
+    0.9939169040413032,
+    1.0
+   ],
+   "wilson_substring": [
+    0.9981322820386362,
+    0.9999999999999998
+   ],
+   "wilson_wildguard": [
+    0.9950007464477801,
+    0.9992420771123813
+   ]
+  },
+  "identity": {
+   "n": 236,
+   "n_arms": 4,
+   "families": [
+    "tulu2"
+   ],
+   "definitional_for_substring": true,
+   "substring_strict": 1.0,
+   "substring_strict_ci": [
+    1.0,
+    1.0
+   ],
+   "substring_verbatim": 1.0,
+   "substring_verbatim_ci": [
+    1.0,
+    1.0
+   ],
+   "wildguard": 0.5635593220338984,
+   "wildguard_ci": [
+    0.3474576271186441,
+    0.8170731707317073
+   ],
+   "wilson_substring": [
+    0.9839827619562242,
+    0.9999999999999998
+   ],
+   "wilson_wildguard": [
+    0.4997667625938864,
+    0.6253157918920744
+   ]
+  },
+  "condemnation": {
+   "n": 216,
+   "n_arms": 4,
+   "families": [
+    "zephyr"
+   ],
+   "definitional_for_substring": false,
+   "substring_strict": 0.0,
+   "substring_strict_ci": [
+    0.0,
+    0.0
+   ],
+   "substring_verbatim": 0.0,
+   "substring_verbatim_ci": [
+    0.0,
+    0.0
+   ],
+   "wildguard": 0.3472222222222222,
+   "wildguard_ci": [
+    0.14705882352941177,
+    0.527027027027027
+   ],
+   "wilson_substring": [
+    1.7044102245025071e-18,
+    0.01747439974963792
+   ],
+   "wilson_wildguard": [
+    0.2869009989663721,
+    0.4128828454015729
+   ]
+  },
+  "normative": {
+   "n": 920,
+   "n_arms": 47,
+   "families": [
+    "olmo2",
+    "tulu2",
+    "zephyr"
+   ],
+   "definitional_for_substring": false,
+   "substring_strict": 0.029347826086956522,
+   "substring_strict_ci": [
+    0.014518727180285412,
+    0.05620135546271909
+   ],
+   "substring_verbatim": 0.029347826086956522,
+   "substring_verbatim_ci": [
+    0.015125923353212252,
+    0.05732850135441831
+   ],
+   "wildguard": 0.8576086956521739,
+   "wildguard_ci": [
+    0.7934911000957584,
+    0.903353871561964
+   ],
+   "wilson_substring": [
+    0.020246656752408807,
+    0.042363210566837256
+   ],
+   "wilson_wildguard": [
+    0.8335383663898336,
+    0.8787049445846884
+   ]
+  }
+ },
+ "specificity": {
+  "compliance": {
+   "n": 2407,
+   "n_arms": 48,
+   "families": [
+    "olmo2",
+    "tulu2",
+    "zephyr"
+   ],
+   "substring_strict": 0.0,
+   "substring_strict_ci": [
+    0.0,
+    0.0
+   ],
+   "wildguard": 0.1271292064810968,
+   "wildguard_ci": [
+    0.08231915140013538,
+    0.17426286369555496
+   ]
+  },
+  "confusion": {
+   "n": 88,
+   "n_arms": 6,
+   "families": [
+    "olmo2",
+    "tulu2",
+    "zephyr"
+   ],
+   "substring_strict": 0.0,
+   "substring_strict_ci": [
+    0.0,
+    0.0
+   ],
+   "wildguard": 0.9431818181818182,
+   "wildguard_ci": [
+    0.16666666666666666,
+    0.9715639810426541
+   ]
+  }
+ },
+ "hand_audits_loaded": [
+  "olmo2_base_from_sft_HANDAUDIT.json",
+  "olmo2_e7_ablated_HANDAUDIT.json",
+  "olmo2_e7_attacked_HANDAUDIT.json",
+  "zephyr_ablated_HANDAUDIT.json"
+ ]
+}

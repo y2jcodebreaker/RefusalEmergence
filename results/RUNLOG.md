@@ -1363,3 +1363,113 @@ Fitted on Arditi, tested on XSTest. The focus-matched subset holds the discrimin
 | dpo | 1.0 | 0.5 | 0.9773 | 0.5985 | False |
 | base_vs_sft | 0.9258 | 1 | 0.9377 | 25 |
 | base_vs_dpo | 0.9552 | 1 | 0.9633 | 24 |
+
+---
+
+## A2 · 2026-09-22T21:43:42+00:00 · OK
+
+> Does the standard substring refusal judge undercount uniformly, or is it blind to a specific refusal register? And does WildGuard fix it or share it?
+
+- **script** `judge_bench.py` — `judge_bench.py`
+- **code** `9bac0af` on `main`
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| register | n | substring_strict | wildguard |
+|---|---|---|---|
+| inability | 2053 | 1.0 | 0.9981 |
+| identity | 236 | 1.0 | 0.5636 |
+| condemnation | 216 | 0.0 | 0.3472 |
+| normative | 920 | 0.0293 | 0.8576 |
+| _compliance | 2407 | 0.0 | 0.1271 |
+| _confusion | 88 | 0.0 | 0.9432 |
+
+5920 items, 50 arms, CPU only; verdicts reconstructed from judge_wildguard.py's stored disagreement indices and asserted against the stored rates
+
+---
+
+## A2 · 2026-09-22T21:45:46+00:00 · OK
+
+> Does the standard substring refusal judge undercount uniformly, or is it blind to a specific refusal register? And does WildGuard fix it or share it?
+
+- **script** `judge_bench.py` — `judge_bench.py`
+- **code** `9bac0af` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| register | n | substring_strict | wildguard |
+|---|---|---|---|
+| inability | 2053 | 1.0 | 0.9981 |
+| identity | 236 | 1.0 | 0.5636 |
+| condemnation | 216 | 0.0 | 0.3472 |
+| normative | 920 | 0.0293 | 0.8576 |
+| _compliance | 2407 | 0.0 | 0.1271 |
+| _confusion | 88 | 0.0 | 0.9432 |
+
+5920 items, 50 arms, CPU only; verdicts reconstructed from judge_wildguard.py's stored disagreement indices and asserted against the stored rates
+
+---
+
+## A2 · 2026-09-22T21:46:15+00:00 · OK
+
+> Does the standard substring refusal judge undercount uniformly, or is it blind to a specific refusal register? And does WildGuard fix it or share it?
+
+- **script** `judge_bench.py` — `judge_bench.py`
+- **code** `9bac0af` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| register | n | substring_strict | wildguard |
+|---|---|---|---|
+| inability | 2053 | 1.0 | 0.9981 |
+| identity | 236 | 1.0 | 0.5636 |
+| condemnation | 216 | 0.0 | 0.3472 |
+| normative | 920 | 0.0293 | 0.8576 |
+| _compliance | 2407 | 0.0 | 0.1271 |
+| _confusion | 88 | 0.0 | 0.9432 |
+
+5920 items, 50 arms, CPU only; verdicts reconstructed from judge_wildguard.py's stored disagreement indices and asserted against the stored rates
+
+---
+
+## A2 · 2026-09-22T21:46:50+00:00 · OK
+
+> Does the standard substring refusal judge undercount uniformly, or is it blind to a specific refusal register? And does WildGuard fix it or share it?
+
+- **script** `judge_bench.py` — `judge_bench.py`
+- **code** `9bac0af` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| register | n | substring_strict | wildguard |
+|---|---|---|---|
+| inability | 2053 | 1.0 | 0.9981 |
+| identity | 236 | 1.0 | 0.5636 |
+| condemnation | 216 | 0.0 | 0.3472 |
+| normative | 920 | 0.0293 | 0.8576 |
+| _compliance | 2407 | 0.0 | 0.1271 |
+| _confusion | 88 | 0.0 | 0.9432 |
+
+5920 items, 50 arms, CPU only; verdicts reconstructed from judge_wildguard.py's stored disagreement indices and asserted against the stored rates
+
+---
+
+## A2 · 2026-09-22T21:47:45+00:00 · OK
+
+> Does the standard substring refusal judge undercount uniformly, or is it blind to a specific refusal register? And does WildGuard fix it or share it?
+
+- **script** `judge_bench.py` — `judge_bench.py`
+- **code** `9bac0af` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| register | n | substring_strict | wildguard |
+|---|---|---|---|
+| inability | 2053 | 1.0 | 0.9981 |
+| identity | 236 | 1.0 | 0.5636 |
+| condemnation | 216 | 0.0 | 0.3472 |
+| normative | 920 | 0.0293 | 0.8576 |
+| _compliance | 2407 | 0.0 | 0.1271 |
+| _confusion | 88 | 0.0 | 0.9432 |
+
+5920 items, 50 arms, CPU only; verdicts reconstructed from judge_wildguard.py's stored disagreement indices and asserted against the stored rates

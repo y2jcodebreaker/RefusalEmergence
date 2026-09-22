@@ -196,6 +196,63 @@ refusals *appear* (2 → 64) rather than surviving. Zephyr's condemnation 24 →
 OLMo 2 loses nearly all its inability refusals but gains 64 normative ones → 51 %. Tulu-2 loses
 70 and keeps 21 identity → 70 %. Zephyr has nothing to fall back on → 100 %.
 
+### A2 — the standard judge is register-blind, and so is the classifier that replaces it (2026-09-22)
+
+5920 completions, 50 arms, 3 families, **no GPU** — `judge_wildguard.py` stored per-arm rates
+and disagreement indices, so each item's verdict is recoverable exactly and re-checked against
+the stored rate.
+
+| register | n | arms | families | substring | 95% CI | **WildGuard** | 95% CI |
+|---|---|---|---|---|---|---|---|
+| inability | 2053 | 31 | 3 | 1.000 \* | [1.00,1.00] | 0.998 | [0.99,1.00] |
+| identity | 236 | 4 | 1 | 1.000 \* | [1.00,1.00] | **0.564** | [0.35,0.82] |
+| condemnation | 216 | 4 | 1 | 0.000 | [0.00,0.00] | **0.347** | [0.15,0.53] |
+| normative | 920 | 47 | 3 | **0.029** | [0.01,0.06] | 0.858 | [0.79,0.90] |
+
+*Every row is a refusal; below 1.000 is a miss. CIs are **cluster bootstraps over arms** — the
+arms share one 132-prompt set, so a per-item interval would count 50 correlated looks at one
+prompt as 50 observations (it gives identity [0.50,0.63] instead of [0.35,0.82]).*
+
+**\* These two substring cells are definitional, not evidence.** `stance_of`'s identity pattern
+is character-for-character Arditi's three identity prefixes, and **0 of 2169** inability items
+open with one of the three patterns `stance_of` has and Arditi lacks. The substring row is a map
+of its own prefix list. Reporting it as a finding would be scoring a classifier on its training
+set. What it does say, fairly: **the field's standard judge covers exactly two of the four
+attested registers.** The miss is *measured* where it counts — 171 normative items were read
+against their prompts and confirmed genuine refusals, and substring scores those **0**.
+
+**The non-circular finding is that WildGuard is register-biased too.** An accepted classifier
+(Han et al., NeurIPS 2024) that never saw these regexes is near-perfect on inability (0.998) and
+misses ~44 % of identity and ~65 % of condemnation refusals. **But those two rows are one family
+each** — Tulu-2 is the only family producing identity refusals and Zephyr the only one producing
+condemnation — so they are one model's behaviour, and the wide intervals say so. **The normative
+row (47 arms, 3 families) is the one that carries weight.**
+
+| non-refusal | n | arms | families | substring | **WildGuard** | 95% CI |
+|---|---|---|---|---|---|---|
+| compliance | 2407 | 48 | 3 | 0.000 | **0.127** | [0.08,0.17] |
+| confusion | 88 | 6 | 3 | 0.000 | 0.943 | [0.17,0.97] |
+
+**The compliance number forks and the data cannot say which way.** Either WildGuard over-counts
+refusal on genuine compliance, *or* the register taxonomy is incomplete and some of those are
+refusals in a fifth register nobody has named. The bucket is the **complement** of four
+hand-built patterns, so it holds both. A 12-item spot check on one arm found all 12 genuine
+harmful compliance — which favours the first reading at n = 12 and settles nothing at n = 2407.
+**Either way it matters: the two error types point in opposite directions, so an aggregate
+refusal rate can look correct while both are large.** The confusion row's interval [0.17, 0.97]
+is a warning, not a measurement.
+
+> **Why this needed no GPU, and one thing it taught.** Pairing a verdict file to the completions
+> it scored *cannot* be done by matching substring rates: `tulu2_dpo_dpo` scores 0.9015 at both
+> 48 and 128 tokens, and `olmo2_e7_rlvr` 0.9848 at both. **The substring rate is invariant to
+> generation length** — the twelve prefixes match an opening and nothing later withdraws the
+> match — while WildGuard moves 0.909 → 0.758. That invariance is exactly why the substring judge
+> could not see the 48-token inflation of O-139. Pairing inverts `judge_wildguard.py`'s
+> deterministic naming rule instead, with the rate as a consistency assertion, and a smoke test
+> pins the two functions together.
+
+Record: `results/a2_judge_bench_ANALYSIS.json`.
+
 ### A3 + A3b — is refusal multi-directional? **No.** (2026-09-22)
 
 B1 left one question: the identity refusals that survive ablation (20 → 21) — do they have a

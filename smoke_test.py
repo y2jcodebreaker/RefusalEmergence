@@ -559,6 +559,51 @@ def test_runrecord_notes_cannot_destroy_a_run() -> None:
     print("  RunRecord notes: no literal-key subscript can abort a run — OK")
 
 
+def test_judge_bench_pairing_is_exact() -> None:
+    """A2 must never score 128-token text against 48-token verdicts.
+
+    The obvious pairing check — recompute the substring rate and see if it matches the stored
+    one — CANNOT distinguish them, and finding out why produced the mechanism behind O-139:
+
+        tulu2_dpo_dpo   48 tok: substring 0.9015    128 tok: substring 0.9015
+        olmo2_e7_rlvr   48 tok: substring 0.9848    128 tok: substring 0.9848
+
+    The substring rate is INVARIANT to generation length, because the twelve prefixes match
+    the opening of a completion and nothing later can withdraw the match. WildGuard, reading
+    the whole text, moves a lot (0.909 -> 0.758). So pairing is done by inverting
+    judge_wildguard.py's deterministic output-path rule, and this test pins the two functions
+    together: if judge_wildguard.py's naming changes, this fails instead of A2 silently
+    scoring the wrong text."""
+    import re as _re
+
+    from judge_bench import source_for
+
+    # The rule, as judge_wildguard.py writes it.
+    def judge_out(inp: str) -> str:
+        m = _re.match(r"^(.*?)_(?:text\.json|refusal(_gen\d+)?\.npz)$", inp)
+        assert m, inp
+        return m.group(1) + (m.group(2) or "") + "_wildguard.json"
+
+    for src in ("results/tulu2_dpo_dpo_refusal.npz",
+                "results/tulu2_dpo_dpo_refusal_gen128.npz",
+                "results/olmo2_e7_rlvr_refusal_gen128.npz",
+                "results/olmo2_base_from_sft_text.json"):
+        out = judge_out(src)
+        back = source_for(out)
+        assert src in back, (
+            f"round trip broken: {src} -> {out} -> {back}. A2 would pair that verdict file "
+            f"with the wrong completions.")
+
+    # And the specific confusion must not happen in either direction.
+    assert "results/tulu2_dpo_dpo_refusal_gen128.npz" not in source_for(
+        "results/tulu2_dpo_dpo_wildguard.json"), \
+        "a 48-token verdict file resolved to 128-token completions"
+    assert "results/tulu2_dpo_dpo_refusal.npz" not in source_for(
+        "results/tulu2_dpo_dpo_gen128_wildguard.json"), \
+        "a 128-token verdict file resolved to 48-token completions"
+    print("  A2 pairing: verdict files resolve to the exact completions judged — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -628,6 +673,7 @@ if __name__ == "__main__":
     test_degenerate_output_is_detected()
     test_a3b_verdict_rejects_the_false_positive()
     test_runrecord_notes_cannot_destroy_a_run()
+    test_judge_bench_pairing_is_exact()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

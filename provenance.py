@@ -202,6 +202,75 @@ CLAIMS: tuple[Claim, ...] = (
         note="C3 holds in OLMo 2 and not Zephyr. Stated in the results, not the limitations.",
     ),
     Claim(
+        id="A2", layer=3,
+        statement="RESOLVED 2026-09-22. The field's standard refusal judge is REGISTER-BLIND, "
+                  "and so is the accepted classifier that replaces it. Arditi's twelve-prefix "
+                  "substring judge covers exactly two of the four attested registers; on "
+                  "normative refusals it scores 0.029, and 171 such items were hand-read "
+                  "against their prompts and confirmed genuine refusals. WildGuard (Han et "
+                  "al., NeurIPS 2024) is near-perfect on inability (0.998) but scores 0.858 "
+                  "on normative, 0.564 on identity and 0.347 on condemnation -- and calls "
+                  "12.7% of the compliance bucket a refusal. The two error types point in "
+                  "OPPOSITE directions, so an aggregate refusal rate can look correct while "
+                  "both are large.",
+        evidence=(
+            Evidence("judge_bench_ANALYSIS", "judge_bench.py", "A2",
+                     "per-register sensitivity and specificity for both judges over 5920 "
+                     "completions from 50 arms and 3 families, with cluster-bootstrap "
+                     "intervals over ARMS rather than items"),
+        ),
+        controls=(
+            Control("circularity partition", "reporting a tautology as a finding -- "
+                    "stance_of's identity pattern IS Arditi's three identity prefixes", True,
+                    "2026-09-22: COMPUTED, not assumed. 0 of 2169 inability items open with "
+                    "one of the three patterns stance_of has and Arditi lacks, so both of "
+                    "those substring cells are pinned at 1.000 by construction. The output "
+                    "marks them DEFINITIONAL and the claim rests on WildGuard's column "
+                    "(an independent classifier) and on the hand-audited misses.",
+                    script="judge_bench.py"),
+            Control("cluster-robust intervals", "treating 50 correlated looks at one "
+                    "132-prompt set as 5920 independent observations", True,
+                    "2026-09-22: RUN. Every interval is a bootstrap resampling ARMS. On the "
+                    "identity row this widens [0.50,0.63] to [0.35,0.82] -- the naive "
+                    "interval would have supported a claim the data does not.",
+                    script="judge_bench.py"),
+            Control("family count per register", "a single model's idiosyncrasy reported as "
+                    "a property of the judge", True,
+                    "2026-09-22: RUN and it BIT. identity is tulu2 only and condemnation is "
+                    "zephyr only -- they are the only families producing those registers at "
+                    "all -- so those two rows are single-family however many arms they span. "
+                    "The normative row (47 arms, 3 families) is the one that carries weight.",
+                    script="judge_bench.py"),
+            Control("verdict/completion pairing", "scoring 128-token text against 48-token "
+                    "verdicts", True,
+                    "2026-09-22: the obvious check does NOT work and that is itself a result. "
+                    "Substring rates are INVARIANT to generation length (tulu2_dpo_dpo is "
+                    "0.9015 at both 48 and 128 tokens), because the prefixes match an opening "
+                    "and nothing later withdraws the match -- which is exactly why this judge "
+                    "could not see O-139's inflation. Pairing inverts judge_wildguard.py's "
+                    "deterministic naming rule; the rate is a consistency assertion on top; "
+                    "smoke_test pins the two functions together.", script="judge_bench.py"),
+            Control("two-sided by construction", "a benchmark that only measures "
+                    "undercounting, i.e. an advertisement for classifiers", True,
+                    "2026-09-22: RUN. Specificity is reported alongside sensitivity, and it "
+                    "is where WildGuard looks worst.", script="judge_bench.py"),
+        ),
+        depends_on=("C3", "C4"),
+        falsifier="Judges agree with each other and with the hand labels within noise across "
+                  "registers -> there is no instrument story and A2 collapses to a paragraph. "
+                  "It did not: substring and WildGuard differ by 0.83 on the normative row "
+                  "alone. The surviving claim's own falsifier is the compliance fork -- if "
+                  "the 12.7% turns out to be refusals in an unnamed fifth register rather "
+                  "than WildGuard errors, the over-counting half is retired and the taxonomy "
+                  "half replaces it. Settling that needs a blind audit of a sample from the "
+                  "compliance bucket, which is not run.",
+        note="Layer 3, and CPU-ONLY. judge_wildguard.py stored per-arm rates plus the indices "
+             "where the judges disagree, so wg[i] = (not sub[i]) if i in disagreements else "
+             "sub[i] recovers every verdict exactly, asserted against the stored rate. No "
+             "model is loaded and no GPU is needed, which is why this ran after the pod was "
+             "released.",
+    ),
+    Claim(
         id="A3", layer=3,
         statement="RESOLVED 2026-09-22, NEGATIVE. Refusal is NOT multi-directional. The "
                   "stances that survive ablation have no second direction that can be acted "
@@ -567,7 +636,11 @@ def on_disk() -> dict[str, list[str]]:
     `stance_directions` is preferred over a hypothetical `directions`."""
     axes = sorted({e.axis for c in CLAIMS for e in c.evidence}, key=len, reverse=True)
     out: dict[str, list[str]] = {}
-    for pat, ext in ((f"{RESULTS}/*.npz", ".npz"), (f"{RESULTS}/*_text.json", ".json")):
+    # *_ANALYSIS.json is the third shape: the CPU-only experiments (A2) write a JSON report
+    # rather than an array, and the first version of this scanner globbed only .npz and
+    # _text.json, so A2's evidence read as missing the moment it was registered.
+    for pat, ext in ((f"{RESULTS}/*.npz", ".npz"), (f"{RESULTS}/*_text.json", ".json"),
+                     (f"{RESULTS}/*_ANALYSIS.json", ".json")):
         for p in sorted(glob.glob(pat)):
             stem = os.path.basename(p)[: -len(ext)]
             hit = next((a for a in axes if stem.endswith("_" + a)), None)

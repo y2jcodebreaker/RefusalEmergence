@@ -228,13 +228,35 @@ def _ablation_handles(model, direction: torch.Tensor):
     return handles
 
 
-def _addition_handles(model, vector: torch.Tensor, coeff: float, layer: int):
+def _addition_handles(model, vector: torch.Tensor, coeff: float, layer: int,
+                      prefill_only: bool = False):
     """Activation addition: add coeff*vector to the source layer's block INPUT only.
-    RAW (un-normalised) mean-diff vector with coeff=1.0, per Arditi select_direction.py."""
+    RAW (un-normalised) mean-diff vector with coeff=1.0, per Arditi select_direction.py.
+
+    `prefill_only=False` is the historical behaviour and every existing experiment's: the
+    vector is added at EVERY token position, and under model.generate the hook also fires on
+    every incremental decode step, so each generated token gets it too.
+
+    THAT IS FINE FOR A ONE-SHOT LOGIT READ AND DESTRUCTIVE UNDER GENERATION. Every caller
+    before 2026-09-22 used this inside refusal_strength_curve -- a single forward pass,
+    coeff=1.0, scoring one last-position logit. stance_steer.py was the first to steer during
+    generation, reused that coefficient grid, and at coeff 2-4 on a norm-19.3 direction it
+    injected a norm-38-77 perturbation at every position of every step. All three arms,
+    including the NEGATIVE CONTROL, collapsed refusal to 0.000 -- not because refusal was
+    removed but because the model was destroyed, which the stance classifier scored as
+    'compliance'.
+
+    `prefill_only=True` adds the vector only while the prompt is being processed (seq_len > 1)
+    and not during decoding. For a question about WHICH continuation the model commits to,
+    that is also the more faithful intervention: the direction was fitted at the prompt's eoi
+    positions, and adding it to freshly generated tokens is off the distribution it was
+    estimated on."""
     v = vector.detach()
 
     def add_pre(module, inp):
         a = inp[0] if isinstance(inp, tuple) else inp
+        if prefill_only and a.shape[1] == 1:      # a decode step under KV cache
+            return inp
         a = a + coeff * v.to(a)
         return (a, *inp[1:]) if isinstance(inp, tuple) else a
 

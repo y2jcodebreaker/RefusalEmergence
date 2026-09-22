@@ -43,6 +43,31 @@ ALL THREE ARMS ARE NORM-MATCHED to ||d_inability|| at the same cell, so one coef
 the same magnitude of intervention in each. Without that the arms are not comparable and a
 null result in one of them could just be a smaller push.
 
+THE COEFFICIENT IS CALIBRATED, NOT ASSUMED -- the first run (2026-09-22) proved why. It
+borrowed transplant.py's COEFFS grid (0.5..16), which lives in a completely different
+measurement regime: refusal_strength_curve adds at coeff=1.0 for ONE forward pass and reads
+ONE last-position logit. Under generation the hook fires at every position of every decode
+step, so coeff 2-4 on a norm-19.3 direction injects a norm-38-77 perturbation continuously.
+All three arms -- INCLUDING THE NEGATIVE CONTROL -- collapsed refusal to 0.000, and the
+stance classifier scored the resulting gibberish as 'compliance'. A destroyed model and a
+model whose refusal was removed produce the same number here, and nothing in the output
+distinguished them. So:
+
+  REGIME   every (arm, coefficient) cell is KL-screened on harmless prompts first, with the
+           project's existing kl_last instrument and bound. Cells out of regime are reported
+           and EXCLUDED from the verdict rather than read.
+  DEGENERACY generations are checked for emptiness and repetition. A cell whose output is
+           degenerate cannot contribute a stance composition -- silent gibberish scored as
+           'compliance' is the exact failure the first run hit.
+  PREFILL  the vector is added while the prompt is processed, not to freshly generated
+           tokens. The direction was fitted at the prompt's eoi positions; adding it to the
+           model's own output is off the distribution it was estimated on, and it is what
+           made the intervention destructive.
+
+  POSITIVE CONTROL DIRECTION MATTERS. Baseline refusal on these harmful prompts is 0.924,
+  i.e. at ceiling, so ADDING d_arditi cannot show anything. The rate control is the NEGATIVE
+  coefficient: subtracting the refusal direction must drive refusal DOWN.
+
 Output: results/{lineage}_{stage}_stance_steer.npz
 """
 
@@ -59,7 +84,8 @@ import torch
 from config import config_for
 from data import load_instructions
 from probes import cache_activations
-from refusal_direction import _addition_handles, resolve_refusal_token
+from refusal_direction import (_addition_handles, _last_logits,
+                               resolve_refusal_token)
 from refusal_substring import (CONFUSION_SUBSTRINGS, generate_completions,
                                is_refusal_strict, truncate_at_turn)
 from run_stage import load_model, set_seed
@@ -99,13 +125,59 @@ def classify(completions: list[str]) -> dict:
             "inability_share": (float(n_in / (n_in + n_id)) if (n_in + n_id) else float("nan"))}
 
 
+def degenerate(text: str) -> bool:
+    """Output that carries no stance because it is not language.
+
+    Needed because stance_of() has no 'broken' bucket: gibberish falls through to
+    'compliance', so a destroyed model reports refusal 0.000, which reads exactly like a
+    clean and powerful effect. That is what the first A3b run produced in all three arms."""
+    t = truncate_at_turn(text).strip()
+    if len(t) < 8:
+        return True
+    words = t.split()
+    if len(words) >= 12 and len(set(words)) / len(words) < 0.25:
+        return True                                    # token-level looping
+    grams = [" ".join(words[i:i + 4]) for i in range(max(len(words) - 3, 0))]
+    return bool(grams) and len(set(grams)) / len(grams) < 0.4
+
+
+def regime_scan(model, tok, cfg, template, vec, layer, harmless, base_logits,
+                grid, kl_max: float) -> dict:
+    """KL(baseline || steered) on HARMLESS prompts for each signed coefficient.
+
+    One forward pass per cell, so the whole scan costs seconds and is what stops 40 minutes
+    of generation being spent outside the regime where the model is still the model."""
+    from refusal_direction import kl_last
+    out = {}
+    for c in grid:
+        h = _addition_handles(model, vec, coeff=c, layer=layer, prefill_only=True)
+        try:
+            lg = _last_logits(model, tok, harmless, template, cfg.batch_size)
+        finally:
+            for x in h:
+                x.remove()
+        out[c] = float(kl_last(base_logits, lg))
+    return out
+
+
+def largest_in_regime(kls: dict, sign: int, kl_max: float) -> float | None:
+    """Biggest |coefficient| of this sign whose KL is still within bound, or None."""
+    ok = [c for c, v in kls.items() if np.sign(c) == sign and v <= kl_max]
+    return max(ok, key=abs) if ok else None
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lineage", default="tulu2_dpo")
     ap.add_argument("--stage", default="dpo")
     ap.add_argument("--arm", default="baseline", choices=("baseline", "ablated"))
-    ap.add_argument("--coeffs", default="-4,-2,2,4",
-                    help="signed coefficients; 0 is always run once and shared across arms")
+    ap.add_argument("--grid", default="0.125,0.25,0.5,1.0,2.0,4.0",
+                    help="magnitudes to KL-screen; both signs are scanned. The generation "
+                         "coefficients are CHOSEN from this by the regime scan, not assumed")
+    ap.add_argument("--kl-max", type=float, default=0.10,
+                    help="KL(baseline||steered) bound on harmless prompts. 0.10 is the "
+                         "project's existing bound (Arditi's, used for ablation selection); "
+                         "a cell above it is not a steered model, it is a different model")
     ap.add_argument("--gen-tokens", type=int, default=128,
                     help="128, not 48: at 48 the normative and identity stances are cut off "
                          "mid-sentence and the stance label is unreliable (O-138/O-139)")
@@ -170,22 +242,54 @@ def main() -> None:
         return torch.tensor(v / (np.linalg.norm(v) + 1e-9) * ref_norm, dtype=torch.float32)
 
     arms = {"stance": matched(d_stance), "arditi": matched(d_arditi), "null": matched(d_null)}
-    coeffs = [float(x) for x in args.coeffs.split(",") if float(x) != 0.0]
+    mags = [float(x) for x in args.grid.split(",") if float(x) > 0]
+    grid = sorted([-m for m in mags] + mags)
+    harmless = load_instructions("harmless_val")[: cfg.n_val]
+
+    # ---- regime scan first: seconds of forward passes, so no generation is spent outside
+    # the range where the model is still the model.
+    base_harmless = _last_logits(model, tok, harmless, template, cfg.batch_size)
+    kls, chosen = {}, {}
+    for name, vec in arms.items():
+        kls[name] = regime_scan(model, tok, cfg, template, vec, c_lay, harmless,
+                                base_harmless, grid, args.kl_max)
+        chosen[name] = [c for c in (largest_in_regime(kls[name], -1, args.kl_max),
+                                    largest_in_regime(kls[name], +1, args.kl_max))
+                        if c is not None]
+        logger.info("[%s] KL: %s -> in regime at %s", name,
+                    {c: round(v, 3) for c, v in kls[name].items()}, chosen[name] or "NOTHING")
+
+    print(f"\n-- regime scan (KL on {len(harmless)} harmless prompts, bound "
+          f"{args.kl_max:.2f}) --")
+    print(f"{'arm':8s} " + " ".join(f"{c:>+8.3f}" for c in grid))
+    for name in arms:
+        print(f"{name:8s} " + " ".join(
+            f"{kls[name][c]:>8.3f}" + ("" if kls[name][c] <= args.kl_max else "!")
+            for c in grid))
+    print("  ! = outside the regime; not generated, not read.")
+
+    if not any(chosen.values()):
+        raise SystemExit("no coefficient of any arm is within the KL bound -- the smallest "
+                         "grid magnitude already breaks the model. Lower --grid before "
+                         "spending generation time.")
 
     logger.info("baseline (c=0), %d prompts @ %d tokens", len(prompts), args.gen_tokens)
     base_comp = generate_completions(model, tok, prompts, template,
                                      args.gen_tokens, cfg.batch_size)
     base = classify(base_comp)
-    logger.info("[c=0] refusal %.3f | inability %d identity %d (share %.3f)",
+    base["degenerate"] = float(np.mean([degenerate(c) for c in base_comp]))
+    logger.info("[c=0] refusal %.3f | inability %d identity %d (share %.3f) | degenerate %.3f",
                 base["refusal_rate"], base["n_inability"], base["n_identity"],
-                base["inability_share"])
+                base["inability_share"], base["degenerate"])
 
-    results: dict = {"baseline": base, "arms": {}}
+    results: dict = {"baseline": base, "arms": {}, "kl": {a: {str(k): v for k, v in d.items()}
+                                                          for a, d in kls.items()},
+                     "chosen": {a: c for a, c in chosen.items()}, "kl_max": args.kl_max}
     completions: dict = {"baseline": base_comp}
     for name, vec in arms.items():
         results["arms"][name] = {}
-        for c in coeffs:
-            h = _addition_handles(model, vec, coeff=c, layer=c_lay)
+        for c in chosen[name]:
+            h = _addition_handles(model, vec, coeff=c, layer=c_lay, prefill_only=True)
             try:
                 comp = generate_completions(model, tok, prompts, template,
                                             args.gen_tokens, cfg.batch_size)
@@ -193,36 +297,49 @@ def main() -> None:
                 for x in h:
                     x.remove()
             r = classify(comp)
+            r["degenerate"] = float(np.mean([degenerate(x) for x in comp]))
+            r["kl"] = kls[name][c]
+            # A cell whose output stopped being language cannot report a composition, and
+            # must not be allowed to look like one.
+            r["usable"] = bool(r["degenerate"] <= base["degenerate"] + 0.10)
             r["d_rate"] = r["refusal_rate"] - base["refusal_rate"]
             r["d_share"] = r["inability_share"] - base["inability_share"]
             results["arms"][name][str(c)] = r
             completions[f"{name}@{c}"] = comp
-            logger.info("[%s c=%+.1f] refusal %.3f (%+.3f) | inability %d identity %d "
-                        "share %.3f (%+.3f)", name, c, r["refusal_rate"], r["d_rate"],
-                        r["n_inability"], r["n_identity"], r["inability_share"], r["d_share"])
+            logger.info("[%s c=%+.3f] refusal %.3f (%+.3f) | inab %d iden %d share %.3f "
+                        "(%+.3f) | KL %.3f degen %.3f%s", name, c, r["refusal_rate"],
+                        r["d_rate"], r["n_inability"], r["n_identity"], r["inability_share"],
+                        r["d_share"], r["kl"], r["degenerate"],
+                        "" if r["usable"] else "  <- UNUSABLE")
 
-    # ---- the dissociation, computed rather than eyeballed
+    # ---- the dissociation, over USABLE cells only
     def span(arm: str, key: str) -> float:
-        vals = [results["arms"][arm][str(c)][key] for c in coeffs]
-        vals = [v for v in vals if np.isfinite(v)]
-        return float(max(vals) - min(vals)) if vals else float("nan")
+        vals = [r[key] for r in results["arms"][arm].values() if r["usable"]]
+        vals = [v for v in vals if np.isfinite(v)] + [base[key]]
+        return float(max(vals) - min(vals)) if len(vals) > 1 else float("nan")
 
-    verdict = {a: {"rate_span": span(a, "refusal_rate"), "share_span": span(a, "inability_share")}
+    verdict = {a: {"rate_span": span(a, "refusal_rate"),
+                   "share_span": span(a, "inability_share"),
+                   "n_usable": sum(1 for r in results["arms"][a].values() if r["usable"])}
                for a in arms}
-    null_share = verdict["null"]["share_span"]
-    stance_moves = verdict["stance"]["share_span"] > null_share
-    stance_keeps_rate = all(abs(results["arms"]["stance"][str(c)]["d_rate"]) <= RATE_TOLERANCE
-                            for c in coeffs)
-    arditi_moves_rate = verdict["arditi"]["rate_span"] > verdict["null"]["rate_span"]
-    verdict["dissociation"] = bool(stance_moves and stance_keeps_rate and arditi_moves_rate)
-    verdict["stance_moves_composition"] = bool(stance_moves)
-    verdict["stance_preserves_rate"] = bool(stance_keeps_rate)
-    verdict["arditi_moves_rate"] = bool(arditi_moves_rate)
+    ns = verdict["null"]["share_span"]
+    stance_moves = bool(verdict["stance"]["share_span"] > (ns if np.isfinite(ns) else 0.0))
+    stance_keeps_rate = all(abs(r["d_rate"]) <= RATE_TOLERANCE
+                            for r in results["arms"]["stance"].values() if r["usable"])
+    nr = verdict["null"]["rate_span"]
+    arditi_moves_rate = bool(verdict["arditi"]["rate_span"] > (nr if np.isfinite(nr) else 0.0))
+    powered = verdict["stance"]["n_usable"] > 0 and verdict["arditi"]["n_usable"] > 0
+    verdict.update({"stance_moves_composition": stance_moves,
+                    "stance_preserves_rate": bool(stance_keeps_rate),
+                    "arditi_moves_rate": arditi_moves_rate, "powered": bool(powered),
+                    "dissociation": bool(powered and stance_moves and stance_keeps_rate
+                                         and arditi_moves_rate)})
     results["verdict"] = verdict
 
     path = f"{cfg.results_dir}/{stem}_stance_steer.npz"
     with RunRecord(EXPERIMENT, "stance_steer.py", cfg=cfg, question=QUESTION,
-                   notes=f"arm={args.arm}, coeffs={coeffs}, gen={args.gen_tokens}, "
+                   notes=f"arm={args.arm}, chosen={chosen}, kl_max={args.kl_max}, "
+                         f"gen={args.gen_tokens}, prefill_only=True, "
                          f"all arms norm-matched to ||d_inability||; "
                          f"dissociation={verdict['dissociation']}") as rec:
         np.savez(path, stage=np.array(args.stage), cell=np.array([c_pos, c_lay]),
@@ -236,19 +353,23 @@ def main() -> None:
     print(f"\n=== A3b: {stem} — does d_stance change the KIND of refusal? ===")
     print(f"baseline (c=0): refusal {base['refusal_rate']:.3f} | "
           f"inability {base['n_inability']} identity {base['n_identity']} "
-          f"| share {base['inability_share']:.3f}\n")
-    print(f"{'arm':8s} {'c':>5s} {'refusal':>8s} {'Δrate':>7s} {'inab':>5s} {'iden':>5s} "
-          f"{'share':>7s} {'Δshare':>8s}")
+          f"| share {base['inability_share']:.3f} | degenerate {base['degenerate']:.3f}\n")
+    print(f"{'arm':8s} {'c':>7s} {'KL':>6s} {'degen':>6s} {'refusal':>8s} {'Δrate':>7s} "
+          f"{'inab':>5s} {'iden':>5s} {'share':>7s} {'Δshare':>8s}")
     for name in arms:
-        for c in coeffs:
-            r = results["arms"][name][str(c)]
-            print(f"{name:8s} {c:>+5.1f} {r['refusal_rate']:>8.3f} {r['d_rate']:>+7.3f} "
-                  f"{r['n_inability']:>5d} {r['n_identity']:>5d} {r['inability_share']:>7.3f} "
-                  f"{r['d_share']:>+8.3f}")
-    print(f"\nspans (max-min across coefficients):")
+        if not results["arms"][name]:
+            print(f"{name:8s} no coefficient of either sign is within the KL bound")
+            continue
+        for c, r in results["arms"][name].items():
+            print(f"{name:8s} {float(c):>+7.3f} {r['kl']:>6.3f} {r['degenerate']:>6.3f} "
+                  f"{r['refusal_rate']:>8.3f} {r['d_rate']:>+7.3f} {r['n_inability']:>5d} "
+                  f"{r['n_identity']:>5d} {r['inability_share']:>7.3f} {r['d_share']:>+8.3f}"
+                  + ("" if r["usable"] else "  UNUSABLE"))
+    print("\nspans over usable cells (baseline included):")
     for a in arms:
         print(f"  {a:8s} rate {verdict[a]['rate_span']:.3f}   "
-              f"composition {verdict[a]['share_span']:.3f}")
+              f"composition {verdict[a]['share_span']:.3f}   "
+              f"({verdict[a]['n_usable']} usable cell(s))")
     print(f"\n  stance moves composition beyond null : "
           f"{'YES' if verdict['stance_moves_composition'] else 'NO'}")
     print(f"  stance leaves the rate alone (±{RATE_TOLERANCE:.2f}): "
@@ -259,13 +380,19 @@ def main() -> None:
     if verdict["dissociation"]:
         print("  -> d_stance changes WHICH refusal, d_arditi changes HOW MUCH. The stance")
         print("     axis is causal and separable: refusal is multi-directional.")
+    elif not verdict["powered"]:
+        print("  -> UNDERPOWERED, not negative. No usable cell in one of the two arms that")
+        print("     the comparison needs, so nothing here is evidence either way. Widen or")
+        print("     lower --grid, or accept that this model cannot be steered in regime.")
     elif not verdict["arditi_moves_rate"]:
-        print("  -> POSITIVE CONTROL FAILED. The harness cannot move refusal at all, so the")
-        print("     stance arm's result is uninterpretable. Fix this before reading anything.")
+        print("  -> POSITIVE CONTROL FAILED inside the regime. The refusal direction itself")
+        print("     does not move the rate at any coefficient the model survives, so the")
+        print("     stance arm's result is uninterpretable. That is a fact about the harness,")
+        print("     not about stance.")
     else:
-        print("  -> the falsifier fired: d_stance does not causally control stance. A3's")
-        print("     geometry is consistent with a prompt-content direction, and the")
-        print("     multi-directionality claim does not survive.")
+        print("  -> the falsifier fired: d_stance does not causally control stance while")
+        print("     d_arditi does control rate. A3's geometry is consistent with a")
+        print("     prompt-content direction, and multi-directionality does not survive.")
     print(f"\nwrote {path}")
 
 

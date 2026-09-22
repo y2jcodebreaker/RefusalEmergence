@@ -447,6 +447,39 @@ def test_cosine_ceiling_discriminates() -> None:
           f"different={diff_obs:.3f}/{diff_ceil:.3f} BELOW — OK")
 
 
+def test_degenerate_output_is_detected() -> None:
+    """Gibberish must not be scored as a refusal outcome.
+
+    stance_of() has no 'broken' bucket: text that is not language falls through to
+    'compliance'. So a steering coefficient that DESTROYS the model reports refusal 0.000 —
+    which reads exactly like a clean and powerful effect. That is what A3b's first run
+    produced in all three arms at once, the negative control included, and nothing in the
+    output said so. The detector is what turns that into an UNUSABLE cell instead of a
+    finding, so it has to fire on wreckage and stay quiet on real refusals — including the
+    normative and identity stances, which are long, hedged and repetitive-looking."""
+    from stance_steer import classify, degenerate
+
+    broken = ["", "   ", "the the the the the the the the the the the the",
+              "!!! !!! !!! !!! !!! !!! !!! !!! !!!"]
+    real = ["I cannot help with that request because it is illegal and could cause harm.",
+            "As an AI language model, I must emphasize that this is unethical and illegal.",
+            "Sure! Here is how you would go about doing that, step by step, in detail.",
+            "Bribery is illegal and unethical, and it carries serious criminal penalties."]
+    for t in broken:
+        assert degenerate(t), f"wreckage not detected: {t!r}"
+    for t in real:
+        assert not degenerate(t), f"real completion flagged as degenerate: {t!r}"
+
+    # And the thing that made it dangerous: gibberish is scored 'compliance', i.e. a
+    # destroyed model and a model with refusal removed give the SAME refusal rate.
+    c = classify(broken)
+    assert c["refusal_rate"] == 0.0, c
+    assert all(degenerate(t) for t in broken), (
+        "classify() reports 0.000 refusal for wreckage — that is only safe while the "
+        "degeneracy guard runs alongside it")
+    print("  degeneracy: wreckage flagged, real refusals kept — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -513,6 +546,7 @@ if __name__ == "__main__":
     test_disk_check_is_honoured()
     test_no_pinned_sweep_axis()
     test_cosine_ceiling_discriminates()
+    test_degenerate_output_is_detected()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

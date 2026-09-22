@@ -612,16 +612,21 @@ strong{font-weight:600;color:var(--ink)}
       the behavioural transplant, which crosses that boundary intact, carries the claim.</li>
       <li><strong>The transplant result is OLMo&nbsp;2&rsquo;s.</strong> In Zephyr no direction
       crosses in base at any magnitude tested, so &ldquo;the aligned direction is sufficient in
-      base&rsquo;&rsquo; is a one-family claim with a two-family representation result under it.</li>
+      base&rdquo; is a one-family claim with a three-family representation result under it.</li>
+      <li><strong>Three recipes is an ordering, not a trend.</strong> Zephyr-DPO 100&thinsp;%
+      &gt; Tulu-2 70&thinsp;% &gt; OLMo&nbsp;2 51&thinsp;%, but the last pair overlaps at
+      95&thinsp;% (55&ndash;80 against 40&ndash;60). Three points with one unseparated pair do
+      not make a line.</li>
       <li><strong>&sigma; is estimated from 10 draws</strong> (9 df). The decisive cell survives
       Bonferroni across all sixteen comparisons; the others are individually significant but not
       after correction. The pattern &mdash; 12/12 aligned, 0/4 base, no overlap &mdash; is what
       carries the claim, not any single cell.</li>
       <li><strong>The layer axis is where the direction was read from</strong>, not where refusal is
       implemented. This report identifies no circuit.</li>
-      <li><strong>Two families is not all families</strong>, and both are 7B. The causal test is
-      OLMo&nbsp;2 only &mdash; though the dose&ndash;response is a second, independent training run
-      that reproduces its endpoint.</li>
+      <li><strong>Three families is not all families</strong>, and all are 7B &mdash; there is no
+      size axis at all. The causal <em>attack</em> is OLMo&nbsp;2 only; the dose&ndash;response is
+      an independent second training run reproducing its endpoint, so the result is replicated
+      but the recipe is not. Llama-2-chat is unrun and gated.</li>
       <li><strong>The two induction rows are not measured at identical scale.</strong> The
       model&rsquo;s own direction is tested at its natural magnitude; the frozen direction was swept
       and peaked at twice its own. That peak is far below the sweep&rsquo;s ceiling, so it is not an
@@ -636,10 +641,10 @@ strong{font-weight:600;color:var(--ink)}
       everywhere except Zephyr base, where the classifier scores incompetence as refusal. That is a
       defensible procedure, not a neutral measurement, and a reader who prefers one instrument
       throughout will get different numbers.</li>
-      <li><strong>The recipe-dependence claim rests on two recipes.</strong> Zephyr-DPO with safety
-      filtering removed and OLMo&nbsp;2 with RLVR are far apart, which makes the contrast clean and
-      also makes it two points on a line. It predicts that any thinly-aligned model concentrates
-      refusal into one direction; that prediction is untested.</li>
+      <li><strong>Tulu-2&rsquo;s direction selection is thin.</strong> One of 160
+      (position, layer) cells passed the standard filters, against 13 for OLMo&nbsp;2. The ablation
+      still beats a norm-matched random control 39&times;, but the selection is marginal and a
+      reviewer will ask.</li>
       <li><strong>No lexically matched set was constructed.</strong> The trigger-word control comes
       from XSTest&rsquo;s own annotations, which match on the discriminative word but not on token
       count. A minimal-pair set would be tighter and is future work.</li>

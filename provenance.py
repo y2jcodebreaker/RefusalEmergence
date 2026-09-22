@@ -202,6 +202,50 @@ CLAIMS: tuple[Claim, ...] = (
         note="C3 holds in OLMo 2 and not Zephyr. Stated in the results, not the limitations.",
     ),
     Claim(
+        id="A3", layer=3,
+        statement="OPEN. Do the refusal stances that survive ablation have linear directions "
+                  "of their own, and are those distinct from Arditi's? B1 showed the "
+                  "direction removes INABILITY wherever it exists while Tulu-2's IDENTITY "
+                  "refusals go 20 -> 21 untouched, so the question is whether identity has a "
+                  "direction of its own.",
+        evidence=(
+            Evidence("stance", "stance_directions.py", "A3",
+                     "per-stance mean-diff directions fitted against harmless prompts, their "
+                     "induce values, and the pairwise cosines between them"),
+        ),
+        controls=(
+            Control("positive control: re-fit inability", "a broken contrast construction "
+                    "producing directions from noise", False,
+                    "d_inability fitted this way is Arditi's own estimator partitioned by "
+                    "what the model did, so it MUST reproduce the known l* and induce value. "
+                    "If it does not, nothing else in the run is readable.",
+                    script="stance_directions.py"),
+            Control("shuffled-label null per stance", "a direction fitted on an arbitrary "
+                    "partition of the model's own outputs looking like something", False,
+                    "same class sizes, same pooled activations, labels randomised; shares the "
+                    "anisotropic geometry so it is harder than an isotropic null",
+                    script="stance_directions.py"),
+            Control("count balance", "a mean-diff dominated by the larger class -- the stance "
+                    "classes differ by up to 6x", False,
+                    "both classes subsampled to the smaller size before fitting",
+                    script="stance_directions.py"),
+            Control("cross-checkpoint transplant", "the circularity of fitting a direction on "
+                    "classes derived from the model's OWN completions", False,
+                    "does d_identity from Tulu-2 induce refusal in OLMo 2? Behavioural, so "
+                    "immune to the objection. Not yet run.", script="transplant.py"),
+        ),
+        depends_on=("C1", "C2", "C3", "P1-E7"),
+        falsifier="No stance direction beats its shuffled-label null -> the surviving stances "
+                  "are not linearly mediated at the eoi position, which bounds the linear "
+                  "representation hypothesis and is itself the result. Or every pairwise "
+                  "cosine exceeds 0.7 -> one direction with several readouts, and 'refusal is "
+                  "multi-directional' is wrong.",
+        note="Layer 3. The decisive run is tulu2_dpo/baseline: it is the only configuration "
+             "that fits inability (78) AND identity (41) from one model, one prompt set, one "
+             "activation cache -- so the cosine between them is a within-model comparison "
+             "with nothing else varying.",
+    ),
+    Claim(
         id="P1-E7", layer=2,
         statement="CONFIRMED 2026-09-19. Breaking alignment breaks the LINK and spares "
                   "the REPRESENTATION. Attacked: probe 1.000, XSTest focus-matched 0.917, "
@@ -471,6 +515,17 @@ def check(claims=CLAIMS) -> list[str]:
                 problems.append(f"{c.id} (layer {c.layer}) depends on {dep} "
                                 f"(layer {by_id[dep].layer}) -- a claim cannot rest on a "
                                 f"DEEPER one; the layering is wrong.")
+        # PLANNED vs BROKEN. This file's own instructions say to add a Claim FIRST, with its
+        # controls and falsifier, and only then write the script -- so a claim whose evidence
+        # does not exist yet is following the process, not violating it. Treating that as a
+        # problem made `--check` exit 1 the moment A3 was registered as designed (2026-09-23),
+        # which would train the reader to ignore the check. A claim is PLANNED when none of
+        # its evidence exists AND none of its controls is marked done; anything else is a
+        # partially-run claim, where a missing file IS a real inconsistency.
+        planned = (all(e.axis not in files for e in c.evidence)
+                   and not any(k.done for k in c.controls))
+        if planned:
+            continue
         for e in c.evidence:
             if e.axis not in files:
                 problems.append(f"{c.id}: no results/*_{e.axis}.npz on disk, so the evidence "

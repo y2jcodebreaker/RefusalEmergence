@@ -827,21 +827,59 @@ trusting the rate — that is the standing instruction for the OLMo 2 and tulu-2
 
 ## Known limitations
 
-1. **One lineage, one size, one behavior.** Zephyr's DPO deliberately removed safety
-   filtering, so this lineage alone cannot support a general claim about alignment.
-2. **`l*` is partly an artifact of pruning.** The ablation curves peak at L26–31, exactly the
-   band `prune_layer_pct=0.20` excludes from selection. Report the full curve; the reported
-   `l*` is "best among allowed." (The *induce* result does not have this problem — its peak
-   at L16 is well inside the allowed range.)
-3. **The x-axis is the layer the direction was READ FROM**, not where refusal is implemented.
-   Ablation is applied globally across all layers, per Arditi.
-4. **The ablation half of the behavioral axis is weak.** SFT and DPO refuse 1/132 and 6/132,
-   so driving those to zero carries little weight. The causal claim rests on the induce axis.
-5. **Residual base-judge risk.** The strict judge fixes turn leakage and confusion, but a base
-   completion that is off-task *without* a turn marker would still pass. The 31 strict hits
-   deserve a full hand-check before publication.
-6. **Jensen gap.** The per-prompt diagnostic reports mean *probability* while the sweep reports
-   mean *log-ratio*; both are correct and they differ on skewed distributions.
+Rewritten 2026-09-23. The previous list was written for the Zephyr-only pilot and had gone
+stale: it said "one lineage, one size, one behavior" when there are now three lineages, called
+the ablation axis weak on the strength of SFT/DPO refusing 1/132 and 6/132 when OLMo 2 refuses
+130/132, and asked for a hand-check that has since been done twice. **A stale limitation is
+worse than a missing one** — it tells a reader the author stopped tracking their own claims.
+
+### Still true, and load-bearing
+
+1. **The attack is one family, one checkpoint, one recipe.** P1-E7 ran on OLMo 2 only. The
+   dose–response is an independent second training run that reproduces its endpoint, so the
+   *result* is replicated; the *recipe* is not. Llama-2-chat, pre-registered as rank 1 on the
+   thoroughness ordering, is unrun and gated.
+2. **Three recipes is an ordering, not a trend.** Zephyr-DPO 100 % > Tulu-2 70 % > OLMo 2
+   51 %, but Tulu-2 vs OLMo 2 overlaps at 95 % (55–80 against 40–60). Do not draw a line
+   through three points when one pair does not separate.
+3. **All 7B.** No size axis at all.
+4. **The layer axis is where the direction was READ FROM**, not where refusal is implemented.
+   Ablation is applied globally across layers, per Arditi. **No circuit is identified anywhere
+   in this work.**
+5. **Every refusal rate rests on a judge, and the judges disagree.** Each arm is reported with
+   the judge that survived an audit of its disagreements — a classifier everywhere except
+   Zephyr base, the one non-chat model, where the classifier scores incompetence as refusal.
+   That is a defensible procedure, not a neutral measurement.
+6. **Generation length is a measurement parameter, and only some runs use the corrected one.**
+   128-token rates exist for the three-family table. P1-E7's 0.477 and the whole dose–response
+   are 48-token measurements and therefore upper bounds on refusal; those checkpoints no longer
+   exist, so correcting them needs the experiment re-run, not re-judged.
+7. **`l*` is partly an artifact of pruning.** Ablation curves peak at L26–31, exactly the band
+   `prune_layer_pct=0.20` excludes. The reported `l*` is "best among allowed". The *induce*
+   axis does not have this problem.
+8. **Tulu-2's direction selection is thin.** 1 of 160 (pos, layer) cells passed Arditi's
+   filters, against 13/160 for OLMo 2. The ablation still beats a norm-matched random control
+   39×, but a reviewer will ask and should.
+9. **σ is estimated from 10 draws** (9 df) in the transplant nulls. The decisive cell survives
+   Bonferroni across sixteen comparisons; the pattern carries the claim, not any single cell.
+10. **The frozen and re-fitted induction columns are not measured at identical scale.** The
+    model's own direction is tested at coefficient 1.0; the frozen sweep peaked at 2.0. Far
+    below the sweep ceiling, so not an artifact of pushing harder — but not yet like for like.
+11. **Base OLMo 2 runs under a different prompt format.** It degenerates under its own chat
+    template and is coherent under a plain one, so it is not format-matched to the aligned
+    stages. Unavoidable, and the reason the behavioural transplant carries that claim.
+12. **Jensen gap.** The per-prompt diagnostic reports mean *probability*; the sweep reports
+    mean *log-ratio*. Both correct, and they differ on skewed distributions.
+
+### Retired — these were limitations and are no longer
+
+- ~~"One lineage, one size, one behavior."~~ Three lineages: Zephyr, OLMo 2, Tulu-2.
+- ~~"The ablation half of the behavioural axis is weak (1/132, 6/132)."~~ OLMo 2 refuses
+  130/132 and Tulu-2 100/132 at baseline, so the ablation axis now carries real weight.
+- ~~"The 31 strict hits deserve a full hand-check before publication."~~ Done, twice: 64
+  completions for P1-E1c and 210 prompt-paired for P1-E7.
+- ~~"Zephyr's rates have not been re-scored with a classifier."~~ Done, all arms, at both
+  generation lengths.
 
 ## Superseded runs in the ledger
 

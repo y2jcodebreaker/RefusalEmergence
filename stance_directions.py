@@ -131,17 +131,52 @@ def fit_direction(acts_pos: np.ndarray, acts_neg: np.ndarray) -> np.ndarray:
     return acts_pos.mean(0) - acts_neg.mean(0)
 
 
+def _induce_at(model, tok, cfg, template, refusal_toks, vec, layer, harmless,
+               coeff: float) -> float:
+    """Mean refusal-token logit on HARMLESS prompts after adding `coeff * vec` at `layer`."""
+    h = _addition_handles(model, torch.tensor(vec, dtype=torch.float32), coeff=coeff,
+                          layer=layer)
+    try:
+        return float(_mean_refusal(
+            _last_logits(model, tok, harmless, template, cfg.batch_size), refusal_toks))
+    finally:
+        for x in h:
+            x.remove()
+
+
+def select_cell(model, tok, cfg, template, refusal_toks, d, harmless) -> tuple:
+    """(pos*, layer*, surface) by induce at coeff=1.0 over the FULL (pos, layer) surface.
+
+    THIS SWEEPS POSITIONS, AND THE FIRST VERSION DID NOT. It fixed the eoi position to the
+    last one -- `d[d.shape[0] - 1, layer]` -- and swept layers only. That is not a cheap
+    approximation of Arditi's selection, it is a different selection: on tulu-2-dpo the
+    model's own (pos*, l*) is (2, 14) of a 5-position window, so the fixed-position sweep
+    could not reach the model's own cell and landed on (4, 12) instead. The positive control
+    (does a re-fitted d_inability reproduce the known direction?) therefore could not pass,
+    and the 2026-09-22 run reported a cosine whose cells nothing else in the project used.
+
+    COEFF 1.0, NOT A COEFFICIENT SWEEP, BECAUSE THAT IS WHAT run_stage STORES. The `steer`
+    surface in {stem}_refusal.npz is refusal_strength_curve's addition at coeff=1.0 across
+    every (pos, layer). Selecting here on the same quantity is what makes the two numbers
+    comparable at all; the earlier per-layer max over six coefficients was not the same
+    measurement, so even the layers it did visit could not be read against run_stage. The
+    coefficient sweep still happens -- once, at the selected cell -- which is also cheaper
+    than the old sweep (n_pos*n_layers + |COEFFS| evaluations, not n_layers*|COEFFS|)."""
+    n_pos, n_layers = d.shape[0], d.shape[1]
+    surf = np.full((n_pos, n_layers), np.nan)
+    for pos in range(n_pos):
+        for layer in range(n_layers):
+            surf[pos, layer] = _induce_at(model, tok, cfg, template, refusal_toks,
+                                          d[pos, layer], layer, harmless, 1.0)
+    p, l = (int(v) for v in np.unravel_index(np.nanargmax(surf), surf.shape))
+    return p, l, surf
+
+
 def induce_sweep(model, tok, cfg, template, refusal_toks, vec, layer, harmless) -> dict:
+    """Best induce over COEFFS at ONE cell. Reported as the stance's effect size."""
     best, at = -float("inf"), None
     for c in COEFFS:
-        h = _addition_handles(model, torch.tensor(vec, dtype=torch.float32), coeff=c,
-                              layer=layer)
-        try:
-            v = _mean_refusal(_last_logits(model, tok, harmless, template, cfg.batch_size),
-                              refusal_toks)
-        finally:
-            for x in h:
-                x.remove()
+        v = _induce_at(model, tok, cfg, template, refusal_toks, vec, layer, harmless, c)
         if v > best:
             best, at = v, c
     return {"max": float(best), "at_coeff": float(at)}
@@ -190,7 +225,7 @@ def main() -> None:
     N = cache_activations(model, tok, harmless_fit, template, n_eoi, cfg.batch_size).numpy()
 
     rng = np.random.default_rng(cfg.seed)
-    out, dirs = {}, {}
+    out, dirs, surfaces, fitted = {}, {}, {}, {}
     for stance in [s for s, _ in STANCES] + ["normative"]:
         idx = groups.get(stance, [])
         if len(idx) < MIN_CLASS:
@@ -204,35 +239,96 @@ def main() -> None:
         neg = rng.choice(len(N), k, replace=False)
         d = fit_direction(A[pos], N[neg])                       # (n_pos, n_layers, dim)
         # Pick the cell by induce, the axis being scored -- the same choice --source-by induce
-        # makes in transplant.py, and for the same anti-circularity reason.
-        best = {"max": -float("inf")}
-        for layer in range(d.shape[1]):
-            r = induce_sweep(model, tok, cfg, template, refusal_toks,
-                             d[d.shape[0] - 1, layer], layer, harmless)
-            if r["max"] > best["max"]:
-                best, best_layer = r, layer
-        dirs[stance] = d[d.shape[0] - 1, best_layer]
-        # Shuffled-label null over the SAME partition sizes.
+        # makes in transplant.py, and for the same anti-circularity reason. Position AND
+        # layer: see select_cell for what fixing the position cost.
+        p_star, best_layer, surf = select_cell(model, tok, cfg, template, refusal_toks,
+                                               d, harmless)
+        best = induce_sweep(model, tok, cfg, template, refusal_toks,
+                            d[p_star, best_layer], best_layer, harmless)
+        dirs[stance] = d[p_star, best_layer]
+        surfaces[stance] = surf
+        fitted[stance] = d          # kept so the control can read OTHER cells
         # Shuffled-label null: same sizes, same pooled activations, labels randomised. It
         # shares the data's anisotropic geometry, so it is strictly harder than an isotropic
         # random vector.
+        #
+        # The null is evaluated AT THE CELL THE REAL DIRECTION SELECTED, not at its own best
+        # cell -- it is not given the same n_pos*n_layers search. So z answers "at this cell,
+        # is the effect label-driven?", which is the question, and NOT "is this cell special?",
+        # which it would overstate. Giving each null its own surface would cost n_null times
+        # the sweep; the asymmetry is stated here rather than silently priced in.
         nulls = []
         pool = np.concatenate([A[pos], N[neg]])
         for _ in range(args.n_null):
             sh = rng.permutation(len(pool))
             dn = fit_direction(pool[sh[:k]], pool[sh[k:2 * k]])
             nulls.append(induce_sweep(model, tok, cfg, template, refusal_toks,
-                                      dn[dn.shape[0] - 1, best_layer], best_layer,
+                                      dn[p_star, best_layer], best_layer,
                                       harmless)["max"])
         out[stance] = {"n": len(idx), "fitted": True, "k_balanced": int(k),
-                       "layer": int(best_layer), "induce_max": best["max"],
-                       "at_coeff": best["at_coeff"],
+                       "layer": int(best_layer), "pos": int(p_star),
+                       "induce_max": best["max"], "at_coeff": best["at_coeff"],
+                       "induce_at_c1": float(surf[p_star, best_layer]),
                        "null_mean": float(np.mean(nulls)), "null_sd": float(np.std(nulls)),
                        "z": float((best["max"] - np.mean(nulls)) / (np.std(nulls) + 1e-9)),
                        "n_null_crossing": int(sum(n >= cfg.induce_threshold for n in nulls))}
-        logger.info("[%s] n=%d k=%d L%d induce %+.3f @c%.1f | null %+.3f±%.3f | z=%+.1f",
-                    stance, len(idx), k, best_layer, best["max"], best["at_coeff"],
-                    np.mean(nulls), np.std(nulls), out[stance]["z"])
+        logger.info("[%s] n=%d k=%d pos%d/L%d induce %+.3f @c%.1f (c1 %+.3f) | "
+                    "null %+.3f±%.3f | z=%+.1f",
+                    stance, len(idx), k, p_star, best_layer, best["max"], best["at_coeff"],
+                    surf[p_star, best_layer], np.mean(nulls), np.std(nulls), out[stance]["z"])
+
+    # ------------------------------------------------------------- positive control
+    # d_inability re-fitted here must reproduce the direction run_stage already found, or
+    # the contrast construction is broken and every cosine below is unreadable. Two halves,
+    # both pre-registered before this run:
+    #   CELL      A3's selected (pos*, l*) equals the argmax of run_stage's stored `steer`
+    #   DIRECTION cos(d_inability, d_arditi) >= 0.70 at that cell
+    #
+    # THE COMPARATOR IS steer's ARGMAX, NOT THE STORED (pos_star, l_star). Those two are not
+    # the same cell and were never meant to be: run_stage selects by ABLATION under Arditi's
+    # three criteria, A3 selects by INDUCE. On tulu-2-dpo, Arditi's OWN direction induces
+    # +0.826 somewhere on the surface and only +0.519 at its ablation-selected (2, 14) -- so
+    # demanding that A3 land on (2, 14) would fail a direction that is exactly right, for a
+    # reason that has nothing to do with the stance partition. Same rule, same quantity,
+    # different fit: that is what makes the comparison diagnostic.
+    #
+    # d_arditi is recomputed from the SAME cached activations, unpartitioned -- literally
+    # Arditi's estimator, on an independent split (the held-out tail, not harmful_train[:128]),
+    # which makes the agreement a stronger check than re-running it on the fitting split.
+    ctrl: dict = {"checked": False}
+    ref_path = cfg.path(args.stage, "refusal")
+    if "inability" not in dirs:
+        ctrl["why"] = "inability not fitted -- there is no positive control"
+    elif not os.path.exists(ref_path):
+        ctrl["why"] = f"{ref_path} missing -- run run_stage first"
+    else:
+        z = np.load(ref_path, allow_pickle=True)
+        steer = np.asarray(z["steer"], dtype=float) if "steer" in z.files else None
+        if steer is None or not np.isfinite(steer).any():
+            ctrl["why"] = ("run_stage stored no usable steer surface for this stage "
+                           "(it was run with filtered=False); re-run it with the KL filter")
+        elif steer.shape != fitted["inability"].shape[:2]:
+            ctrl["why"] = (f"steer surface is {steer.shape} but A3 cached "
+                           f"{fitted['inability'].shape[:2]} -- n_eoi or the layer count "
+                           f"changed between runs, so the cells are not the same cells")
+        else:
+            ref_pos, ref_l = (int(v) for v in
+                              np.unravel_index(np.nanargmax(steer), steer.shape))
+            got_pos, got_l = out["inability"]["pos"], out["inability"]["layer"]
+            # The SAME count-balanced d_inability the experiment uses, read at run_stage's
+            # cell -- not a second, differently-sampled fit, which would leave the control
+            # certifying a direction no result depends on.
+            va = fitted["inability"][ref_pos, ref_l]
+            vb = (A.mean(0) - N.mean(0))[ref_pos, ref_l]
+            c = float(va @ vb / (np.linalg.norm(va) * np.linalg.norm(vb) + 1e-9))
+            ctrl = {"checked": True,
+                    "ref_pos": ref_pos, "ref_layer": ref_l,
+                    "ref_steer_max": float(np.nanmax(steer)),
+                    "ablation_pos_star": int(z["pos_star"]), "ablation_l_star": int(z["l_star"]),
+                    "got_pos": got_pos, "got_layer": got_l,
+                    "cell_match": bool(got_pos == ref_pos and got_l == ref_l),
+                    "cos_with_arditi": c, "direction_match": bool(c >= 0.70)}
+            ctrl["passed"] = bool(ctrl["cell_match"] and ctrl["direction_match"])
 
     cos = {}
     names = sorted(dirs)
@@ -246,13 +342,18 @@ def main() -> None:
 
     path = f"{cfg.results_dir}/{stem}_stance_directions.npz"
     with RunRecord(EXPERIMENT, "stance_directions.py", cfg=cfg, question=QUESTION,
-                   notes=f"arm={args.arm}, stances fitted against compliance, count-balanced, "
-                         f"{args.n_null} shuffled-label nulls per stance") as rec:
+                   notes=f"arm={args.arm}, stances fitted against HARMLESS (not compliance), "
+                         f"count-balanced, cell by induce@c1.0 over the full (pos, layer) "
+                         f"surface, {args.n_null} shuffled-label nulls per stance; "
+                         f"positive control passed={ctrl.get('passed')}") as rec:
         np.savez(path, stage=np.array(args.stage), arm=np.array(args.arm),
                  results=np.array(json.dumps(out)), cosines=np.array(json.dumps(cos)),
-                 **{f"dir_{s}": v for s, v in dirs.items()})
+                 control=np.array(json.dumps(ctrl)),
+                 **{f"dir_{s}": v for s, v in dirs.items()},
+                 **{f"surface_{s}": v for s, v in surfaces.items()})
         for s, r in out.items():
             rec.result(stance=s, **{k: v for k, v in r.items() if k != "fitted"})
+        rec.result(stance="_positive_control", **ctrl)
     print(f"\n=== A3: {stem}/{args.arm} ===")
     print(f"{'stance':14s} {'n':>4s} {'layer':>6s} {'induce':>8s} {'z':>7s} {'nulls crossing':>15s}")
     for s, r in out.items():
@@ -261,6 +362,23 @@ def main() -> None:
             continue
         print(f"{s:14s} {r['n']:>4d} {r['layer']:>6d} {r['induce_max']:>+8.3f} "
               f"{r['z']:>+7.1f} {r['n_null_crossing']:>10d}/{args.n_null}")
+    print("\n-- positive control (d_inability must reproduce Arditi's direction) --")
+    if not ctrl.get("checked"):
+        print(f"   NOT CHECKED: {ctrl.get('why', 'unavailable')}")
+        print("   Nothing below is reportable without this.")
+    else:
+        print(f"   cell      {'PASS' if ctrl['cell_match'] else 'FAIL'}  "
+              f"A3 picked (pos {ctrl['got_pos']}, L{ctrl['got_layer']}); run_stage's steer "
+              f"argmax is (pos {ctrl['ref_pos']}, L{ctrl['ref_layer']})")
+        print(f"   direction {'PASS' if ctrl['direction_match'] else 'FAIL'}  "
+              f"cos(d_inability, d_arditi) = {ctrl['cos_with_arditi']:+.3f} there "
+              f"(pre-registered >= 0.70)")
+        print(f"   (for reference, run_stage's ABLATION cell is "
+              f"(pos {ctrl['ablation_pos_star']}, L{ctrl['ablation_l_star']}) -- a different "
+              f"criterion, not the comparator)")
+        if not ctrl["passed"]:
+            print("   -> the contrast construction does NOT reproduce the known direction.")
+            print("      The cosines below are NOT reportable until this passes.")
     if cos:
         print("\npairwise |cos|: " + ", ".join(f"{k} {abs(v):.3f}" for k, v in cos.items()))
         print("  < 0.30 -> distinct directions, refusal is multi-directional")

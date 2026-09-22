@@ -348,6 +348,57 @@ def test_disk_check_is_honoured() -> None:
     print("  check_disk: no caller discards the return value — OK")
 
 
+def test_no_pinned_sweep_axis() -> None:
+    """A sweep must not silently pin an axis it is supposed to sweep.
+
+    On 2026-09-22 stance_directions.py selected its (position, layer) cell with
+    `d[d.shape[0] - 1, layer]` -- the LAST eoi position, fixed, layers swept. That is not a
+    cheap approximation of Arditi's selection over the full surface, it is a different
+    selection: on tulu-2-dpo it landed on (pos 4, L12), a cell where Arditi's OWN direction
+    scores -1.417, while run_stage's steer surface peaks at (pos 3, L14) = +0.826. The
+    positive control could not pass, and nothing in the output said why -- the run looked
+    clean and reported a cosine computed in the wrong place.
+
+    The signature is literal and worth catching statically: indexing an activation surface's
+    first axis with `<arr>.shape[0] - 1`. Anything that genuinely wants the last row should
+    say `arr[-1]`, which is unambiguous and is not flagged here."""
+    import ast
+    import pathlib
+
+    def is_last_row(node: ast.AST) -> bool:
+        """`X.shape[0] - 1`"""
+        return (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Sub)
+                and isinstance(node.right, ast.Constant) and node.right.value == 1
+                and isinstance(node.left, ast.Subscript)
+                and isinstance(node.left.value, ast.Attribute)
+                and node.left.value.attr == "shape"
+                and isinstance(node.left.slice, ast.Constant)
+                and node.left.slice.value == 0)
+
+    offenders = []
+    for path in sorted(pathlib.Path(".").glob("*.py")):
+        if path.name == "smoke_test.py":
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Subscript):
+                continue
+            sl = node.slice
+            first = sl.elts[0] if isinstance(sl, ast.Tuple) and sl.elts else sl
+            if is_last_row(first):
+                offenders.append(f"{path.name}:{node.lineno}")
+    assert not offenders, (
+        "an axis is pinned to its last index inside a subscript at: " + ", ".join(offenders) +
+        "\n  If the axis should be swept, sweep it. If you really want the last row, "
+        "write arr[-1].")
+
+    # Prove the detector fires, so a green line here means something.
+    bad = ast.parse("v = d[d.shape[0] - 1, layer]")
+    hits = [n for n in ast.walk(bad) if isinstance(n, ast.Subscript)
+            and isinstance(n.slice, ast.Tuple) and is_last_row(n.slice.elts[0])]
+    assert hits, "the pinned-axis detector does not fire on the original bug"
+    print("  sweeps: no module pins a surface axis to its last index — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -412,6 +463,7 @@ if __name__ == "__main__":
     test_provenance_graph()
     test_superseded_citations()
     test_disk_check_is_honoured()
+    test_no_pinned_sweep_axis()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

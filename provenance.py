@@ -280,7 +280,12 @@ CLAIMS: tuple[Claim, ...] = (
                     "rlvr->attacked cell, which DID restore refusal at +1.069, so the "
                     "instrument is known to work. BLOCKING for 'the coupling is destroyed "
                     "before the behaviour is'; the weaker 'no direction is FINDABLE at dose "
-                    "100' already holds.", script="transplant.py"),
+                    "100' already holds. BUILT 2026-09-22 into dose_response.py instead of a "
+                    "separate script: the dose-0 direction is frozen and re-injected at every "
+                    "later dose, which gives a CURVE rather than one point and needs no saved "
+                    "checkpoint. Carries its own positive control -- at dose 0 the frozen cell "
+                    "IS the self cell, so the sweep must reproduce steer at l* or the run "
+                    "aborts.", script="dose_response.py"),
             Control("step dose-response", "a single before/after pair being a coincidence",
                     True, "2026-09-22: RUN, both arms, six doses. It did not confirm the "
                     "prediction -- it sharpened it. Coupling 13 -> 0 steerable layers by step "

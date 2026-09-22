@@ -39,6 +39,22 @@ artifact this experiment would otherwise claim as its result.
 
     python judge_wildguard.py results/olmo2_e7d_{arm}_dose_{step}_refusal.npz --lineage olmo2
 
+DESTROYED, OR MERELY UNFINDABLE? The direction is RE-FITTED from each dose's own activations,
+so "no valid direction at dose 100" has two readings that the curve alone cannot separate:
+
+    (a) the COUPLING is destroyed                       <- what the claim needs
+    (b) mean-diff no longer FINDS a direction that still works
+
+Under (b) the mechanism is intact and only our estimator lost it, which would make the whole
+result an artifact of the measurement. So the dose-0 direction is FROZEN at the start and
+re-injected at every subsequent dose, over the same coefficient grid transplant.py uses. If
+that frozen direction keeps inducing refusal while the re-fitted one goes negative, reading
+(b) is correct and the claim collapses. If it dies too, the coupling is genuinely gone.
+
+This is P1-E7b's rlvr->attacked cell turned into a curve, and that cell DID restore refusal
+(+1.069), so the instrument is known to work on exactly this comparison. Testing it in-run
+costs one extra sweep per dose and needs no saved checkpoint.
+
 WHERE THIS SITS IN THE GRAPH.
 
     attack.py (P1-E7)  ->  endpoints, behaviour + mechanism           [DONE]
@@ -69,7 +85,10 @@ from attack import build_benign, build_safety_examples, encode_sft, fill_respons
 from config import config_for
 from data import load_instructions
 from probes import cache_activations, logistic_accuracy, mass_mean_accuracy
-from refusal_direction import get_mean_diff, refusal_strength_curve, resolve_refusal_token
+from refusal_direction import (_addition_handles, _last_logits, _mean_refusal,
+                               get_mean_diff, refusal_strength_curve,
+                               resolve_refusal_token)
+from transplant import COEFFS
 from refusal_substring import behavioral_rates
 from run_stage import load_model, set_seed
 from runlog import RunRecord
@@ -87,9 +106,35 @@ QUESTION = ("Across a benign fine-tuning run, do behavioural refusal and the cou
 DEFAULT_DOSES = (0, 100, 250, 500, 1000, 1500)
 
 
+def frozen_probe(model, tok, cfg, template, refusal_toks, frozen: torch.Tensor,
+                 layer: int, pos: int, harmless) -> dict:
+    """Does the DOSE-0 direction still induce refusal in this model?
+
+    Separates 'the coupling is destroyed' from 'mean-diff stopped finding it' -- see the
+    module docstring. Same absolute-score convention as refusal_strength_curve's steer
+    surface, so the values are comparable with `max_induce` cell for cell."""
+    best, at = -float("inf"), None
+    for c in COEFFS:
+        h = _addition_handles(model, frozen, coeff=c, layer=layer)
+        try:
+            v = _mean_refusal(_last_logits(model, tok, harmless, template, cfg.batch_size),
+                              refusal_toks)
+        finally:
+            for x in h:
+                x.remove()
+        if v > best:
+            best, at = v, c
+    return {"frozen_induce_max": float(best), "frozen_induce_at_coeff": float(at),
+            "frozen_layer": int(layer), "frozen_pos": int(pos)}
+
+
 def measure(model, tok, cfg, stage_tag: str, template: str, refusal_toks, n_eoi: int,
-            splits: dict) -> dict:
-    """Behaviour + coupling + probe on the model AS IT CURRENTLY IS. No saving, no reloading."""
+            splits: dict, frozen: dict | None = None) -> dict:
+    """Behaviour + coupling + probe on the model AS IT CURRENTLY IS. No saving, no reloading.
+
+    `frozen` carries the dose-0 direction and its layer/pos; when present, it is re-injected
+    here so every dose answers 'does the ORIGINAL direction still work' as well as 'is a
+    direction findable now'."""
     was_training = model.training
     model.eval()
     grad = torch.is_grad_enabled()
@@ -152,6 +197,21 @@ def measure(model, tok, cfg, stage_tag: str, template: str, refusal_toks, n_eoi:
         out["probe_L0_logistic"] = float(np.nanmax(acc_lr[:, 0]))
         out["steer_curve"] = best_per_layer
         out["bypass"] = res["bypass"]
+        # steer AT l*, not the surface maximum. max_induce is the best over ALL cells and at
+        # dose 0 that is a different layer (L18) from l* (L24), so it is the wrong thing to
+        # check the frozen sweep against -- the frozen direction lives at l*.
+        out["steer_at_l_star"] = (float(steer[int(res["pos_star"]), int(res["l_star"])])
+                                  if out["l_star"] >= 0 else float("nan"))
+
+        # --- the frozen dose-0 direction, re-tested. At dose 0 this is the SELF cell and
+        # must reproduce max_induce, which makes it its own positive control.
+        if frozen is not None:
+            out.update(frozen_probe(model, tok, cfg, template, refusal_toks,
+                                    frozen["vec"], frozen["layer"], frozen["pos"],
+                                    splits["harmless_val"]))
+        # Keep this dose's own directions so dose 0 can be frozen by the caller.
+        out["_dirs"] = dirs
+        out["_pos_star"] = int(res["pos_star"]) if out["l_star"] >= 0 else -1
         return out
     finally:
         torch.set_grad_enabled(grad)
@@ -268,7 +328,7 @@ def main() -> None:
                         "gate_proj", "up_proj", "down_proj"]))
     opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=args.lr)
 
-    rows, step = [], 0
+    rows, step, frozen = [], 0, None
     with RunRecord(EXPERIMENT, "dose_response.py", cfg=cfg, question=QUESTION,
                    notes=f"arm={args.arm} doses={doses} rank={args.rank} lr={args.lr} "
                          f"n={args.n} responses={args.responses}. Substring rates are LOWER "
@@ -280,11 +340,51 @@ def main() -> None:
                                 bs=args.bs, pad=tok.pad_token_id)
             logger.info("[%s] === measuring at dose %d ===", args.arm, step)
             m = measure(model, tok, cfg, f"{args.arm}@{step}", template, refusal_toks, n_eoi,
-                        splits)
-            logger.info("[%s] dose %4d | refusal(substring) %.3f | l*=%2d | max induce %+.3f "
-                        "| steerable layers %2d | probe %.3f",
+                        splits, frozen=frozen)
+
+            if frozen is None:
+                # Freeze dose 0's direction at its OWN l*. If l* = -1 here the untouched
+                # checkpoint has no validated direction and the whole comparison is moot, so
+                # refuse rather than freeze the unfiltered fallback and quietly compare
+                # against a direction that never worked.
+                if m["l_star"] < 0:
+                    raise SystemExit(
+                        f"dose 0 has no filtered l* for {ckpts[args.src]}, so there is no "
+                        f"validated direction to freeze and 'does the original direction "
+                        f"still work' has no meaning. Check the lineage/regime before "
+                        f"reading anything into a dose-response here.")
+                frozen = {"vec": m["_dirs"][m["_pos_star"], m["l_star"]].clone(),
+                          "layer": int(m["l_star"]), "pos": int(m["_pos_star"])}
+                logger.info("[%s] FROZE the dose-0 direction @ (pos %d, L%d), norm %.1f -- it "
+                            "will be re-injected at every later dose",
+                            args.arm, frozen["pos"], frozen["layer"],
+                            float(frozen["vec"].norm()))
+                m.update(frozen_probe(model, tok, cfg, template, refusal_toks, frozen["vec"],
+                                      frozen["layer"], frozen["pos"], splits["harmless_val"]))
+                # POSITIVE CONTROL for the frozen path. The grid includes coeff 1.0, and at
+                # coeff 1.0 the frozen injection at (pos*, l*) is EXACTLY what the re-fitted
+                # sweep already measured at that cell. So the frozen maximum must be at least
+                # that value; if it is not, the two code paths disagree and neither is usable.
+                # Compared at l*, not against max_induce, which is the best over all cells and
+                # at dose 0 sits at a different layer.
+                if m["frozen_induce_max"] < m["steer_at_l_star"] - 0.01:
+                    raise SystemExit(
+                        f"dose 0 self-check FAILED: the frozen sweep peaks at "
+                        f"{m['frozen_induce_max']:+.3f} but the re-fitted surface already "
+                        f"reads {m['steer_at_l_star']:+.3f} at the very same cell "
+                        f"(pos {frozen['pos']}, L{frozen['layer']}), and the grid includes "
+                        f"coeff 1.0. The two paths must agree at dose 0 or the frozen curve "
+                        f"means nothing.")
+                logger.info("[%s] dose-0 self-check OK: frozen sweep peaks %+.3f (coeff %.1f) "
+                            ">= re-fitted %+.3f at the same cell",
+                            args.arm, m["frozen_induce_max"], m["frozen_induce_at_coeff"],
+                            m["steer_at_l_star"])
+
+            logger.info("[%s] dose %4d | refusal(substring) %.3f | l*=%2d | refit induce "
+                        "%+.3f | FROZEN induce %+.3f | steerable %2d | probe %.3f",
                         args.arm, step, m["substring_baseline_rate_strict"], m["l_star"],
-                        m["max_induce"], m["n_steerable_layers"], m["probe_peak_logistic"])
+                        m["max_induce"], m["frozen_induce_max"], m["n_steerable_layers"],
+                        m["probe_peak_logistic"])
 
             path = f"{cfg.results_dir}/{args.tag}_{args.arm}_dose_{step}_refusal.npz"
             np.savez(path,
@@ -293,7 +393,8 @@ def main() -> None:
                      dose_steps=np.array(step),
                      n_behavioral=np.array(len(splits["beh"])),
                      sample_completions=np.array(json.dumps(m["sample_completions"])),
-                     **{k: np.array(v) for k, v in m.items() if k != "sample_completions"})
+                     **{k: np.array(v) for k, v in m.items()
+                        if k != "sample_completions" and not k.startswith("_")})
             if dose > 0:
                 model.save_pretrained(f"models/{args.tag}-{args.arm}-adapter-{step}")
             rows.append({k: v for k, v in m.items()
@@ -301,17 +402,24 @@ def main() -> None:
                                   "n_steerable_layers", "probe_peak_logistic",
                                   "probe_peak_mass_mean", "probe_L0_logistic",
                                   "substring_baseline_rate_strict",
-                                  "substring_ablated_rate_strict")} | {"dose": step})
+                                  "substring_ablated_rate_strict",
+                                  "frozen_induce_max", "frozen_induce_at_coeff")}
+                        | {"dose": step})
             rec.result(arm=args.arm, dose=step, path=path,
                        **{k: (round(v, 4) if isinstance(v, float) else v)
                           for k, v in rows[-1].items() if k != "dose"})
 
     print(f"\n=== P1-E7d dose-response: {args.arm} ===")
-    print(f"{'dose':>6} {'refusal*':>9} {'l*':>4} {'induce':>8} {'steerable':>10} {'probe':>7}")
+    print(f"{'dose':>6} {'refusal*':>9} {'l*':>4} {'refit':>8} {'FROZEN':>8} "
+          f"{'steerable':>10} {'probe':>7}")
     for r in rows:
         print(f"{r['dose']:>6} {r['substring_baseline_rate_strict']:>9.3f} {r['l_star']:>4} "
-              f"{r['max_induce']:>+8.3f} {r['n_steerable_layers']:>10} "
-              f"{r['probe_peak_logistic']:>7.3f}")
+              f"{r['max_induce']:>+8.3f} {r['frozen_induce_max']:>+8.3f} "
+              f"{r['n_steerable_layers']:>10} {r['probe_peak_logistic']:>7.3f}")
+    print("\n  FROZEN = the dose-0 direction re-injected into this dose, best over the same\n"
+          "  coefficient grid. It separates 'the coupling is destroyed' (frozen goes negative\n"
+          "  too) from 'mean-diff stopped finding it' (frozen stays positive while refit does\n"
+          "  not). Threshold is 0.00, same convention as the refit column.")
     print("\n* SUBSTRING rate — a LOWER BOUND on refusal, and not the number to report. It\n"
           "  misses normative refusals entirely (8-10x undercount on two families, 2026-09-21).\n"
           "  The behavioural curve is only valid after:")

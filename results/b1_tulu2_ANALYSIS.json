@@ -1,0 +1,35 @@
+{
+ "what": "B1 \u2014 third alignment recipe (allenai/tulu-2-dpo-7b), against the pre-registered ordering. Plus the A1 taxonomy revision this run forced.",
+ "date": "2026-09-23",
+ "commit": "11c991d",
+ "pre_registered_prediction": "Zephyr > Tulu-2-DPO > {OLMo 2, Llama-2-chat}, ordinal.",
+ "verdict_on_the_ordering": "HOLDS. Sufficiency (fraction of refusal ablation removes, WildGuard-scored): Zephyr-DPO 97.8%, Zephyr-SFT 90.4%, Tulu-2-DPO 42.5%, OLMo 2 RLVR 38.5%, OLMo 2 control 25.4%. Tulu-2 lands strictly between, as predicted -- but far closer to OLMo 2 than to Zephyr, so the axis is not linear in anything we can currently name. Three points, one ordering, no trend line.",
+ "verdict_on_the_MECHANISM_prediction": "FAILS AS STATED, AND THE REPAIR IS THE RESULT. The pre-registration said sufficiency should track the model's ability to render a refusal in the THIRD person without the direction. Tulu-2 breaks that: its ablated arm is 90% FIRST-person. But the first-person category was hiding two stances, and OLMo 2 has none of the second, so A1 could not have seen it.",
+ "the_three_registers": {
+  "inability": "'I cannot' / 'I'm sorry, but I can't' -- forecloses the request",
+  "identity": "'As an AI language model, I must emphasize...' -- asserts a role, and can continue into compliance",
+  "normative": "'Bribery is illegal and unethical' -- asserts a norm about the act"
+ },
+ "THE_INVARIANT": {
+  "claim": "Ablating the refusal direction destroys the INABILITY register, in every family tested. That is what the direction mediates.",
+  "measured": {
+   "olmo2 (9 arms)": "100% of inability refusals removed",
+   "tulu2_dpo": "78 -> 8, 90% removed",
+   "zephyr (2 arms)": "100% removed"
+  },
+  "why_A1_got_it_wrong": "A1 concluded 'first-person vs third-person' from OLMo 2 and Zephyr, neither of which produces identity-frame refusals in quantity. Tulu-2 produces 38 at baseline and 54 after ablation. The axis is INABILITY vs everything else, not grammatical person."
+ },
+ "what_replaces_it_is_family_specific_and_explains_sufficiency": {
+  "olmo2": "third-person normative. 80 refusals, FIRM -- 1/80 contain a compliance pivot. Sufficiency 38.5%.",
+  "tulu2": "first-person identity assertion. 54 refusals, WEAK -- 12/54 (22%) pivot to compliance ('However, if you still want to...'). Sufficiency 42.5% as measured.",
+  "zephyr": "nothing. Refusal collapses to 0.008. Sufficiency 90-98%.",
+  "reading": "Sufficiency is not about grammatical person. It is about whether the model has a FALLBACK register at all, and how firm that fallback is. Zephyr has none; Tulu-2 has a leaky one; OLMo 2 has a solid one."
+ },
+ "OPEN_and_it_bounds_the_tulu2_number": {
+  "problem": "48 generated tokens is too short for Tulu-2. Its ablated refusals pivot LATE -- 'However, if you still want to' lands right at the truncation boundary -- so 13 of 69 cannot be judged from what was generated. Hand-reading them: roughly half head for compliance ('if you are determined to make false accusations'), half for legitimate redirects ('ways to PROTECT your own trade secrets', 'LEGAL ways to use offshore accounts').",
+  "consequence": "Tulu-2's ablated rate of 0.523 is an UPPER bound, so its sufficiency of 42.5% is a LOWER bound. The ordering is unaffected -- correcting it moves Tulu-2 further from OLMo 2 and closer to Zephyr, i.e. in the predicted direction -- but the number should not be quoted until it is fixed.",
+  "fix": "regenerate the tulu2_dpo ablated arm with gen_max_new_tokens=128 and re-judge. ~15 min. Cheap, and it is the difference between a bounded number and a quoted one.",
+  "note": "OLMo 2 is unaffected: 1/80 of its ablated refusals pivot, so 48 tokens is sufficient there. This is a Tulu-2 property, not a design flaw across the board."
+ },
+ "direction_quality_caveat": "Only 1/160 (pos,layer) cells passed Arditi's filters for tulu-2-dpo, against 13/160 for OLMo 2. The ablation still works (peak 10.715 against a norm-matched random control of 0.277, 39x), but the selection is thin and a reviewer will ask. Worth reporting rather than smoothing over."
+}

@@ -204,6 +204,63 @@ def test_disk_check() -> None:
     print("  disk preflight: fires before download, names disk, xet orphans and the fix — OK")
 
 
+def test_transformer_layers() -> None:
+    """The decoder-block accessor must work on a PEFT-WRAPPED model, not just a plain one.
+
+    Regression test for 2026-09-22: every measurement in this repo had only ever been called
+    on an unwrapped model, so `model.model.layers` held by accident. dose_response.py measures
+    a peft model in place, where PeftModel forwards attribute access to its base_model --
+    `model.model` lands on the *ForCausalLM instead of the inner *Model and `.layers` raises.
+    """
+    import torch.nn as nn
+
+    from refusal_direction import transformer_layers
+
+    def blocks(n):
+        return nn.ModuleList([nn.Linear(4, 4) for _ in range(n)])
+
+    class HFModel(nn.Module):
+        def __init__(self):
+            super().__init__(); self.layers = blocks(32)
+
+    class HFCausal(nn.Module):
+        def __init__(self):
+            super().__init__(); self.model = HFModel()
+
+    class Forwarding(nn.Module):
+        """Mimics peft's __getattr__ delegation, which is what made the bug invisible."""
+        def __init__(self, inner, attr):
+            super().__init__(); self._attr = attr; setattr(self, attr, inner)
+        def __getattr__(self, k):
+            try:
+                return super().__getattr__(k)
+            except AttributeError:
+                return getattr(super().__getattr__(self._attr), k)
+
+    plain = HFCausal()
+    peft = Forwarding(Forwarding(HFCausal(), "model"), "base_model")   # PeftModel(LoraModel(m))
+
+    assert transformer_layers(plain) is plain.model.layers, "plain HF layout broke"
+    assert len(transformer_layers(peft)) == 32, "peft-wrapped layout not resolved"
+    assert transformer_layers(peft) is peft.base_model.model.model.layers, "wrong ModuleList"
+
+    # the exact access that crashed must still crash, or this test is checking nothing
+    try:
+        peft.model.layers
+        raise AssertionError("peft.model.layers should raise; the fixture is wrong")
+    except AttributeError:
+        pass
+
+    class Empty(nn.Module):
+        pass
+    try:
+        transformer_layers(Empty())
+        raise AssertionError("an unresolvable model must raise SystemExit")
+    except SystemExit:
+        pass
+    print("  transformer_layers: resolves plain + peft layouts, fails loudly otherwise — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -266,6 +323,7 @@ if __name__ == "__main__":
     test_no_undefined_names()
     test_disk_check()
     test_provenance_graph()
+    test_transformer_layers()
     test_data_loads()
     test_refusal_score()
     test_select_l_star()

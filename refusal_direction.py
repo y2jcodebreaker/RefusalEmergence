@@ -133,10 +133,52 @@ def eoi_len(tok, template: str) -> int:
     return len(tok.encode(template.split("{instruction}")[-1], add_special_tokens=False))
 
 
+def transformer_layers(model) -> "torch.nn.ModuleList":
+    """The decoder-block ModuleList, however the model happens to be wrapped.
+
+    Every hook in this repo needs this one object. `model.model.layers` is correct for a
+    plain HF causal LM and WRONG for a peft-wrapped one: PeftModel forwards attribute access
+    to its base_model, so `model.model` lands on the *ForCausalLM rather than the inner
+    *Model, and `.layers` raises. That cost the first dose_response run
+    (AttributeError: 'Olmo2ForCausalLM' object has no attribute 'layers', 2026-09-22) --
+    every measurement in this repo had only ever been called on an unwrapped model, so the
+    assumption held by accident for months.
+
+    Rather than hardcode a wrapper depth, this tries the known layouts and then falls back to
+    finding the longest ModuleList in the module tree, which is the decoder stack in every
+    decoder-only architecture. LoRA adapters live in ModuleDicts keyed by adapter name, not
+    in a long ModuleList, so they cannot be mistaken for it.
+    """
+    for path in (("model", "layers"),                                  # plain HF
+                 ("base_model", "model", "model", "layers"),           # peft
+                 ("transformer", "h"),                                 # gpt2-style
+                 ("layers",)):
+        node = model
+        for attr in path:
+            node = getattr(node, attr, None)
+            if node is None:
+                break
+        if isinstance(node, torch.nn.ModuleList) and len(node) > 1:
+            return node
+
+    best = max((m for _, m in model.named_modules()
+                if isinstance(m, torch.nn.ModuleList) and len(m) > 1),
+               key=len, default=None)
+    if best is not None:
+        logger.warning("transformer_layers: no known layout matched %s; using the longest "
+                       "ModuleList (%d entries). Verify this is the decoder stack.",
+                       type(model).__name__, len(best))
+        return best
+    raise SystemExit(
+        f"cannot locate the decoder-block ModuleList on {type(model).__name__}. Every hook "
+        f"in this repo needs it. Top-level submodules: "
+        f"{[n for n, _ in model.named_children()][:12]}")
+
+
 def get_mean_diff(model, tok, harmful, harmless, template, n_eoi, batch_size=16) -> torch.Tensor:
     """(n_eoi, n_layers, d) = mean harmful resid_pre - mean harmless, at eoi positions.
     forward_pre_hook on each block reads input[0] = resid_pre (Arditi generate_directions)."""
-    layers = model.model.layers
+    layers = transformer_layers(model)
     n_layers, d = len(layers), model.config.hidden_size
     positions = list(range(-n_eoi, 0))
 
@@ -179,7 +221,7 @@ def _ablation_handles(model, direction: torch.Tensor):
         return (a, *out[1:]) if isinstance(out, tuple) else a
 
     handles = []
-    for layer in model.model.layers:
+    for layer in transformer_layers(model):
         handles.append(layer.register_forward_pre_hook(proj_pre))
         handles.append(layer.self_attn.register_forward_hook(proj_out))
         handles.append(layer.mlp.register_forward_hook(proj_out))
@@ -196,7 +238,7 @@ def _addition_handles(model, vector: torch.Tensor, coeff: float, layer: int):
         a = a + coeff * v.to(a)
         return (a, *inp[1:]) if isinstance(inp, tuple) else a
 
-    return [model.model.layers[layer].register_forward_pre_hook(add_pre)]
+    return [transformer_layers(model)[layer].register_forward_pre_hook(add_pre)]
 
 
 def _last_logits(model, tok, instructions, template, batch_size=16) -> torch.Tensor:

@@ -26,7 +26,7 @@ from typing import List
 import numpy as np
 import torch
 
-from refusal_direction import _tokenize
+from refusal_direction import _tokenize, transformer_layers
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ def cache_activations(model, tok, instructions: List[str], template: str, n_eoi:
     q_i . k_j depends only on (i - j), every real token shifts by the same offset, and v
     carries no positional term — so activations are batch-composition invariant up to
     float error. smoke_test_probes.py asserts that invariance."""
-    layers = model.model.layers
+    layers = transformer_layers(model)
     n_layers, d = len(layers), model.config.hidden_size
     positions = list(range(-n_eoi, 0))
     out = torch.empty((len(instructions), n_eoi, n_layers, d), dtype=torch.float32)

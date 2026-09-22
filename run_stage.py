@@ -22,7 +22,8 @@ import torch
 from config import config_for
 from data import assert_available, load_instructions
 from refusal_direction import (eoi_len, get_mean_diff, norm_matched_random,
-                               refusal_strength_curve, resolve_refusal_token)
+                               refusal_strength_curve, resolve_refusal_token,
+                               transformer_layers)
 from refusal_substring import behavioral_rates
 from runlog import RunRecord
 
@@ -50,14 +51,11 @@ def load_model(model_id: str, dtype: str):
     tok.padding_side = "left"
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
-    # Every hook in this repo walks model.model.layers. That holds for Llama/Mistral/OLMo,
-    # but it is an assumption about module layout, not a guarantee -- fail here with the
-    # actual attribute names rather than deep inside a forward hook.
-    if not hasattr(getattr(model, "model", None), "layers"):
-        raise SystemExit(
-            f"{model_id} ({type(model).__name__}) has no model.model.layers; every hook in "
-            f"this repo assumes that layout.\n  top-level attrs: "
-            f"{[a for a in dir(model) if not a.startswith('_')][:25]}")
+    # Every hook in this repo needs the decoder-block ModuleList. Resolve it HERE, so a model
+    # whose layout nothing understands fails at load with a readable message rather than deep
+    # inside a forward hook. transformer_layers also handles the peft-wrapped case, which a
+    # plain `model.model.layers` check silently passes and then breaks on (2026-09-22).
+    transformer_layers(model)
     return model, tok
 
 

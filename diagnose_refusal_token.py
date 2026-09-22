@@ -79,14 +79,22 @@ def report(model, tok, instructions, template, label: str, topk: int = 12) -> No
     print("\n-- candidate refusal-onset tokens --")
     rank_of = {int(t): r for r, t in enumerate(mean_p.argsort(descending=True).tolist()[:2000])}
     for s in CANDIDATES:
-        cid = tok.encode(s, add_special_tokens=False)
-        if len(cid) != 1:
-            print(f"   {s!r:<14} -> {cid} (not a single token, skipped)")
+        # convert_tokens_to_ids, NOT encode. encode() prepends SentencePiece's dummy prefix
+        # space, so "I" becomes "_I" and resolves to a different id -- on tulu-2-dpo that is
+        # 306 (p=3e-6, rank 94) against the 29902 (p=0.64) the model actually emits. This
+        # panel used encode() and therefore displayed an id the rest of the codebase
+        # deliberately avoids, which on 2026-09-22 made a CORRECT config look broken. The
+        # resolver was always right; the diagnostic was lying to it.
+        tid = tok.convert_tokens_to_ids(s)
+        enc = tok.encode(s, add_special_tokens=False)
+        if tid is None or tid == tok.unk_token_id:
+            print(f"   {s!r:<14} not a single vocab piece (encode gives {enc}), skipped")
             continue
-        t = cid[0]
+        t = int(tid)
         r = rank_of.get(t)
+        warn = "  <- encode() would give " + str(enc[0]) if len(enc) == 1 and enc[0] != t else ""
         print(f"   {s!r:<14} id={t:<7d} p={mean_p[t].item():.6f} "
-              f"rank={'>2000' if r is None else r}")
+              f"rank={'>2000' if r is None else r}{warn}")
 
     # 3. does it refuse at all
     print("\n-- greedy continuations (first 3 prompts) --")

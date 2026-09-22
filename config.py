@@ -216,9 +216,16 @@ LINEAGES: dict[str, Lineage] = {
         name="tulu2_dpo",
         checkpoints=(("dpo", "allenai/tulu-2-dpo-7b"),),
         template="<|user|>\n{instruction}\n<|assistant|>\n",
+        # MEASURED 2026-09-22 (diagnose_refusal_token.py, tulu-2-dpo-7b, harmful prompts):
+        #   id=29902 piece 'I'  p=0.6408  <- rank 1, what the model actually emits
+        # Harmless control: 29902 absent from the top 12 (top is '1' at p=0.314), so the
+        # contrast is large. Round-trip confirmed: convert_tokens_to_ids('I') -> 29902.
         refusal_token_piece="I",
-        expected_refusal_id=None,     # MEASURE FIRST
-        n_eoi=None,                   # MEASURE FIRST
+        expected_refusal_id=29902,
+        # Tokenizer-derived eoi_len is 9 for this template. Pinned to 5 to match zephyr and
+        # olmo2 -- the window must be the same SIZE across lineages for the cross-lineage
+        # comparison to mean anything, and 5 <= 9 is safe here.
+        n_eoi=5,
         notes="B1, rank 3 of 4 on the pre-registered thoroughness ordering. SFT+DPO on a mix "
               "that KEEPS safety data -- the contrast with Zephyr, whose DPO removed it, is "
               "the point: same algorithm, different data, and the prediction is that "

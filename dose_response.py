@@ -113,7 +113,7 @@ def frozen_probe(model, tok, cfg, template, refusal_toks, frozen: torch.Tensor,
     Separates 'the coupling is destroyed' from 'mean-diff stopped finding it' -- see the
     module docstring. Same absolute-score convention as refusal_strength_curve's steer
     surface, so the values are comparable with `max_induce` cell for cell."""
-    best, at = -float("inf"), None
+    best, at, sweep = -float("inf"), None, {}
     for c in COEFFS:
         h = _addition_handles(model, frozen, coeff=c, layer=layer)
         try:
@@ -122,9 +122,18 @@ def frozen_probe(model, tok, cfg, template, refusal_toks, frozen: torch.Tensor,
         finally:
             for x in h:
                 x.remove()
+        sweep[c] = float(v)
         if v > best:
             best, at = v, c
+    # The WHOLE sweep, not just its peak. The re-fitted surface is measured at coeff 1.0
+    # only, so without the coeff-1.0 value here the frozen column cannot be compared with it
+    # like for like -- and "the frozen direction wins" would be confoundable with "the
+    # frozen direction was allowed a bigger coefficient". Noticed 2026-09-22, after a run
+    # whose peaks all landed at coeff 2.0.
     return {"frozen_induce_max": float(best), "frozen_induce_at_coeff": float(at),
+            "frozen_induce_at_1": float(sweep.get(1.0, float("nan"))),
+            "frozen_sweep_coeffs": np.array(sorted(sweep)),
+            "frozen_sweep_values": np.array([sweep[c] for c in sorted(sweep)]),
             "frozen_layer": int(layer), "frozen_pos": int(pos)}
 
 
@@ -403,18 +412,20 @@ def main() -> None:
                                   "probe_peak_mass_mean", "probe_L0_logistic",
                                   "substring_baseline_rate_strict",
                                   "substring_ablated_rate_strict",
-                                  "frozen_induce_max", "frozen_induce_at_coeff")}
+                                  "frozen_induce_max", "frozen_induce_at_coeff",
+                                  "frozen_induce_at_1")}
                         | {"dose": step})
             rec.result(arm=args.arm, dose=step, path=path,
                        **{k: (round(v, 4) if isinstance(v, float) else v)
                           for k, v in rows[-1].items() if k != "dose"})
 
     print(f"\n=== P1-E7d dose-response: {args.arm} ===")
-    print(f"{'dose':>6} {'refusal*':>9} {'l*':>4} {'refit':>8} {'FROZEN':>8} "
-          f"{'steerable':>10} {'probe':>7}")
+    print(f"{'dose':>6} {'refusal*':>9} {'l*':>4} {'refit@c1':>9} {'FROZ@c1':>8} "
+          f"{'FROZ max':>9} {'steerable':>10} {'probe':>7}")
     for r in rows:
         print(f"{r['dose']:>6} {r['substring_baseline_rate_strict']:>9.3f} {r['l_star']:>4} "
-              f"{r['max_induce']:>+8.3f} {r['frozen_induce_max']:>+8.3f} "
+              f"{r['max_induce']:>+9.3f} {r['frozen_induce_at_1']:>+8.3f} "
+              f"{r['frozen_induce_max']:>+9.3f} "
               f"{r['n_steerable_layers']:>10} {r['probe_peak_logistic']:>7.3f}")
     print("\n  FROZEN = the dose-0 direction re-injected into this dose, best over the same\n"
           "  coefficient grid. It separates 'the coupling is destroyed' (frozen goes negative\n"

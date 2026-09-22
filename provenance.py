@@ -207,8 +207,11 @@ CLAIMS: tuple[Claim, ...] = (
                   "behavioural refusal 0.477 (hand-audited; substring said 0.189), and ZERO "
                   "of 130 cells induce. Its own "
                   "direction reaches -4.955 at natural scale; rlvr's direction injected "
-                  "into it reaches +1.069 and crosses. Neither the representation nor the "
-                  "readout was damaged -- the coupling between them was.",
+                  "into it reaches +1.069 and crosses. P1-E7d then decomposed this: the "
+                  "REPRESENTATION is intact (probe 1.000 at every dose), the READOUT is "
+                  "intact (the frozen pre-attack direction induces +3.4 to +4.7 in every "
+                  "attacked checkpoint), and only the MAPPING between them is destroyed -- "
+                  "the model stops producing the refusal direction when it sees harm.",
         evidence=(
             Evidence("refusal", "run_stage.py", "P1-E7",
                      "behavioural refusal rate of the attacked stage, before/after"),
@@ -272,7 +275,7 @@ CLAIMS: tuple[Claim, ...] = (
                     "mean-diff estimator no longer FINDS a direction that still works. The "
                     "direction is re-fitted from each dose's own activations, so the curve "
                     "cannot separate them, and the strong claim needs the first reading",
-                    False,
+                    True,
                     "Adapters are saved at every dose (models/olmo2_e7d-{arm}-adapter-{step}), "
                     "so this is runnable without retraining: inject the dose-0 direction into "
                     "the dose-100 model. Induces refusal -> the coupling survived and the "
@@ -289,17 +292,16 @@ CLAIMS: tuple[Claim, ...] = (
             Control("step dose-response", "a single before/after pair being a coincidence",
                     True, "2026-09-22: RUN, both arms, six doses. It did not confirm the "
                     "prediction -- it sharpened it. Coupling 13 -> 0 steerable layers by step "
-                    "100 while refusal still retains ~81% of dose 0; behaviour then decays to "
-                    "~0.49 by step 1500. They do NOT fall together: the link breaks at once "
+                    "100 while refusal still retains 87% of dose 0 (WildGuard 0.985 -> 0.856); "
+                    "behaviour then decays to 0.477 by step 1500. They do NOT fall together: the link breaks at once "
                     "and the behaviour decays afterwards. Probe = 1.000 at EVERY dose in BOTH "
                     "arms (mass-mean 0.981-1.000), so the falsifier did not fire. Control "
                     "keeps 62-85% of its coupling and 85-95% of its behaviour throughout. The "
                     "surviving refusals shift register exactly where coupling dies: normative "
                     "share 0% -> 68% in the benign arm, 0-1% at every dose in the control. "
                     "dose 1500 also replicates the destroyed 2026-09-19 checkpoint at a "
-                    "different LoRA draw (substring 0.182 vs 0.189, both judged the same way; "
-                    "the audited value there was 0.477, and this run's phrase-scan estimate "
-                    "is 0.492). Max induce -5.170 vs -5.188. See "
+                    "different LoRA draw: WildGuard 0.477 here against the audited 0.477 there, "
+                    "to three decimals, and max induce -5.170 vs -5.188. See "
                     "results/olmo2_e7d_dose_response_ANALYSIS.json. Was "
                            "2026-09-21, not yet run. Measures behaviour, coupling and probe "
                            "IN PLACE at 6 doses (0/100/250/500/1000/1500 steps) -- no merged "

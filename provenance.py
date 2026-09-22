@@ -448,6 +448,24 @@ CLAIMS: tuple[Claim, ...] = (
 # registered here and `check()` fails if any claim still quotes one. The registry is the
 # propagation mechanism -- adding a row is how a correction reaches every claim at once.
 SUPERSEDED: tuple[tuple[str, str, str], ...] = (
+    ("0.871", "0.972",
+     "A3's pairwise stance cosine. The 0.871 run swept LAYERS with the eoi position pinned "
+     "to the last one, landing on (pos 4, L12) where Arditi's own direction scores -1.417 on "
+     "the stored steer surface. Corrected run sweeps both axes and lands on (pos 3, L14), "
+     "the surface argmax. NOTE both numbers are near a split-half ceiling of 0.980 and "
+     "neither is reportable on its own -- the stance-vs-harmless contrast cannot separate "
+     "stance from harmfulness"),
+    ("0.076 against a null of 0.008", "0.174 vs 0.121",
+     "A3b's rate-axis separation. The 0.008 was ONE null draw. Against five independent "
+     "nulls the in-regime magnitude clears by 0.001 (0.076 vs mean+2sd 0.075), |c|=0.25 "
+     "clears properly but is outside the strict KL bound, and |c|=0.5 fails. The '~10x' "
+     "phrasing is retired"),
+    ("DISSOCIATION: YES", "NO DISSOCIATION at any magnitude",
+     "A3b run 75e3f48 (ledger 2026-09-22T20:34:15, notes say dissociation=True). It used ONE "
+     "pseudo-stance null and the bare criterion stance_span > null_span, passing on "
+     "0.266 vs 0.235. The negative control had moved composition nearly as much as the "
+     "treatment, and the arditi arm moved it MORE (0.308). The row stays in the ledger as "
+     "history; the number must never be quoted"),
     ("0.985 -> 0.606", "0.985 -> 0.485",
      "ablation's surviving refusal rate, re-measured at 128 generated tokens. At 48 the "
      "normative-register PREAMBLE is all a judge can see; 19 of 80 continue into explanation "
@@ -534,11 +552,28 @@ def on_disk() -> dict[str, list[str]]:
     results/{lineage}_{target}_from_{source}_text.json -- text is the evidence there, so it
     has to be text on disk. The first version of this scanner only globbed .npz and reported
     C3's text evidence as missing; the check caught my own graph being wrong, which is the
-    point of having it."""
+    point of having it.
+
+
+    AN AXIS MAY CONTAIN UNDERSCORES, and until 2026-09-22 this function assumed it could not.
+    It derived the axis with rsplit("_", 1), so tulu2_dpo_dpo_stance_directions.npz parsed as
+    axis "directions" and A3's declared `stance_directions` evidence could never match a file
+    that was sitting right there on disk. The check reported the evidence missing, which looks
+    exactly like the failure it is supposed to detect -- a claim with nothing behind it -- and
+    would have been "fixed" by weakening the claim.
+
+    So the axes are no longer GUESSED from the filename. They come from the claim graph, which
+    is the only place that knows what an axis is, and the longest match wins so that
+    `stance_directions` is preferred over a hypothetical `directions`."""
+    axes = sorted({e.axis for c in CLAIMS for e in c.evidence}, key=len, reverse=True)
     out: dict[str, list[str]] = {}
     for pat, ext in ((f"{RESULTS}/*.npz", ".npz"), (f"{RESULTS}/*_text.json", ".json")):
         for p in sorted(glob.glob(pat)):
-            axis = os.path.basename(p).rsplit("_", 1)[-1][: -len(ext)]
+            stem = os.path.basename(p)[: -len(ext)]
+            hit = next((a for a in axes if stem.endswith("_" + a)), None)
+            # Unknown files still register under a best-effort axis, so a NEW result appears
+            # in the report before its claim is written rather than being invisible.
+            axis = hit if hit else stem.rsplit("_", 1)[-1]
             out.setdefault(axis, []).append(os.path.basename(p))
     return out
 

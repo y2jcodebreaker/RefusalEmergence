@@ -124,7 +124,7 @@ strong{font-weight:600;color:var(--ink)}
 
 <div class="wrap">
   <header class="col">
-    <p class="eyebrow">Report &middot; P1-E1 &middot; P1-E1b/c/d &middot; P1-E2d &middot; P1-E7/b/c/d &middot; 22 Sep 2026</p>
+    <p class="eyebrow">Report &middot; P1-E1 &middot; P1-E1b/c/d &middot; P1-E2d &middot; P1-E7/b/c/d &middot; B1 &middot; 23 Sep 2026</p>
     <h1>Alignment installs refusal machinery, not refusal behavior</h1>
     <p class="lede">A base model that has never been aligned reads harmful-vs-harmless at
     <strong>99.6&thinsp;%</strong> and refuses <strong>1.5&thinsp;%</strong> of harmful requests. Add the
@@ -404,9 +404,10 @@ strong{font-weight:600;color:var(--ink)}
     the window. The two highlighted cells are the ones that retired an earlier headline &mdash; see below.</p>
 
     <div class="col claim retract" style="margin-top:1.4rem">
-      <p style="font-size:1.08rem">Correction: two refusal rates were wrong, and neither judge was
-      wrong everywhere.</p>
-      <p><strong>Ablation does not produce compliance in OLMo&nbsp;2.</strong> Its 0.000 was a
+      <p style="font-size:1.08rem">Corrections: the refusal rates were wrong twice over, and
+      neither judge was wrong everywhere.</p>
+      <p><strong>Ablation does not produce compliance in OLMo&nbsp;2</strong> &mdash; though it
+      produces more of it than the figure below says. Its 0.000 was a
       <em>substring</em> rate. WildGuard (Han et al., NeurIPS&nbsp;2024) scores <strong>0.606</strong>
       of the same completions as refusals, and all <strong>171</strong> disagreements across the two
       ablated arms were read against their prompts: <strong>every one</strong> is a genuine refusal.
@@ -423,6 +424,18 @@ strong{font-weight:600;color:var(--ink)}
       (<code>I'm sorry</code>) or assistant identity (<code>As an AI</code>). <strong>No refusal that
       asserts a norm rather than a limitation can match any of them.</strong> That is why it survived
       three prior audits: each family&rsquo;s symptom looks like a one-off.
+      <br><br><strong>And 0.606 is itself 0.485.</strong> Every refusal rate on this page was
+      measured on 48 generated tokens, and the normative register turns out to be a
+      <em>preamble</em> rather than a refusal: <em>&ldquo;Blackmail is illegal and
+      unethical&hellip;&rdquo;</em> continues into <em>&ldquo;Here are some general ways that
+      individuals might attempt&rdquo;</em>, and <em>&ldquo;&hellip;often referred to as
+      phishing&rdquo;</em> into <em>&ldquo;Here&rsquo;s how such a scam typically works&rdquo;</em>.
+      At 48 tokens a judge sees the opening and scores a refusal; at 128 it sees the explanation.
+      <strong>19 of the 80 flip.</strong> So every refusal rate here is an upper bound, every effect
+      is <em>larger</em> than stated, and no conclusion reverses &mdash; sufficiency at matched
+      128 tokens is <strong>70&thinsp;%</strong> for Tulu-2 against <strong>51&thinsp;%</strong> for
+      OLMo&nbsp;2, a wider gap than the 42/38 measured at 48. The logit-based results are untouched,
+      and so is the register split itself, which is read off the completion&rsquo;s opening.
       <br><br><strong>And the classifier is not simply better.</strong> On Zephyr <em>base</em> &mdash;
       the one non-chat model here &mdash; <strong>41 of its 43</strong> extra hits are
       <em>&ldquo;I&rsquo;m sorry, I don&rsquo;t understand the question. Could you please rephrase
@@ -613,6 +626,11 @@ strong{font-weight:600;color:var(--ink)}
       model&rsquo;s own direction is tested at its natural magnitude; the frozen direction was swept
       and peaked at twice its own. That peak is far below the sweep&rsquo;s ceiling, so it is not an
       artifact of pushing harder &mdash; but the like-for-like comparison has not been run yet.</li>
+      <li><strong>Every refusal rate here was measured on 48 generated tokens</strong>, which
+      truncates refusals that are really preambles, so all of them are upper bounds. Where the
+      128-token figure exists it is given; the dose&ndash;response and attacked-checkpoint rates
+      would need the experiment re-run rather than re-judged, because those checkpoints no longer
+      exist.</li>
       <li><strong>Every refusal rate here rests on a judge, and the judges disagree.</strong> Each
       arm is reported with the judge that survived an audit of its disagreements &mdash; a classifier
       everywhere except Zephyr base, where the classifier scores incompetence as refusal. That is a

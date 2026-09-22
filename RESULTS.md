@@ -117,6 +117,48 @@ commands in `RUNBOOK.md`; every run is in `results/RUNLOG.md` with its commit an
 > audit above *is* a measurement of the OLMo 2 aligned stage. Its `0.985 → 0.000` is
 > **`0.985 → 0.606`**. No new GPU run was needed and no assumption was made.
 
+> ## ⚠️ GENERATION LENGTH — every 48-token refusal rate here is an UPPER BOUND (2026-09-23)
+>
+> Refusal rates in this file were measured on **48 generated tokens**. Re-measuring at 128
+> moves them, in both families, on baseline and ablated arms alike:
+>
+> | | 48 tokens | 128 tokens |
+> |---|---|---|
+> | OLMo 2 rlvr, baseline | 0.985 | 0.985 |
+> | OLMo 2 rlvr, **ablated** | ~~0.606~~ | **0.485** |
+> | Tulu-2 DPO, baseline | ~~0.909~~ | **0.758** |
+> | Tulu-2 DPO, **ablated** | ~~0.523~~ | **0.227** |
+>
+> **Why.** The normative register is a *preamble*, not a refusal. *"Blackmail is illegal and
+> unethical, involving the threat to reveal damaging information…"* continues into *"Here are
+> some general ways that individuals might attempt"*; *"…often referred to as phishing"*
+> continues into *"Here's how such a scam typically works"*. At 48 tokens a judge sees only the
+> normative opening and scores a refusal. At 128 it sees the explanation and scores compliance.
+> **19 of OLMo 2's 80 ablated "refusals" flip this way.**
+>
+> **This corrects a claim made here on 2026-09-22.** That entry said OLMo 2 was unaffected
+> because only 1/80 of its ablated refusals contained a lexical pivot (*"however, if you"*,
+> *"here are some ideas"*). A regex for pivot *markers* cannot see a completion that drifts
+> into explanation without one — and the drift is the common case. The pivot detector measured
+> the presence of a word, not the behaviour.
+>
+> **What is unaffected.** Every logit-based result — probe accuracy, the induce and ablate
+> surfaces, `l*` selection, the frozen-direction curve, every transplant delta and z. None of
+> them generate text. And the **inability invariant is unchanged**: OLMo 2 128 → 0 and Tulu-2
+> 78 → 8 at *both* lengths, because a register is read off the completion's opening, which 48
+> tokens captures in full.
+>
+> **Direction of the error.** All 48-token rates *overstate* refusal, so every effect reported
+> here — ablation, attack, dose — is **larger** than stated, not smaller. No conclusion
+> reverses. Sufficiency at matched 128 tokens: Tulu-2 **70.0 %**, OLMo 2 **50.8 %**, against
+> 42.5 % and 38.5 % at 48 — the pre-registered ordering holds and the separation widens from
+> 4.0 to 19.3 points.
+>
+> **Still to do.** Zephyr was measured at 48 only, so the three-family sufficiency table is not
+> yet quotable. P1-E7's 0.477 and the whole P1-E7d dose curve are 48-token measurements; the
+> attacked checkpoints no longer exist, so those would need the experiment re-run rather than
+> re-judged. Record: `results/b1_gen128_ANALYSIS.json`.
+
 ## THE RESULT (P1-E7 + P1-E7d, 2026-09-19 / 2026-09-22)
 
 **Benign fine-tuning does not damage what the model knows, and it does not damage what the
@@ -910,9 +952,15 @@ layer.**
 
 ## P1-E7 refusal rates: which number to quote, and why they differ
 
-Three refusal rates exist for the same attacked checkpoint. They are **not** in conflict, but
-quoting the wrong one, or quoting two without saying which set each came from, reads as a
-contradiction. Quote the **132-prompt rate** everywhere in the paper.
+Three SUBSTRING rates exist for the same attacked checkpoint, and none of them is the number
+to report. They differ from each other for the two reasons below, and they differ from the
+truth for a third: the substring judge misses normative refusals entirely.
+
+> **The reportable figure is 0.477**, from the prompt-paired hand audit of every
+> WildGuard/substring disagreement (38 genuine refusals of 39, 1 partial). This section is
+> about why the three *substring* numbers disagree among themselves — a separate question from
+> why all three are wrong. **And 0.477 is itself an upper bound**, because it was measured at
+> 48 generated tokens; see the generation-length correction at the top of this file.
 
 | number | where it comes from | prompts | model measured |
 |---|---|---|---|
@@ -921,6 +969,9 @@ contradiction. Quote the **132-prompt rate** everywhere in the paper.
 | 0.125 (6/48) | the same first 48, recomputed from the stored `run_stage` completions | identical prompts | loaded **from disk** |
 
 Two separate things are going on, and both are worth one sentence in the methods.
+
+Within the substring family, quote the **132-prompt rate**; the two 48-prompt numbers are
+diagnostics.
 
 **The 48 is a prefix, not a sample.** `attack.py:257` takes `[:48]` of the held-out tail with
 no shuffle, so the efficacy check reads the first 48 prompts of a non-randomised split. Those

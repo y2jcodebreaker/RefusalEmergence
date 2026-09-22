@@ -25,6 +25,7 @@ import argparse
 import glob
 import json
 import os
+import re
 from dataclasses import dataclass, field
 
 RESULTS = "results"
@@ -348,6 +349,10 @@ CLAIMS: tuple[Claim, ...] = (
 # registered here and `check()` fails if any claim still quotes one. The registry is the
 # propagation mechanism -- adding a row is how a correction reaches every claim at once.
 SUPERSEDED: tuple[tuple[str, str, str], ...] = (
+    ("0.985 -> 0.606", "0.985 -> 0.485",
+     "ablation's surviving refusal rate, re-measured at 128 generated tokens. At 48 the "
+     "normative-register PREAMBLE is all a judge can see; 19 of 80 continue into explanation "
+     "and are compliance. Every 48-token refusal rate in this project is an upper bound"),
     ("0.189", "0.477",
      "attacked-arm behavioural refusal: substring judge, corrected by WildGuard + a "
      "prompt-paired audit of all 39 disagreements (38 genuine refusals, 1 partial)"),
@@ -361,6 +366,43 @@ SUPERSEDED: tuple[tuple[str, str, str], ...] = (
      "Zephyr base-over-SFT ratio: computed from a pre-2026-09-13 judge against an SFT rate "
      "the same judge undercounts 10x"),
 )
+
+
+# Documents that quote measurements and are read by humans rather than by check(). The
+# registry guarded the claim graph and nothing else, so on 2026-09-23 a superseded figure sat
+# in RESULTS.md and the published report while `provenance --check` reported OK. A registry
+# that only polices the file it lives in is not a propagation mechanism.
+CITING_DOCS: tuple[str, ...] = ("RESULTS.md", "report/refusal-machinery.html")
+
+
+def superseded_in_documents(docs: tuple[str, ...] = CITING_DOCS) -> list[str]:
+    """Superseded values still quoted in the prose, with no sign of the correction nearby.
+
+    SECTION-scoped, not line-scoped and not file-scoped. File-scoped is too weak: a document
+    that corrects a number in one place and quotes the stale one elsewhere passes. Line-scoped
+    is too strict, and the first version proved it -- it flagged four citations inside the very
+    section whose subject is that correction, where a table and its prose legitimately repeat
+    the old value several lines from the new one. A section is the unit a reader actually
+    consumes, so it is the right unit to demand the correction appear in."""
+    out = []
+    for path in docs:
+        if not os.path.exists(path):
+            continue
+        text = open(path, encoding="utf-8").read()
+        # Markdown headings or HTML <section> both delimit "what a reader has in view".
+        marks = [m.start() for m in re.finditer(r"(?m)^#{1,3} |<section[ >]", text)] or [0]
+        for old_v, new_v, why in SUPERSEDED:
+            for m in re.finditer(re.escape(old_v), text):
+                start = max((p for p in marks if p <= m.start()), default=0)
+                end = min((p for p in marks if p > m.start()), default=len(text))
+                section = text[start:end]
+                if new_v in section or "~~" in text[m.start() - 12:m.start() + 12]:
+                    continue
+                line = text.count("\n", 0, m.start()) + 1
+                head = text[start:start + 70].strip().splitlines()[0] if section else ""
+                out.append(f"STALE DOC: {path}:{line} quotes {old_v!r}; its section "
+                           f"({head!r}) never mentions {new_v!r} -- {why}")
+    return out
 
 
 def superseded_citations(claims=CLAIMS) -> list[str]:
@@ -448,6 +490,7 @@ def check(claims=CLAIMS) -> list[str]:
                     f"hand-write a row.")
 
     problems.extend(superseded_citations(claims))
+    problems.extend(superseded_in_documents())
 
     # BFS guard: the thing the user asked for by name.
     deepest_open = min((c.layer for c in claims if c.open_controls), default=None)

@@ -1,0 +1,30 @@
+{
+ "what": "B1 step 1 \u2014 regenerate at 128 tokens to fix the truncation bound on Tulu-2. The OLMo 2 arm was included as a CONTROL on the fix. The control failed, and that is the finding.",
+ "date": "2026-09-23",
+ "headline": "REFUSAL RATES MEASURED AT 48 GENERATED TOKENS ARE INFLATED, in both families, on baseline AND ablated arms. Not a Tulu-2 quirk as claimed in O-138.",
+ "measured": {
+  "olmo2_rlvr ablated": "0.606 (48) -> 0.485 (128)",
+  "tulu2_dpo baseline": "0.909 (48) -> 0.758 (128)",
+  "tulu2_dpo ablated": "0.523 (48) -> 0.227 (128)",
+  "olmo2_rlvr baseline": "0.985 at both -- an intact model's refusal does not decay with length, which is what makes the other three moves meaningful"
+ },
+ "why": "The normative register is a PREAMBLE, not a refusal. 'Blackmail is illegal and unethical, involving the threat to reveal damaging information...' continues into 'Here are some general ways that individuals might attempt' -- and '...often referred to as phishing' continues into 'Here's how such a scam typically works'. At 48 tokens a judge sees only the normative opening and scores a refusal. At 128 it sees the explanation and scores compliance.",
+ "my_error_in_O138": "I claimed OLMo 2 was unaffected because only 1/80 of its ablated refusals contained a lexical compliance pivot ('however, if you', 'here are some ideas'). 19 of 80 actually flip. A regex for pivot MARKERS cannot see a completion that drifts into explanation without one -- and the drift is the common case. The pivot detector measured the presence of a word, not the behaviour.",
+ "what_survives_untouched": {
+  "the inability invariant": "OLMo 2 baseline 128 inability -> ablated 0 at BOTH lengths; Tulu-2 78 -> 8 at both. Identical, because the register is read off the OPENING, which 48 tokens captures completely.",
+  "every logit-based result": "probe accuracy, induce/ablate surfaces, l* selection, the frozen-direction curve, all transplant deltas. None of these generate text."
+ },
+ "sufficiency_at_matched_128_tokens": {
+  "tulu2_dpo": "0.758 -> 0.227 = 70.0% removed",
+  "olmo2_rlvr": "0.985 -> 0.485 = 50.8% removed",
+  "at_48_for_comparison": "tulu2 42.5%, olmo2 38.5%",
+  "reading": "The pre-registered ORDERING holds at both lengths, and at 128 the separation widens from 4.0 to 19.3 points. Correcting the measurement did not threaten the claim; it sharpened it."
+ },
+ "SCOPE_of_the_correction": {
+  "affected": "every behavioural refusal rate in this project measured at 48 tokens is an UPPER bound on refusal. That includes P1-E7's attacked 0.477, the whole P1-E7d dose curve, all Zephyr rates, and the 0.606 ablation figure now in RESULTS.md and the published report.",
+  "direction_of_the_error": "All of them OVERSTATE refusal, so every effect we report -- ablation, attack, dose -- is LARGER than stated, not smaller. No conclusion reverses; several get stronger.",
+  "not_affected": "anything computed from logits rather than generated text.",
+  "next": "re-measure Zephyr at 128 before the three-family sufficiency table is quotable, then decide whether to re-run the dose curve at 128 or report it as a 48-token measurement with the bound stated."
+ },
+ "methodological_point_for_the_paper": "Generation length is a measurement parameter that changes the quantity, exactly like the choice of judge. A short window truncates refusals that are really preambles, and the error is one-directional. This belongs beside the judge finding: two independent ways the standard instrument inflates measured refusal."
+}

@@ -222,12 +222,12 @@ def main() -> None:
                    n_disagreements=len(dis), disagreement_indices=dis,
                    n_unparsed=report[key]["n_unparsed"])
 
-    for suffix in ("_text.json", "_refusal.npz"):
-        if args.path.endswith(suffix):
-            out_path = args.path[: -len(suffix)] + "_wildguard.json"
-            break
-    else:
-        out_path = args.path + ".wildguard.json"
+    # Strip the measurement suffix, keeping any _gen<N> marker so a 128-token judgement
+    # never lands on top of a 48-token one -- they are different measurements.
+    import re as _re
+    m = _re.match(r"^(.*?)_(?:text\.json|refusal(_gen\d+)?\.npz)$", args.path)
+    out_path = (m.group(1) + (m.group(2) or "") + "_wildguard.json") if m \
+        else args.path + ".wildguard.json"
     with open(out_path, "w") as f:
         json.dump(report, f, indent=1)
     rec.__exit__(None, None, None)

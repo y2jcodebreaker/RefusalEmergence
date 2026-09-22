@@ -104,12 +104,21 @@ def wildguard_labels(stem: str, arm: str, n: int, comps: list[str]) -> list[bool
 def collect() -> list[dict]:
     """Every stored completion a validated judge called a refusal, with its provenance."""
     rows = []
-    for p in sorted(glob.glob("results/*_refusal.npz")):
+    for p in sorted(glob.glob("results/*_refusal.npz")
+                    + glob.glob("results/*_refusal_gen*.npz")):
         z = np.load(p, allow_pickle=True)
         if "sample_completions" not in z.files:
             continue
-        stem = os.path.basename(p)[: -len("_refusal.npz")]
-        family = "zephyr" if stem.startswith("zephyr") else "olmo2"
+        # keep the _gen<N> marker in the stem so the judge file matches and so
+        # the two generation lengths appear as separate rows, not one.
+        b = os.path.basename(p)
+        m = re.match(r"^(.*?)_refusal(_gen\d+)?\.npz$", b)
+        stem = m.group(1) + (m.group(2) or "")
+        # Family from the lineage prefix. Was a two-way "zephyr else olmo2" guess,
+        # which silently filed tulu-2 under olmo2 the moment a third family arrived --
+        # and the cross-family REPLICATION claim is computed from this field.
+        family = next((f for f in ("zephyr", "tulu2", "llama2", "olmo2")
+                       if stem.startswith(f)), "unknown")
         sc = json.loads(str(z["sample_completions"]))
         for arm in ("baseline", "ablated"):
             comps = sc.get(arm) or []

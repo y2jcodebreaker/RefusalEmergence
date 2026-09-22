@@ -144,7 +144,11 @@ def run_one(stage: str, model_id: str, cfg, control: bool = False,
                     float(np.nanmax(res["bypass"])))
 
     os.makedirs(cfg.results_dir, exist_ok=True)
-    path = cfg.path(stage, "refusal")
+    # The axis encodes a non-default generation length, exactly as transplant.py encodes
+    # --source-by. A rate measured at 128 tokens is not the same quantity as one measured at
+    # 48, so it must not silently overwrite it.
+    axis = "refusal" if cfg.gen_max_new_tokens == 48 else f"refusal_gen{cfg.gen_max_new_tokens}"
+    path = cfg.path(stage, axis)
 
     # np.savez rewrites the WHOLE file, so re-running one stage with fewer flags would
     # silently delete results from an earlier run (e.g. `--stage base` without --control
@@ -196,10 +200,25 @@ def main() -> None:
                     help="also run the norm-matched random-direction negative control")
     ap.add_argument("--behavioral", action="store_true",
                     help="also measure substring refusal rate, baseline vs ablated")
+    ap.add_argument("--gen-tokens", type=int, default=None,
+                    help="override gen_max_new_tokens for the behavioural arm. The default "
+                         "48 is too short for a model that pivots LATE: tulu-2-dpo's ablated "
+                         "refusals put 'However, if you still want to' right at the cutoff, "
+                         "so 13 of 69 could not be judged from what was generated (O-138). "
+                         "Writes to a SEPARATE npz (…_refusal_gen{N}.npz) so the 48-token "
+                         "result survives for comparison -- generation length changes a "
+                         "measured rate, so the two are different measurements, not versions "
+                         "of one.")
     args = ap.parse_args()
     # Cheap checks first: a missing clone costs nothing to detect and a full weight
     # download to discover late (hit on a pod, 2026-09-13).
-    cfg = config_for(args.lineage)
+    over = {"gen_max_new_tokens": args.gen_tokens} if args.gen_tokens else {}
+    cfg = config_for(args.lineage, **over)
+    if args.gen_tokens:
+        logger.warning("GENERATION LENGTH OVERRIDE: %d tokens (default 48). Rates from this "
+                       "run are NOT comparable with 48-token rates -- a longer generation "
+                       "gives a late-pivoting refusal room to become compliance. Compare "
+                       "only against other %d-token runs.", args.gen_tokens, args.gen_tokens)
     cfg.require_verified()          # conceptual blocker first ...
     logger.info("data: %s", assert_available())   # ... then the cheap file check
     ckpts = dict(cfg.checkpoints)

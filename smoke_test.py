@@ -399,6 +399,54 @@ def test_no_pinned_sweep_axis() -> None:
     print("  sweeps: no module pins a surface axis to its last index — OK")
 
 
+def test_cosine_ceiling_discriminates() -> None:
+    """A3's ceiling must tell "same direction" from "different direction" — pure numpy.
+
+    A3 reports |cos| between stance directions, and on 2026-09-22 it reported 0.972 with
+    nothing to read it against. Both directions are mean(harmful & stance) - mean(harmless),
+    so they share a subtrahend and the harmfulness signal; a high cosine is close to
+    guaranteed by construction. The fix is a split-half CEILING, and a ceiling is only worth
+    printing if it actually separates the two cases — so build both cases synthetically,
+    with a large shared offset standing in for the residual stream's common mean, and assert
+    the verdict flips."""
+    import numpy as _np
+
+    from stance_directions import halves, paired_cos
+
+    rng = _np.random.default_rng(0)
+    dim, n_pos, n_lay, pos, lay = 256, 5, 3, 3, 2
+
+    def make(n, sig):
+        x = rng.normal(0, 1.0, (n, n_pos, n_lay, dim))
+        x[:, pos, lay] += sig
+        return x
+
+    common = rng.normal(0, 3, dim)          # the residual stream's big shared mean
+    harm = rng.normal(0, 1, dim) * 2
+    stance = rng.normal(0, 1, dim) * 2
+    stance -= stance @ harm / (harm @ harm) * harm      # genuinely orthogonal axis
+    neg = make(80, common)
+
+    def verdict(pool_a, pool_b):
+        ha = halves(_np.arange(len(pool_a)), rng)
+        hb = halves(_np.arange(len(pool_b)), rng)
+        ceil = min(paired_cos(pool_a[ha[0]], pool_a[ha[1]], neg, rng, pos, lay, 20)[0],
+                   paired_cos(pool_b[hb[0]], pool_b[hb[1]], neg, rng, pos, lay, 20)[0])
+        obs, sd = paired_cos(pool_a, pool_b, neg, rng, pos, lay, 20)
+        return ceil, obs, obs >= ceil - max(sd, 0.01)
+
+    same_ceil, same_obs, same_at = verdict(make(78, common + harm), make(41, common + harm))
+    assert same_at, (f"two fits of the SAME direction read as different: "
+                     f"observed {same_obs:.3f} vs ceiling {same_ceil:.3f}")
+    diff_ceil, diff_obs, diff_at = verdict(make(78, common + harm + stance),
+                                           make(41, common + harm - stance))
+    assert not diff_at, (f"two GENUINELY different directions read as identical: "
+                         f"observed {diff_obs:.3f} vs ceiling {diff_ceil:.3f}")
+    assert diff_obs < 0.5, f"orthogonal stance axis should collapse the cosine, got {diff_obs:.3f}"
+    print(f"  cosine ceiling: same={same_obs:.3f}/{same_ceil:.3f} AT, "
+          f"different={diff_obs:.3f}/{diff_ceil:.3f} BELOW — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -464,6 +512,7 @@ if __name__ == "__main__":
     test_superseded_citations()
     test_disk_check_is_honoured()
     test_no_pinned_sweep_axis()
+    test_cosine_ceiling_discriminates()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

@@ -182,6 +182,41 @@ def induce_sweep(model, tok, cfg, template, refusal_toks, vec, layer, harmless) 
     return {"max": float(best), "at_coeff": float(at)}
 
 
+def _cos(a: np.ndarray, b: np.ndarray) -> float:
+    return float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9))
+
+
+def halves(idx, rng) -> tuple:
+    p = rng.permutation(np.asarray(idx))
+    return p[: len(p) // 2], p[len(p) // 2:]
+
+
+def paired_cos(pool_a, pool_b, neg, rng, pos: int, layer: int, k: int,
+               n_rep: int = 20) -> tuple:
+    """mean |cos| between two mean-diffs, each = mean(k from its pool) - mean(k from neg).
+
+    Draws from `neg` are INDEPENDENT and overlapping, exactly as the real per-stance fits
+    draw them, so whatever inflation the shared harmless class contributes is present on
+    both sides of every comparison and cancels when one is read against the other.
+
+    Used two ways, and they only mean anything together:
+      CEILING  pool_a, pool_b = disjoint halves of the SAME stance -> what |cos| looks like
+               when the two directions ARE the same direction, at this n.
+      OBSERVED pool_a, pool_b = two different stances.
+    Both at the same k, because a cosine's noise floor depends on n. The 2026-09-22 run
+    reported a full-n between-stance cosine (0.972, n=78 vs n=41) against no ceiling at all,
+    and a half-n ceiling would have been the wrong comparator in the direction that flatters
+    the interesting answer."""
+    out = []
+    for _ in range(n_rep):
+        a = (pool_a[rng.choice(len(pool_a), k, replace=False)].mean(0)
+             - neg[rng.choice(len(neg), k, replace=False)].mean(0))
+        b = (pool_b[rng.choice(len(pool_b), k, replace=False)].mean(0)
+             - neg[rng.choice(len(neg), k, replace=False)].mean(0))
+        out.append(abs(_cos(a[pos, layer], b[pos, layer])))
+    return float(np.mean(out)), float(np.std(out))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lineage", default="tulu2_dpo")
@@ -330,8 +365,101 @@ def main() -> None:
                     "cos_with_arditi": c, "direction_match": bool(c >= 0.70)}
             ctrl["passed"] = bool(ctrl["cell_match"] and ctrl["direction_match"])
 
+    # -------------------------------------------------------------- geometry, read properly
+    # THE CONTRAST CANNOT SEPARATE STANCE FROM HARMFULNESS, AND THE FIRST VERSION DID NOT SAY
+    # SO. Every stance direction here is mean(harmful & stance) - mean(harmless): the stance
+    # label chooses WHICH harmful prompts enter the positive class, but the axis being fitted
+    # is harmful-vs-harmless either way. Two such fits share a subtrahend and a dominant
+    # signal, so a high pairwise cosine is close to guaranteed by construction and says
+    # nothing about stance. The 2026-09-22 run reported 0.972 with nothing to read it against.
+    # Two additions make it readable, and neither needs another forward pass over the corpus:
+    #
+    #   CEILING  |cos| between two fits of the SAME stance on disjoint halves -- what
+    #            agreement looks like when the direction is identical, at this n.
+    #   CONTRAST mean(inability) - mean(identity): both classes harmful, both refused,
+    #            differing only in the stance rendered. The only within-harmful test of
+    #            whether stance has a linear axis, and its cosine against d_arditi is the
+    #            multi-directionality number this experiment actually wants.
+    #
+    # It also has to reconcile with B1: ablating d_arditi takes inability 78->8 and leaves
+    # identity 20->21 UNTOUCHED. A d_identity genuinely collinear with d_arditi could not do
+    # that, so either the pairwise cosine is an artifact of the shared contrast or identity
+    # refusal is not linearly mediated at the eoi position. Those are different claims and
+    # the ceiling is what separates them.
+    geo: dict = {}
+    if ctrl.get("checked"):
+        c_pos, c_lay = ctrl["ref_pos"], ctrl["ref_layer"]
+    elif dirs:
+        c_pos, c_lay = (lambda f: (out[f]["pos"], out[f]["layer"]))(next(iter(dirs)))
+    else:
+        c_pos = c_lay = None
+
+    stance_names = sorted(dirs)
+    if c_pos is not None and len(stance_names) >= 2:
+        geo["cell"] = [int(c_pos), int(c_lay)]
+        d_arditi_cell = (A.mean(0) - N.mean(0))[c_pos, c_lay]
+        # One k for the whole block, so ceiling and observed are the same measurement at the
+        # same sample size: half the SMALLEST stance, since the ceiling needs two disjoint
+        # halves of it.
+        k_geo = min(len(groups[x]) for x in stance_names) // 2
+        geo["k_matched"] = int(k_geo)
+        if k_geo < 8:
+            geo["why_no_ceiling"] = f"smallest stance gives k={k_geo}; too few to split"
+        else:
+            for x in stance_names:
+                h1, h2 = halves(groups[x], rng)
+                m, sd = paired_cos(A[h1], A[h2], N, rng, c_pos, c_lay, k_geo)
+                geo[f"ceiling_{x}"] = {"mean": m, "sd": sd}
+            for i, a in enumerate(stance_names):
+                for b in stance_names[i + 1:]:
+                    m, sd = paired_cos(A[groups[a]], A[groups[b]], N, rng,
+                                       c_pos, c_lay, k_geo)
+                    geo[f"observed_{a}|{b}"] = {"mean": m, "sd": sd}
+
+        if "inability" in dirs and "identity" in dirs and k_geo >= 8:
+            ia, idn = np.asarray(groups["inability"]), np.asarray(groups["identity"])
+            kk = min(len(ia), len(idn))
+            d_stance = (A[rng.choice(ia, kk, replace=False)].mean(0)
+                        - A[rng.choice(idn, kk, replace=False)].mean(0))
+            a1, a2 = halves(ia, rng)
+            b1, b2 = halves(idn, rng)
+            rel = []
+            for _ in range(20):
+                d1 = (A[rng.choice(a1, k_geo, replace=False)].mean(0)
+                      - A[rng.choice(b1, k_geo, replace=False)].mean(0))
+                d2 = (A[rng.choice(a2, k_geo, replace=False)].mean(0)
+                      - A[rng.choice(b2, k_geo, replace=False)].mean(0))
+                rel.append(abs(_cos(d1[c_pos, c_lay], d2[c_pos, c_lay])))
+            # Null: pool the two stances, split into two PSEUDO-stances at random, ask the
+            # same reliability question. A real stance axis has to beat this.
+            pooled = np.concatenate([ia, idn])
+            nrel = []
+            for _ in range(args.n_null):
+                sh = rng.permutation(pooled)
+                qa1, qa2 = halves(sh[: len(ia)], rng)
+                qb1, qb2 = halves(sh[len(ia):], rng)
+                if min(len(qa1), len(qa2), len(qb1), len(qb2)) < k_geo:
+                    continue
+                d1 = (A[rng.choice(qa1, k_geo, replace=False)].mean(0)
+                      - A[rng.choice(qb1, k_geo, replace=False)].mean(0))
+                d2 = (A[rng.choice(qa2, k_geo, replace=False)].mean(0)
+                      - A[rng.choice(qb2, k_geo, replace=False)].mean(0))
+                nrel.append(abs(_cos(d1[c_pos, c_lay], d2[c_pos, c_lay])))
+            sw = induce_sweep(model, tok, cfg, template, refusal_toks,
+                              d_stance[c_pos, c_lay], c_lay, harmless)
+            geo["stance_contrast"] = {
+                "k_balanced": int(kk), "k_matched": int(k_geo),
+                "reliability": {"mean": float(np.mean(rel)), "sd": float(np.std(rel))},
+                "null_reliability": {"mean": float(np.mean(nrel)) if nrel else float("nan"),
+                                     "sd": float(np.std(nrel)) if nrel else float("nan")},
+                "cos_with_arditi": _cos(d_stance[c_pos, c_lay], d_arditi_cell),
+                "cos_with_inability": _cos(d_stance[c_pos, c_lay],
+                                           fitted["inability"][c_pos, c_lay]),
+                "induce_max": sw["max"], "at_coeff": sw["at_coeff"]}
+            dirs["_stance_contrast"] = d_stance[c_pos, c_lay]
+
     cos = {}
-    names = sorted(dirs)
+    names = sorted(k for k in dirs if not k.startswith("_"))
     for i, a in enumerate(names):
         for b in names[i + 1:]:
             va, vb = dirs[a], dirs[b]
@@ -349,6 +477,7 @@ def main() -> None:
         np.savez(path, stage=np.array(args.stage), arm=np.array(args.arm),
                  results=np.array(json.dumps(out)), cosines=np.array(json.dumps(cos)),
                  control=np.array(json.dumps(ctrl)),
+                 geometry=np.array(json.dumps(geo)),
                  **{f"dir_{s}": v for s, v in dirs.items()},
                  **{f"surface_{s}": v for s, v in surfaces.items()})
         for s, r in out.items():
@@ -380,9 +509,51 @@ def main() -> None:
             print("   -> the contrast construction does NOT reproduce the known direction.")
             print("      The cosines below are NOT reportable until this passes.")
     if cos:
-        print("\npairwise |cos|: " + ", ".join(f"{k} {abs(v):.3f}" for k, v in cos.items()))
-        print("  < 0.30 -> distinct directions, refusal is multi-directional")
-        print("  > 0.70 -> one direction with several readouts")
+        print("\npairwise |cos| (stance-vs-harmless fits): "
+              + ", ".join(f"{k} {abs(v):.3f}" for k, v in cos.items()))
+        print("  NOT readable alone -- both fits are harmful-vs-harmless, with the stance")
+        print("  label only choosing which harmful prompts go in. See the ceiling below.")
+
+    if geo.get("cell"):
+        print(f"\n-- geometry at the canonical cell (pos {geo['cell'][0]}, "
+              f"L{geo['cell'][1]}), every fit at k={geo.get('k_matched')} --")
+        if geo.get("why_no_ceiling"):
+            print(f"   no ceiling: {geo['why_no_ceiling']}")
+        else:
+            print("   ceiling = |cos| between two fits of the SAME stance on disjoint halves;")
+            print("   that is what agreement looks like when the direction is identical.")
+            for key in sorted(x for x in geo if x.startswith("ceiling_")):
+                r = geo[key]
+                print(f"     {key[len('ceiling_'):]:14s} {r['mean']:.3f} ± {r['sd']:.3f}")
+            for key in sorted(x for x in geo if x.startswith("observed_")):
+                pair = key[len("observed_"):]
+                a, b = pair.split("|")
+                r, ca, cb = geo[key], geo.get(f"ceiling_{a}"), geo.get(f"ceiling_{b}")
+                ceil = min(ca["mean"], cb["mean"]) if ca and cb else float("nan")
+                verdict = ("AT the ceiling -- not resolvably different directions"
+                           if r["mean"] >= ceil - max(r["sd"], 0.01)
+                           else "BELOW the ceiling -- a difference survives the noise")
+                print(f"     {pair}: observed {r['mean']:.3f} ± {r['sd']:.3f} vs "
+                      f"ceiling {ceil:.3f}\n       -> {verdict}")
+
+        sc = geo.get("stance_contrast")
+        if sc:
+            print("\n   stance contrast: mean(inability) - mean(identity), both classes")
+            print("   harmful and refused -- the only within-harmful test of a stance axis.")
+            print(f"     reliability           {sc['reliability']['mean']:.3f} ± "
+                  f"{sc['reliability']['sd']:.3f}")
+            print(f"     pseudo-stance null    {sc['null_reliability']['mean']:.3f} ± "
+                  f"{sc['null_reliability']['sd']:.3f}")
+            print(f"     |cos| vs d_arditi     {abs(sc['cos_with_arditi']):.3f}")
+            print(f"     |cos| vs d_inability  {abs(sc['cos_with_inability']):.3f}")
+            print(f"     induces refusal       {sc['induce_max']:+.3f} @c{sc['at_coeff']:.1f}")
+            print("\n   read it as:")
+            print("     reliability at the null   -> NO stance axis; the surviving stance is")
+            print("                                  not linearly mediated at the eoi position.")
+            print("                                  Bounds the linear-representation")
+            print("                                  hypothesis -- the reportable negative.")
+            print("     reliable and |cos| < 0.30 -> a SEPARATE stance axis: multi-directional.")
+            print("     reliable and |cos| > 0.70 -> stance rides the refusal axis itself.")
     print(f"\nwrote {path}")
 
 

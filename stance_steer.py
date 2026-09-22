@@ -423,23 +423,33 @@ def main() -> None:
                "dissociation_any": bool(any(c["dissociation"] for c in per_mag.values()))}
     results["verdict"] = verdict
 
+    # SAVE BEFORE REPORTING. The notes f-string below is evaluated when the `with` block is
+    # ENTERED, i.e. before np.savez runs inside it. On 2026-09-22 that string still referenced
+    # verdict['dissociation'] after the key was renamed, and the KeyError threw away 42
+    # completed generations -- 22 minutes of pod time -- with nothing written to disk. The
+    # expensive artefact is now on disk before any string that could fail is built, and the
+    # ledger row is written against a file that already exists.
     path = f"{cfg.results_dir}/{stem}_stance_steer.npz"
+    np.savez(path, stage=np.array(args.stage), cell=np.array([c_pos, c_lay]),
+             results=np.array(json.dumps(results)),
+             completions=np.array(json.dumps(completions)))
+    logger.info("wrote %s (%d generation passes)", path, total)
+
     with RunRecord(EXPERIMENT, "stance_steer.py", cfg=cfg, question=QUESTION,
                    notes=f"arm={args.arm}, mags={mags}, n_null={args.n_null}, "
-                         f"kl_max={args.kl_max}, "
-                         f"gen={args.gen_tokens}, prefill_only=True, "
-                         f"all arms norm-matched to ||d_inability||; "
-                         f"dissociation={verdict['dissociation']}") as rec:
-        np.savez(path, stage=np.array(args.stage), cell=np.array([c_pos, c_lay]),
-                 results=np.array(json.dumps(results)),
-                 completions=np.array(json.dumps(completions)))
+                         f"kl_max={args.kl_max}, gen={args.gen_tokens}, prefill_only=True; "
+                         f"dissociation_in_regime="
+                         f"{verdict.get('dissociation_in_regime')}") as rec:
         for m in mags:
             c = per_mag[str(m)]
             rec.result(mag=m, in_regime=c["in_regime"],
                        stance_share_span=round(c["stance_share_span"], 4),
+                       arditi_share_span=round(c["arditi_share_span"], 4),
                        null_share_max=round(c["null_share_max"], 4),
                        arditi_rate_span=round(c["arditi_rate_span"], 4),
                        null_rate_max=round(c["null_rate_max"], 4),
+                       stance_beats_null=c["stance_beats_null"],
+                       axes_separable=c["axes_separable"],
                        dissociation=c["dissociation"])
         rec.result(mag="_headline",
                    dissociation_in_regime=verdict["dissociation_in_regime"],
@@ -497,7 +507,6 @@ def main() -> None:
         print("     consistent with a prompt-content direction and multi-directionality does")
         print("     not survive. Note what DOES survive: whether d_arditi specifically")
         print("     controls the RATE is reported above and is a separate claim.")
-    print(f"\nwrote {path}")
 
 
 if __name__ == "__main__":

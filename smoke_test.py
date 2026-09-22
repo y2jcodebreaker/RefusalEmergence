@@ -513,6 +513,52 @@ def test_a3b_verdict_rejects_the_false_positive() -> None:
     print("  A3b verdict: replayed false positive rejected twice over, real effect kept — OK")
 
 
+def test_runrecord_notes_cannot_destroy_a_run() -> None:
+    """A log message must not be able to throw away an experiment.
+
+    RunRecord's `notes` f-string is evaluated when the `with` block is ENTERED — before the
+    np.savez inside it. On 2026-09-22 that string still said verdict['dissociation'] after
+    the key had been renamed, and the KeyError discarded 42 completed generations, 22 minutes
+    of pod time, with nothing written to disk. Same shape as merge_ledger.py's
+    report-before-write.
+
+    So: no literal-key dict subscript inside a notes= f-string. `.get(...)` renders None for
+    a missing key instead of aborting, and a run that mislabels its own ledger row is
+    incomparably cheaper than a run that vanishes."""
+    import ast
+    import pathlib
+
+    offenders = []
+    for path in sorted(pathlib.Path(".").glob("*.py")):
+        if path.name == "smoke_test.py":
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not (isinstance(node, ast.Call)
+                    and getattr(node.func, "id", None) == "RunRecord"):
+                continue
+            for kw in node.keywords:
+                if kw.arg != "notes":
+                    continue
+                for sub in ast.walk(kw.value):
+                    if isinstance(sub, ast.Subscript) and isinstance(sub.slice, ast.Constant):
+                        offenders.append(f"{path.name}:{node.lineno}")
+    assert not offenders, (
+        "RunRecord notes= subscripts a dict with a literal key at: " + ", ".join(offenders) +
+        "\n  A KeyError there aborts the run BEFORE its results are saved. Use .get(...).")
+
+    # Prove the detector fires on the exact line that cost the 22 minutes.
+    bad = ast.parse("with RunRecord(E, s, notes=f\"d={verdict['dissociation']}\") as rec:\n    pass")
+    hits = []
+    for node in ast.walk(bad):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "RunRecord":
+            for kw in node.keywords:
+                if kw.arg == "notes":
+                    hits += [x for x in ast.walk(kw.value)
+                             if isinstance(x, ast.Subscript) and isinstance(x.slice, ast.Constant)]
+    assert hits, "the notes-subscript detector does not fire on the original bug"
+    print("  RunRecord notes: no literal-key subscript can abort a run — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -581,6 +627,7 @@ if __name__ == "__main__":
     test_cosine_ceiling_discriminates()
     test_degenerate_output_is_detected()
     test_a3b_verdict_rejects_the_false_positive()
+    test_runrecord_notes_cannot_destroy_a_run()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

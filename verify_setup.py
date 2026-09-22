@@ -171,12 +171,12 @@ def check_disk(cfg) -> bool:
                   f"      only its symlinks (~7 MB) and ORPHANS its share of this bulk, which\n"
                   f"      nothing garbage-collects. To actually reclaim it, delete the cache:\n"
                   f"        rm -rf {hf}\n"
-                  f"      Everything there re-downloads. results/ is NOT in it.")
+                  f"      Everything there re-downloads. results/ is NOT affected.")
         else:
             print(f"      Free space by deleting a FINISHED lineage's weights, e.g.\n"
                   f"        du -sh {hub}/* | sort -h | tail\n"
                   f"        rm -rf {hf}      # simplest: the whole cache re-downloads\n"
-                  f"      Results in results/ are small and are NOT affected.")
+                  f"      Results are small and results/ is NOT affected.")
         return False
     print(f"OK  disk: {free:.0f} GB free + {cached:.0f} GB cached >= ~{need:.0f} GB needed "
           f"({len(cfg.checkpoints)} checkpoints)")

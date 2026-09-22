@@ -122,10 +122,18 @@ def test_disk_check() -> None:
     Background writer channel closed' -- naming neither disk nor the model. That killed a
     Zephyr run on a pod after its base row had already been computed (2026-09-17).
 
-    Hermetic: the per-checkpoint size is monkeypatched, so the test does not depend on how
-    much free space the machine running it happens to have. (The first version did, and
-    failed on a laptop with 19 GB free.)"""
+    Hermetic in TWO respects, both learned the hard way. The per-checkpoint size is
+    monkeypatched, so the test does not depend on how much free space the machine happens to
+    have -- the first version did, and failed on a laptop with 19 GB free. And HF_HOME is
+    pointed at an empty temp dir, so it does not depend on the machine's cache SHAPE either:
+    check_disk takes a different failure branch when the xet orphan bulk is large, and this
+    test asserted wording from the other branch. It passed on a laptop and failed on the
+    first pod with a warm cache (2026-09-22). Both branches now make the same promise about
+    results/ in the same words, and the assertion checks that promise rather than a phrase
+    from one branch."""
     import io
+    import os
+    import tempfile
     from contextlib import redirect_stdout
 
     import verify_setup as V
@@ -133,6 +141,9 @@ def test_disk_check() -> None:
 
     cfg = config_for("olmo2")
     saved = V._GB_PER_CKPT
+    _home = os.environ.get("HF_HOME")
+    _empty = tempfile.TemporaryDirectory()
+    os.environ["HF_HOME"] = _empty.name
     try:
         for per_ckpt, want in ((0, True), (10_000_000, False)):   # 0 GB always fits; 10 PB never
             V._GB_PER_CKPT = per_ckpt
@@ -146,10 +157,16 @@ def test_disk_check() -> None:
             else:
                 assert "not enough disk" in out and "HF_HOME" in out, out
                 assert "rm -rf" in out, "the message must say HOW to free space"
-                assert "NOT affected" in out, "must say results/ are safe to keep"
+                assert "results/ is NOT affected" in out, \
+                    "every failure branch must promise results/ is safe, in the same words"
                 assert "4 checkpoints" in out, "must say how many checkpoints it sized for"
     finally:
         V._GB_PER_CKPT = saved
+        _empty.cleanup()
+        if _home is None:
+            os.environ.pop("HF_HOME", None)
+        else:
+            os.environ["HF_HOME"] = _home
 
     # The pod's actual cache shape: a huge SHARED `hub/blobs` (xet chunk store) with
     # ~7 MB symlink-only model dirs. `rm -rf hub/models--<finished>*` then frees nothing and
@@ -178,7 +195,10 @@ def test_disk_check() -> None:
             assert "NOT under any models--" in out, out
             assert "xet" in out, "must name the xet shared cache"
             assert f"rm -rf {td}" in out, "must point at the CACHE ROOT, not a model dir"
-            assert "results/ is NOT in it" in out, "must say results/ is safe"
+            # Same promise, same words as the other failure branch: both sub-checks now
+            # assert the identical string, so the two cannot drift apart again.
+            assert "results/ is NOT affected" in out, \
+                "every failure branch must promise results/ is safe, in the same words"
     finally:
         V._GB_PER_CKPT, V._ORPHAN_GB = saved_g, saved_o
         os.environ.pop("HF_HOME", None)

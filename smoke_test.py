@@ -480,6 +480,39 @@ def test_degenerate_output_is_detected() -> None:
     print("  degeneracy: wreckage flagged, real refusals kept — OK")
 
 
+def test_a3b_verdict_rejects_the_false_positive() -> None:
+    """A3b's verdict must reject the exact numbers that fooled it, for the right reason.
+
+    On 2026-09-22 stance_steer.py reported DISSOCIATION: YES on a composition span of 0.266
+    against a SINGLE null draw of 0.235 — a margin of 0.031, no distribution, no noise model.
+    Two separate defects, and fixing only one leaves the door open:
+
+      1. one draw is not a null. With n=1 the sd is 0, so a mean+2sd rule degenerates back
+         into the bare `>` it was meant to replace.
+      2. the ARDITI arm moved composition MORE (0.308) than the stance arm (0.266). If the
+         refusal direction is the better stance-changer, composition is just responding to
+         whatever is injected, however the null lands.
+
+    The replayed numbers are the fixture: if either rule ever passes them, the false positive
+    is back."""
+    from stance_steer import axes_separable, beats_null
+
+    # 1. no distribution
+    assert not beats_null(0.266, [0.235]), "one draw must not count as a null distribution"
+    assert not beats_null(0.266, []), "an empty null is not evidence"
+    assert not beats_null(float("nan"), [0.21, 0.24, 0.19]), "nan is not evidence"
+    assert not beats_null(0.24, [0.21, 0.24, 0.19, 0.23]), "must sit above EVERY draw"
+    assert beats_null(0.62, [0.21, 0.24, 0.19, 0.23, 0.22]), \
+        "a real effect is being rejected — the rule is now too strict to ever fire"
+
+    # 2. the replayed run: even if the null had been tight enough to clear, the refusal
+    #    direction out-moved the stance direction, so the axes are not separable.
+    assert not axes_separable(0.266, 0.308), "the 2026-09-22 false positive passes again"
+    assert axes_separable(0.62, 0.21), "a genuine separation is being rejected"
+    assert not axes_separable(float("nan"), 0.21)
+    print("  A3b verdict: replayed false positive rejected twice over, real effect kept — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -547,6 +580,7 @@ if __name__ == "__main__":
     test_no_pinned_sweep_axis()
     test_cosine_ceiling_discriminates()
     test_degenerate_output_is_detected()
+    test_a3b_verdict_rejects_the_false_positive()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

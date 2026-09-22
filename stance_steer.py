@@ -35,6 +35,23 @@ PRE-REGISTERED, BEFORE THE FIRST RUN (2026-09-22):
   not separable after all -- which is reportable, and is the outcome that retires A3's
   headline rather than confirming it.
 
+  ONE NULL DRAW IS NOT A NULL, and the 2026-09-22 run proved it by passing. With a single
+  pseudo-stance direction and the criterion `stance_span > null_span`, the run reported
+  DISSOCIATION: YES on stance 0.266 against null 0.235 -- a margin of 0.031, no noise model,
+  no distribution. At the only coefficient the KL bound admitted, ALL THREE arms moved
+  composition identically (share ~0.46-0.53 at -c, ~0.77-0.79 at +c), i.e. the shift was a
+  generic consequence of perturbing layer 14 at that magnitude and had nothing to do with
+  d_stance. The arditi arm moved composition MORE than the stance arm. So: n_null independent
+  pseudo-stance directions, and the stance arm must clear the whole distribution
+  (max, and mean + 2sd) at a magnitude, not beat one sample of it.
+
+  THE KL BOUND IS ALSO BORROWED. 0.10 is Arditi's ABLATION criterion; his steering path has
+  no KL constraint at all (the induce criterion is just induce >= 0). It admits only +-0.125
+  here, about 0.55x d_stance's natural magnitude, which may be too small for anything
+  direction-specific to appear. Magnitude is therefore swept, every cell is reported with its
+  KL and its degeneracy, and cells are TIERED: the headline claim may use only cells inside
+  the strict bound, while larger magnitudes are reported as exploratory and labelled.
+
   FALSIFIER: the stance arm fails to move the inability:identity ratio beyond the null arm's
   movement at any coefficient. Then d_stance is a prompt-content direction, A3's geometry is
   an artifact of the contrast, and the multi-directionality claim does not survive.
@@ -166,14 +183,55 @@ def largest_in_regime(kls: dict, sign: int, kl_max: float) -> float | None:
     return max(ok, key=abs) if ok else None
 
 
+def beats_null(observed: float, nulls: list) -> bool:
+    """Does `observed` clear the WHOLE null distribution, not one sample of it?
+
+    Both conditions, deliberately: above every draw, AND above mean + 2sd. The 2026-09-22
+    run used `observed > nulls[0]` with a single draw and reported a dissociation on
+    stance 0.266 against null 0.235 -- a margin of 0.031 with no noise model. At that
+    magnitude every arm moved composition alike, so the "effect" was a generic consequence
+    of perturbing the layer, and a bare `>` could not see that. Requiring max() alone would
+    still pass on a lucky draw; requiring mean+2sd alone would pass when one null draw
+    exceeds the observed value. Neither is sufficient, so both are required."""
+    vals = [v for v in nulls if np.isfinite(v)]
+    # Fewer than three draws is not a distribution. With ONE draw the sd is 0, so the
+    # mean+2sd arm degenerates into the same bare `>` that produced the false positive and
+    # adds nothing -- the rule would look stricter while being identical.
+    if len(vals) < 3 or not np.isfinite(observed):
+        return False
+    return bool(observed > max(vals)
+                and observed > float(np.mean(vals)) + 2 * float(np.std(vals)))
+
+
+def axes_separable(stance_share_span: float, arditi_share_span: float) -> bool:
+    """Does d_stance move composition MORE than the refusal direction does?
+
+    Clearing the null is necessary and not sufficient. On 2026-09-22 the arditi arm moved
+    composition by 0.308 against the stance arm's 0.266: the refusal direction was the better
+    stance-changer. If injecting the REFUSAL direction reshapes the stance mix at least as
+    much as the direction fitted to separate stances, then composition is simply responding
+    to whatever is injected, and "a separate axis controls which kind of refusal" is not
+    what the data show -- whatever the null distribution says."""
+    if not (np.isfinite(stance_share_span) and np.isfinite(arditi_share_span)):
+        return False
+    return bool(stance_share_span > arditi_share_span)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lineage", default="tulu2_dpo")
     ap.add_argument("--stage", default="dpo")
     ap.add_argument("--arm", default="baseline", choices=("baseline", "ablated"))
     ap.add_argument("--grid", default="0.125,0.25,0.5,1.0,2.0,4.0",
-                    help="magnitudes to KL-screen; both signs are scanned. The generation "
-                         "coefficients are CHOSEN from this by the regime scan, not assumed")
+                    help="magnitudes to KL-screen (reported for every arm, both signs)")
+    ap.add_argument("--mags", default="0.125,0.25,0.5",
+                    help="magnitudes actually GENERATED at, both signs. Swept because the "
+                         "KL bound alone admits one tiny coefficient, and a generic nudge "
+                         "may be all that is visible there")
+    ap.add_argument("--n-null", type=int, default=5,
+                    help="independent pseudo-stance directions. One is not a null: with one "
+                         "draw and a bare `>` the 2026-09-22 run reported a dissociation on "
+                         "a margin of 0.031")
     ap.add_argument("--kl-max", type=float, default=0.10,
                     help="KL(baseline||steered) bound on harmless prompts. 0.10 is the "
                          "project's existing bound (Arditi's, used for ablation selection); "
@@ -232,63 +290,63 @@ def main() -> None:
     logger.info("caching activations for the null direction (%d prompts)", len(prompts))
     A = cache_activations(model, tok, prompts, template, n_eoi, cfg.batch_size).numpy()
     pooled = np.array(ia + idn)
-    sh = rng.permutation(pooled)
     k = min(len(ia), len(idn))
-    d_null = (A[sh[:k]].mean(0) - A[sh[k:2 * k]].mean(0))[c_pos, c_lay].astype(np.float32)
 
     def matched(v: np.ndarray) -> torch.Tensor:
         """Unit-normalise, then rescale to ||d_inability||, so one coefficient means the same
         magnitude of intervention in every arm."""
         return torch.tensor(v / (np.linalg.norm(v) + 1e-9) * ref_norm, dtype=torch.float32)
 
-    arms = {"stance": matched(d_stance), "arditi": matched(d_arditi), "null": matched(d_null)}
-    mags = [float(x) for x in args.grid.split(",") if float(x) > 0]
-    grid = sorted([-m for m in mags] + mags)
+    # n_null independent pseudo-stance directions, each from its own random split of the
+    # same pooled harmful prompts, so each carries the corpus's anisotropy exactly as the
+    # real contrast does -- strictly harder than isotropic noise, and the same construction
+    # A3's reliability null uses.
+    arms = {"stance": matched(d_stance), "arditi": matched(d_arditi)}
+    for j in range(args.n_null):
+        sh = rng.permutation(pooled)
+        arms[f"null{j}"] = matched((A[sh[:k]].mean(0) - A[sh[k:2 * k]].mean(0))[c_pos, c_lay])
+    null_names = [a for a in arms if a.startswith("null")]
+
+    mags = sorted({abs(float(x)) for x in args.mags.split(",") if float(x) != 0})
+    signed = [c for m in mags for c in (-m, m)]
+    grid = sorted({-abs(float(x)) for x in args.grid.split(",") if float(x) != 0}
+                  | {abs(float(x)) for x in args.grid.split(",") if float(x) != 0})
     harmless = load_instructions("harmless_val")[: cfg.n_val]
 
-    # ---- regime scan first: seconds of forward passes, so no generation is spent outside
-    # the range where the model is still the model.
+    # KL is REPORTED, not a gate. It tiers the cells: inside the bound a result can carry the
+    # headline claim, outside it the cell is exploratory and labelled as such. Using it as a
+    # gate admitted exactly one magnitude and hid the fact that that magnitude shows a
+    # generic effect.
     base_harmless = _last_logits(model, tok, harmless, template, cfg.batch_size)
-    kls, chosen = {}, {}
-    for name, vec in arms.items():
-        kls[name] = regime_scan(model, tok, cfg, template, vec, c_lay, harmless,
-                                base_harmless, grid, args.kl_max)
-        chosen[name] = [c for c in (largest_in_regime(kls[name], -1, args.kl_max),
-                                    largest_in_regime(kls[name], +1, args.kl_max))
-                        if c is not None]
-        logger.info("[%s] KL: %s -> in regime at %s", name,
-                    {c: round(v, 3) for c, v in kls[name].items()}, chosen[name] or "NOTHING")
-
-    print(f"\n-- regime scan (KL on {len(harmless)} harmless prompts, bound "
-          f"{args.kl_max:.2f}) --")
+    kls = {name: regime_scan(model, tok, cfg, template, vec, c_lay, harmless,
+                             base_harmless, grid, args.kl_max)
+           for name, vec in arms.items()}
+    print(f"\n-- KL on {len(harmless)} harmless prompts (strict bound {args.kl_max:.2f}) --")
     print(f"{'arm':8s} " + " ".join(f"{c:>+8.3f}" for c in grid))
     for name in arms:
         print(f"{name:8s} " + " ".join(
             f"{kls[name][c]:>8.3f}" + ("" if kls[name][c] <= args.kl_max else "!")
             for c in grid))
-    print("  ! = outside the regime; not generated, not read.")
-
-    if not any(chosen.values()):
-        raise SystemExit("no coefficient of any arm is within the KL bound -- the smallest "
-                         "grid magnitude already breaks the model. Lower --grid before "
-                         "spending generation time.")
+    print("  ! = outside the strict bound: generated if in --mags, but labelled exploratory.")
 
     logger.info("baseline (c=0), %d prompts @ %d tokens", len(prompts), args.gen_tokens)
     base_comp = generate_completions(model, tok, prompts, template,
                                      args.gen_tokens, cfg.batch_size)
     base = classify(base_comp)
     base["degenerate"] = float(np.mean([degenerate(c) for c in base_comp]))
-    logger.info("[c=0] refusal %.3f | inability %d identity %d (share %.3f) | degenerate %.3f",
+    logger.info("[c=0] refusal %.3f | inab %d iden %d share %.3f | degen %.3f",
                 base["refusal_rate"], base["n_inability"], base["n_identity"],
                 base["inability_share"], base["degenerate"])
 
-    results: dict = {"baseline": base, "arms": {}, "kl": {a: {str(k): v for k, v in d.items()}
-                                                          for a, d in kls.items()},
-                     "chosen": {a: c for a, c in chosen.items()}, "kl_max": args.kl_max}
+    results: dict = {"baseline": base, "arms": {},
+                     "kl": {a: {str(c): v for c, v in d.items()} for a, d in kls.items()},
+                     "kl_max": args.kl_max, "mags": mags, "n_null": args.n_null}
     completions: dict = {"baseline": base_comp}
+    total = len(arms) * len(signed)
+    done = 0
     for name, vec in arms.items():
         results["arms"][name] = {}
-        for c in chosen[name]:
+        for c in signed:
             h = _addition_handles(model, vec, coeff=c, layer=c_lay, prefill_only=True)
             try:
                 comp = generate_completions(model, tok, prompts, template,
@@ -296,103 +354,149 @@ def main() -> None:
             finally:
                 for x in h:
                     x.remove()
+            done += 1
             r = classify(comp)
             r["degenerate"] = float(np.mean([degenerate(x) for x in comp]))
             r["kl"] = kls[name][c]
-            # A cell whose output stopped being language cannot report a composition, and
-            # must not be allowed to look like one.
+            r["in_regime"] = bool(r["kl"] <= args.kl_max)
+            # A cell whose output stopped being language cannot report a composition.
             r["usable"] = bool(r["degenerate"] <= base["degenerate"] + 0.10)
             r["d_rate"] = r["refusal_rate"] - base["refusal_rate"]
             r["d_share"] = r["inability_share"] - base["inability_share"]
             results["arms"][name][str(c)] = r
             completions[f"{name}@{c}"] = comp
-            logger.info("[%s c=%+.3f] refusal %.3f (%+.3f) | inab %d iden %d share %.3f "
-                        "(%+.3f) | KL %.3f degen %.3f%s", name, c, r["refusal_rate"],
-                        r["d_rate"], r["n_inability"], r["n_identity"], r["inability_share"],
-                        r["d_share"], r["kl"], r["degenerate"],
-                        "" if r["usable"] else "  <- UNUSABLE")
+            logger.info("(%d/%d) [%s c=%+.3f] refusal %.3f (%+.3f) share %.3f (%+.3f) "
+                        "| KL %.3f degen %.3f%s%s", done, total, name, c, r["refusal_rate"],
+                        r["d_rate"], r["inability_share"], r["d_share"], r["kl"],
+                        r["degenerate"], "" if r["in_regime"] else " [exploratory]",
+                        "" if r["usable"] else " UNUSABLE")
 
-    # ---- the dissociation, over USABLE cells only
-    def span(arm: str, key: str) -> float:
-        vals = [r[key] for r in results["arms"][arm].values() if r["usable"]]
-        vals = [v for v in vals if np.isfinite(v)] + [base[key]]
+    # ---- verdict, PER MAGNITUDE, against the whole null distribution
+    def span_at(arm: str, mag: float, key: str) -> float:
+        vals = [base[key]]
+        for c in (-mag, mag):
+            r = results["arms"][arm].get(str(c))
+            if r and r["usable"]:
+                vals.append(r[key])
+        vals = [v for v in vals if np.isfinite(v)]
         return float(max(vals) - min(vals)) if len(vals) > 1 else float("nan")
 
-    verdict = {a: {"rate_span": span(a, "refusal_rate"),
-                   "share_span": span(a, "inability_share"),
-                   "n_usable": sum(1 for r in results["arms"][a].values() if r["usable"])}
-               for a in arms}
-    ns = verdict["null"]["share_span"]
-    stance_moves = bool(verdict["stance"]["share_span"] > (ns if np.isfinite(ns) else 0.0))
-    stance_keeps_rate = all(abs(r["d_rate"]) <= RATE_TOLERANCE
-                            for r in results["arms"]["stance"].values() if r["usable"])
-    nr = verdict["null"]["rate_span"]
-    arditi_moves_rate = bool(verdict["arditi"]["rate_span"] > (nr if np.isfinite(nr) else 0.0))
-    powered = verdict["stance"]["n_usable"] > 0 and verdict["arditi"]["n_usable"] > 0
-    verdict.update({"stance_moves_composition": stance_moves,
-                    "stance_preserves_rate": bool(stance_keeps_rate),
-                    "arditi_moves_rate": arditi_moves_rate, "powered": bool(powered),
-                    "dissociation": bool(powered and stance_moves and stance_keeps_rate
-                                         and arditi_moves_rate)})
+    per_mag = {}
+    for m in mags:
+        ns = [span_at(n, m, "inability_share") for n in null_names]
+        nr = [span_at(n, m, "refusal_rate") for n in null_names]
+        ns = [v for v in ns if np.isfinite(v)]
+        nr = [v for v in nr if np.isfinite(v)]
+        st_s, st_r = span_at("stance", m, "inability_share"), span_at("stance", m, "refusal_rate")
+        ar_r = span_at("arditi", m, "refusal_rate")
+        ar_s = span_at("arditi", m, "inability_share")
+        in_reg = all(results["arms"][a][str(c)]["in_regime"]
+                     for a in ("stance", "arditi") for c in (-m, m))
+        cell = {
+            "in_regime": bool(in_reg),
+            "stance_share_span": st_s, "stance_rate_span": st_r,
+            "arditi_rate_span": ar_r, "arditi_share_span": ar_s,
+            "null_share_max": float(max(ns)) if ns else float("nan"),
+            "null_share_mean": float(np.mean(ns)) if ns else float("nan"),
+            "null_share_sd": float(np.std(ns)) if ns else float("nan"),
+            "null_rate_max": float(max(nr)) if nr else float("nan"),
+            "null_rate_mean": float(np.mean(nr)) if nr else float("nan"),
+            "null_rate_sd": float(np.std(nr)) if nr else float("nan")}
+        # Clear the WHOLE distribution, both ways: above every null draw, and above
+        # mean + 2sd. A bare `>` against one draw is what produced the false YES.
+        cell["stance_beats_null"] = beats_null(st_s, ns)
+        cell["arditi_beats_null_on_rate"] = beats_null(ar_r, nr)
+        cell["stance_preserves_rate"] = bool(
+            all(abs(results["arms"]["stance"][str(c)]["d_rate"]) <= RATE_TOLERANCE
+                for c in (-m, m) if results["arms"]["stance"][str(c)]["usable"]))
+        cell["axes_separable"] = axes_separable(st_s, ar_s)
+        cell["dissociation"] = bool(cell["stance_beats_null"] and cell["stance_preserves_rate"]
+                                    and cell["arditi_beats_null_on_rate"]
+                                    and cell["axes_separable"])
+        per_mag[str(m)] = cell
+
+    headline = [m for m in mags if per_mag[str(m)]["in_regime"]]
+    verdict = {"per_magnitude": per_mag,
+               "headline_magnitudes": [str(m) for m in headline],
+               "dissociation_in_regime": bool(any(per_mag[str(m)]["dissociation"]
+                                                  for m in headline)),
+               "dissociation_any": bool(any(c["dissociation"] for c in per_mag.values()))}
     results["verdict"] = verdict
 
     path = f"{cfg.results_dir}/{stem}_stance_steer.npz"
     with RunRecord(EXPERIMENT, "stance_steer.py", cfg=cfg, question=QUESTION,
-                   notes=f"arm={args.arm}, chosen={chosen}, kl_max={args.kl_max}, "
+                   notes=f"arm={args.arm}, mags={mags}, n_null={args.n_null}, "
+                         f"kl_max={args.kl_max}, "
                          f"gen={args.gen_tokens}, prefill_only=True, "
                          f"all arms norm-matched to ||d_inability||; "
                          f"dissociation={verdict['dissociation']}") as rec:
         np.savez(path, stage=np.array(args.stage), cell=np.array([c_pos, c_lay]),
                  results=np.array(json.dumps(results)),
                  completions=np.array(json.dumps(completions)))
-        for a in arms:
-            rec.result(arm=a, rate_span=round(verdict[a]["rate_span"], 4),
-                       share_span=round(verdict[a]["share_span"], 4))
-        rec.result(arm="_verdict", **{k: v for k, v in verdict.items() if isinstance(v, bool)})
+        for m in mags:
+            c = per_mag[str(m)]
+            rec.result(mag=m, in_regime=c["in_regime"],
+                       stance_share_span=round(c["stance_share_span"], 4),
+                       null_share_max=round(c["null_share_max"], 4),
+                       arditi_rate_span=round(c["arditi_rate_span"], 4),
+                       null_rate_max=round(c["null_rate_max"], 4),
+                       dissociation=c["dissociation"])
+        rec.result(mag="_headline",
+                   dissociation_in_regime=verdict["dissociation_in_regime"],
+                   dissociation_any=verdict["dissociation_any"])
 
     print(f"\n=== A3b: {stem} — does d_stance change the KIND of refusal? ===")
     print(f"baseline (c=0): refusal {base['refusal_rate']:.3f} | "
           f"inability {base['n_inability']} identity {base['n_identity']} "
           f"| share {base['inability_share']:.3f} | degenerate {base['degenerate']:.3f}\n")
     print(f"{'arm':8s} {'c':>7s} {'KL':>6s} {'degen':>6s} {'refusal':>8s} {'Δrate':>7s} "
-          f"{'inab':>5s} {'iden':>5s} {'share':>7s} {'Δshare':>8s}")
+          f"{'share':>7s} {'Δshare':>8s}")
     for name in arms:
-        if not results["arms"][name]:
-            print(f"{name:8s} no coefficient of either sign is within the KL bound")
-            continue
-        for c, r in results["arms"][name].items():
-            print(f"{name:8s} {float(c):>+7.3f} {r['kl']:>6.3f} {r['degenerate']:>6.3f} "
-                  f"{r['refusal_rate']:>8.3f} {r['d_rate']:>+7.3f} {r['n_inability']:>5d} "
-                  f"{r['n_identity']:>5d} {r['inability_share']:>7.3f} {r['d_share']:>+8.3f}"
+        for c in signed:
+            r = results["arms"][name][str(c)]
+            print(f"{name:8s} {c:>+7.3f} {r['kl']:>6.3f} {r['degenerate']:>6.3f} "
+                  f"{r['refusal_rate']:>8.3f} {r['d_rate']:>+7.3f} "
+                  f"{r['inability_share']:>7.3f} {r['d_share']:>+8.3f}"
+                  + ("" if r["in_regime"] else "  [exploratory]")
                   + ("" if r["usable"] else "  UNUSABLE"))
-    print("\nspans over usable cells (baseline included):")
-    for a in arms:
-        print(f"  {a:8s} rate {verdict[a]['rate_span']:.3f}   "
-              f"composition {verdict[a]['share_span']:.3f}   "
-              f"({verdict[a]['n_usable']} usable cell(s))")
-    print(f"\n  stance moves composition beyond null : "
-          f"{'YES' if verdict['stance_moves_composition'] else 'NO'}")
-    print(f"  stance leaves the rate alone (±{RATE_TOLERANCE:.2f}): "
-          f"{'YES' if verdict['stance_preserves_rate'] else 'NO'}")
-    print(f"  arditi moves the rate (positive control): "
-          f"{'YES' if verdict['arditi_moves_rate'] else 'NO'}")
-    print(f"\n  DISSOCIATION: {'YES' if verdict['dissociation'] else 'NO'}")
-    if verdict["dissociation"]:
-        print("  -> d_stance changes WHICH refusal, d_arditi changes HOW MUCH. The stance")
-        print("     axis is causal and separable: refusal is multi-directional.")
-    elif not verdict["powered"]:
-        print("  -> UNDERPOWERED, not negative. No usable cell in one of the two arms that")
-        print("     the comparison needs, so nothing here is evidence either way. Widen or")
-        print("     lower --grid, or accept that this model cannot be steered in regime.")
-    elif not verdict["arditi_moves_rate"]:
-        print("  -> POSITIVE CONTROL FAILED inside the regime. The refusal direction itself")
-        print("     does not move the rate at any coefficient the model survives, so the")
-        print("     stance arm's result is uninterpretable. That is a fact about the harness,")
-        print("     not about stance.")
+
+    print(f"\n-- per magnitude, stance against {len(null_names)} independent nulls --")
+    for m in mags:
+        c = per_mag[str(m)]
+        tag = "in regime" if c["in_regime"] else "EXPLORATORY (outside the KL bound)"
+        print(f"\n  |c| = {m:g}   [{tag}]")
+        print(f"    composition  stance {c['stance_share_span']:.3f}  vs null "
+              f"max {c['null_share_max']:.3f}, mean {c['null_share_mean']:.3f} "
+              f"± {c['null_share_sd']:.3f}   -> "
+              f"{'CLEARS the null' if c['stance_beats_null'] else 'does NOT clear the null'}")
+        print(f"    rate         arditi {c['arditi_rate_span']:.3f}  vs null "
+              f"max {c['null_rate_max']:.3f}, mean {c['null_rate_mean']:.3f} "
+              f"± {c['null_rate_sd']:.3f}   -> "
+              f"{'CLEARS the null' if c['arditi_beats_null_on_rate'] else 'does NOT clear'}")
+        print(f"    stance leaves rate alone (±{RATE_TOLERANCE:.2f}): "
+              f"{'YES' if c['stance_preserves_rate'] else 'NO'}")
+        print(f"    axes separable (stance moves composition more than arditi does): "
+              f"{'YES' if c['axes_separable'] else 'NO'}  "
+              f"[stance {c['stance_share_span']:.3f} vs arditi {c['arditi_share_span']:.3f}]")
+        print(f"    DISSOCIATION at this magnitude: "
+              f"{'YES' if c['dissociation'] else 'NO'}")
+
+    print(f"\n  HEADLINE (in-regime magnitudes {verdict['headline_magnitudes'] or 'none'}): "
+          f"{'DISSOCIATION' if verdict['dissociation_in_regime'] else 'NO DISSOCIATION'}")
+    if verdict["dissociation_in_regime"]:
+        print("  -> d_stance changes WHICH refusal beyond anything an arbitrary direction of")
+        print("     the same norm does, while d_arditi changes HOW MUCH. Refusal is")
+        print("     multi-directional. Replicate on a second family before writing it.")
+    elif verdict["dissociation_any"]:
+        print("  -> only OUTSIDE the strict KL bound. Report as exploratory, not as the")
+        print("     headline: at those coefficients the model is measurably not the same")
+        print("     model, and that is exactly where a spurious effect is cheapest to get.")
     else:
-        print("  -> the falsifier fired: d_stance does not causally control stance while")
-        print("     d_arditi does control rate. A3's geometry is consistent with a")
-        print("     prompt-content direction, and multi-directionality does not survive.")
+        print("  -> the falsifier fired. d_stance does not move stance composition beyond")
+        print("     what an arbitrary norm-matched direction does, so A3's geometry is")
+        print("     consistent with a prompt-content direction and multi-directionality does")
+        print("     not survive. Note what DOES survive: whether d_arditi specifically")
+        print("     controls the RATE is reported above and is a separate claim.")
     print(f"\nwrote {path}")
 
 

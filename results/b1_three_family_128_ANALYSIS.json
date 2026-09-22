@@ -1,0 +1,74 @@
+{
+ "what": "Three families at MATCHED 128-token generation. Completes B1's pre-registered ordering test and the stance taxonomy.",
+ "date": "2026-09-23",
+ "sufficiency_128_tokens": {
+  "zephyr_dpo": {
+   "baseline": 0.227,
+   "ablated": 0.0,
+   "removed_pct": 100.0,
+   "ci": [
+    83,
+    100
+   ],
+   "n_refusals": "30 -> 0"
+  },
+  "tulu2_dpo": {
+   "baseline": 0.758,
+   "ablated": 0.227,
+   "removed_pct": 70.0,
+   "ci": [
+    55,
+    80
+   ],
+   "n_refusals": "100 -> 30"
+  },
+  "olmo2_rlvr": {
+   "baseline": 0.985,
+   "ablated": 0.485,
+   "removed_pct": 50.8,
+   "ci": [
+    40,
+    60
+   ],
+   "n_refusals": "130 -> 64"
+  },
+  "zephyr_sft": {
+   "baseline": 0.061,
+   "ablated": 0.015,
+   "removed_pct": 75.0,
+   "ci": [
+    0,
+    96
+   ],
+   "n_refusals": "8 -> 2",
+   "EXCLUDED": "8 baseline refusals of 132. The interval spans 0-96%, so this point cannot be ordered against anything and is reported but not used. zephyr_DPO is the usable Zephyr point."
+  }
+ },
+ "verdict_on_the_pre_registration": "ORDERING HOLDS at matched generation length: Zephyr-DPO 100% > Tulu-2 70% > OLMo 2 51%, as pre-registered on 2026-09-23 before any B1 run. HONEST ON SEPARATION: Zephyr vs Tulu-2 is clean (CI 83-100 against 55-80). Tulu-2 vs OLMo 2 OVERLAPS (55-80 against 40-60) -- supported by the point estimates, not separated at 95%. Three points with one overlapping pair is an ordering, not a trend line, and it should be written as one.",
+ "the_four_stances": {
+  "inability": "'I cannot', 'I'm sorry, but I can't' -- forecloses",
+  "identity": "'As an AI language model, I must emphasize' -- asserts a role",
+  "condemnation": "'I strongly condemn', 'I strongly advise against' -- takes a position",
+  "normative": "'Bribery is illegal and unethical' -- the act is the subject",
+  "note": "Each family has a DOMINANT stance: OLMo 2 inability (128/130), Tulu-2 inability with identity secondary (78/20), Zephyr-DPO condemnation (24/30). The taxonomy grew from two to four across three families, but it is converging rather than exploding -- the fourth was predicted by O-121 before this run."
+ },
+ "WHAT_THE_DIRECTION_MEDIATES": {
+  "inability -- REMOVED in all three": {
+   "olmo2": "128 -> 0 (100%)",
+   "tulu2": "78 -> 8 (90%)",
+   "zephyr_dpo": "2 -> 0 (n too small to weigh)"
+  },
+  "identity -- UNTOUCHED": {
+   "tulu2": "20 -> 21. The only family with enough of it to test, and ablation does not remove it at all."
+  },
+  "normative -- APPEARS": {
+   "olmo2": "2 -> 64. Did not exist at baseline."
+  },
+  "condemnation -- CONFOUNDED": {
+   "zephyr_dpo": "24 -> 0, but Zephyr's total goes 30 -> 0, so this cannot be attributed to the stance rather than to the model simply losing all refusal."
+  },
+  "claim": "The direction mediates INABILITY refusal. That is the only stance removed in every family that has it, and the one stance we can test against a survivor (identity, 20 -> 21) shows it is not a general 'refusal' effect."
+ },
+ "why_sufficiency_differs": "Sufficiency = the inability share of baseline refusals, minus whatever fallback appears. OLMo 2: 128/130 inability removed, but 64 normative appear -> 51%. Tulu-2: 78/100 removed, 21 identity survive -> 70%. Zephyr-DPO: everything goes, no fallback -> 100%. The ordering is therefore about FALLBACK CAPACITY, not about how much refusal the direction carries.",
+ "open": "Zephyr-SFT is unusable at n=8. Llama-2-chat (pre-registered rank 1) is unrun and gated. The dose curve and P1-E7's 0.477 remain 48-token measurements."
+}

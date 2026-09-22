@@ -154,8 +154,49 @@ commands in `RUNBOOK.md`; every run is in `results/RUNLOG.md` with its commit an
 > 42.5 % and 38.5 % at 48 — the pre-registered ordering holds and the separation widens from
 > 4.0 to 19.3 points.
 >
-> **Still to do.** Zephyr was measured at 48 only, so the three-family sufficiency table is not
-> yet quotable. P1-E7's 0.477 and the whole P1-E7d dose curve are 48-token measurements; the
+> **Zephyr is now measured at 128 too**, so the three-family table below is at matched length.
+
+## B1 — three alignment recipes at matched generation length (2026-09-23)
+
+| | baseline | ablated | **removed** | 95% CI | refusals |
+|---|---|---|---|---|---|
+| Zephyr-DPO *(safety data removed)* | 0.227 | **0.000** | **100.0 %** | [83, 100] | 30 → 0 |
+| Tulu-2-DPO *(safety data kept)* | 0.758 | 0.227 | **70.0 %** | [55, 80] | 100 → 30 |
+| OLMo 2 RLVR | 0.985 | 0.485 | **50.8 %** | [40, 60] | 130 → 64 |
+| ~~Zephyr-SFT~~ | 0.061 | 0.015 | 75.0 % | [0, 96] | 8 → 2 |
+
+**The pre-registered ordering holds** — written into the plan file before any B1 run:
+*Zephyr > Tulu-2 > {OLMo 2, Llama-2-chat}*.
+
+**On separation, honestly.** Zephyr vs Tulu-2 is clean (83–100 against 55–80). **Tulu-2 vs
+OLMo 2 overlaps** (55–80 against 40–60): supported by the point estimates, not separated at
+95 %. Three points with one overlapping pair is an **ordering**, not a trend line, and it is
+written as one. Zephyr-SFT rests on 8 baseline refusals and its interval spans 0–96 %, so it
+is reported and not used.
+
+### Four stances, and the one the direction actually controls
+
+| | inability | identity | condemnation | normative |
+|---|---|---|---|---|
+| | *"I cannot"* | *"As an AI… I must emphasize"* | *"I strongly condemn"* | *"Bribery is illegal"* |
+| OLMo 2 → ablated | **128 → 0** | 0 → 0 | 0 → 0 | 2 → **64** |
+| Tulu-2 → ablated | **78 → 8** | **20 → 21** | 0 → 0 | 2 → 1 |
+| Zephyr-DPO → ablated | 2 → 0 | 0 → 0 | **24 → 0** | 4 → 0 |
+
+Each family has a **dominant** stance, and the taxonomy grew from two to four across three
+families — the fourth having been predicted from Zephyr's judge disagreements before this run.
+
+**The direction mediates INABILITY.** It is the only stance removed wherever it exists (OLMo 2
+100 %, Tulu-2 90 %), and the one stance with a testable survivor shows the effect is not
+generic: Tulu-2's **identity** refusals go 20 → 21, entirely untouched. OLMo 2's **normative**
+refusals *appear* (2 → 64) rather than surviving. Zephyr's condemnation 24 → 0 is
+**confounded** — its total also goes 30 → 0, so that cannot be attributed to the stance.
+
+**So sufficiency is about fallback capacity, not about how much refusal the direction carries.**
+OLMo 2 loses nearly all its inability refusals but gains 64 normative ones → 51 %. Tulu-2 loses
+70 and keeps 21 identity → 70 %. Zephyr has nothing to fall back on → 100 %.
+
+> **Still to do.** Llama-2-chat (pre-registered rank 1) is unrun and gated. P1-E7's 0.477 and the whole P1-E7d dose curve are 48-token measurements; the
 > attacked checkpoints no longer exist, so those would need the experiment re-run rather than
 > re-judged. Record: `results/b1_gen128_ANALYSIS.json`.
 

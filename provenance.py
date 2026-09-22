@@ -203,47 +203,102 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         id="A3", layer=3,
-        statement="OPEN. Do the refusal stances that survive ablation have linear directions "
-                  "of their own, and are those distinct from Arditi's? B1 showed the "
-                  "direction removes INABILITY wherever it exists while Tulu-2's IDENTITY "
-                  "refusals go 20 -> 21 untouched, so the question is whether identity has a "
-                  "direction of its own.",
+        statement="RESOLVED 2026-09-22, NEGATIVE. Refusal is NOT multi-directional. The "
+                  "stances that survive ablation have no second direction that can be acted "
+                  "on. A within-harmful contrast (mean(inability) - mean(identity)) is "
+                  "reliable (0.688 vs a 0.229 pseudo-stance null, ~6 sigma) and nearly "
+                  "orthogonal to Arditi's (|cos| 0.191, 0.23 disattenuated) -- but steering "
+                  "on it does NOT change which stance the model produces, at any magnitude, "
+                  "against five independent norm-matched nulls. The refusal direction itself "
+                  "reshapes the stance mix MORE than the stance direction does (0.308 vs "
+                  "0.266 at the in-regime magnitude). The geometry encoded PROMPT CONTENT: "
+                  "the stance classes are different prompts and the model picks its stance "
+                  "from the prompt, so a reliable separating direction is exactly what a "
+                  "topic confound looks like. What A3 reports is the BOUND -- the surviving "
+                  "stance is not linearly mediated at the eoi position in any actionable "
+                  "way, which constrains the linear-representation hypothesis and "
+                  "reconciles with B1's identity refusals going 20 -> 21.",
         evidence=(
-            Evidence("stance", "stance_directions.py", "A3",
-                     "per-stance mean-diff directions fitted against harmless prompts, their "
-                     "induce values, and the pairwise cosines between them"),
+            Evidence("stance_directions", "stance_directions.py", "A3",
+                     "per-stance mean-diff directions, the split-half CEILING they must be "
+                     "read against, and the within-harmful stance contrast with its "
+                     "reliability and pseudo-stance null"),
+            Evidence("stance_steer", "stance_steer.py", "A3b",
+                     "the causal test: composition and rate spans per magnitude against five "
+                     "independent nulls, with KL tiering and a degeneracy guard"),
         ),
         controls=(
             Control("positive control: re-fit inability", "a broken contrast construction "
-                    "producing directions from noise", False,
-                    "d_inability fitted this way is Arditi's own estimator partitioned by "
-                    "what the model did, so it MUST reproduce the known l* and induce value. "
-                    "If it does not, nothing else in the run is readable.",
+                    "producing directions from noise", True,
+                    "2026-09-22: PASSED. A3 selects (pos 3, L14) -- the argmax of "
+                    "run_stage's stored steer surface -- and cos(d_inability, d_arditi) = "
+                    "+0.996 there. NOTE the comparator: run_stage selects by ABLATION and A3 "
+                    "by INDUCE, and those disagree for Arditi's own direction (+0.826 at the "
+                    "surface argmax vs +0.519 at the ablation cell), so demanding the stored "
+                    "(pos_star, l_star) would have failed a correct direction. An earlier "
+                    "version swept LAYERS ONLY with the eoi position pinned to the last, "
+                    "landing on a cell where Arditi's own direction scores -1.417.",
                     script="stance_directions.py"),
+            Control("split-half ceiling for every cosine", "reading a pairwise cosine with "
+                    "no idea what agreement looks like when the directions ARE the same", True,
+                    "2026-09-22: RUN, and it retired a number. The stance-vs-harmless "
+                    "cosine of 0.972 sits against a ceiling of 0.980 -- both fits are "
+                    "harmful-vs-harmless with the stance label only choosing which harmful "
+                    "prompts go in, so a high cosine is near-guaranteed by construction. "
+                    "Every fit in the block uses one k so ceiling and observed are the same "
+                    "measurement at the same n.", script="stance_directions.py"),
             Control("shuffled-label null per stance", "a direction fitted on an arbitrary "
-                    "partition of the model's own outputs looking like something", False,
-                    "same class sizes, same pooled activations, labels randomised; shares the "
-                    "anisotropic geometry so it is harder than an isotropic null",
+                    "partition of the model's own outputs looking like something", True,
+                    "2026-09-22: RUN. Same class sizes, same pooled activations, labels "
+                    "randomised, so it shares the anisotropic geometry and is harder than an "
+                    "isotropic null. inability z=+2.8, identity z=+2.5.",
                     script="stance_directions.py"),
             Control("count balance", "a mean-diff dominated by the larger class -- the stance "
-                    "classes differ by up to 6x", False,
-                    "both classes subsampled to the smaller size before fitting",
-                    script="stance_directions.py"),
+                    "classes differ by up to 6x", True,
+                    "2026-09-22: RUN. Both classes subsampled to the smaller size before "
+                    "fitting.", script="stance_directions.py"),
+            Control("causal test against FIVE nulls", "a geometric direction that is "
+                    "reliable, orthogonal and significant against its own null while "
+                    "encoding an entirely different property (prompt topic, not stance)",
+                    True,
+                    "2026-09-22: RUN, AND IT FIRED. Necessary because geometry cannot "
+                    "separate stance from topic when the stance label is DERIVED FROM THE "
+                    "PROMPT -- the confound is in the class definition, not the estimator. "
+                    "d_stance clears the null at no magnitude, and arditi out-moves it on "
+                    "composition everywhere. An earlier run with ONE null draw and a bare "
+                    "'>' reported a dissociation on a margin of 0.031; the verdict now "
+                    "requires n>=3 draws, max AND mean+2sd, AND that stance move composition "
+                    "more than arditi does.", script="stance_steer.py"),
+            Control("regime + degeneracy guard", "reading a destroyed model as a clean "
+                    "effect -- stance_of() has no 'broken' bucket, so gibberish scores as "
+                    "'compliance' and reports refusal 0.000", True,
+                    "2026-09-22: RUN after the first attempt hit exactly this. Every cell is "
+                    "KL-tiered on harmless prompts and degeneracy-checked; degeneracy was "
+                    "0.000 in all 42 cells of the reported run, so the negative is not a "
+                    "broken-model artifact.", script="stance_steer.py"),
             Control("cross-checkpoint transplant", "the circularity of fitting a direction on "
-                    "classes derived from the model's OWN completions", False,
-                    "does d_identity from Tulu-2 induce refusal in OLMo 2? Behavioural, so "
-                    "immune to the objection. Not yet run.", script="transplant.py"),
+                    "classes derived from the model's OWN completions", True,
+                    "2026-09-22: MOOT and recorded as such. It was designed to test whether "
+                    "d_identity transfers to another family. A3b shows d_stance has no "
+                    "causal effect on stance in the model it was fitted on, so there is "
+                    "nothing whose transfer would be informative. Not run, and not "
+                    "outstanding.", script="transplant.py"),
         ),
         depends_on=("C1", "C2", "C3", "P1-E7"),
-        falsifier="No stance direction beats its shuffled-label null -> the surviving stances "
-                  "are not linearly mediated at the eoi position, which bounds the linear "
-                  "representation hypothesis and is itself the result. Or every pairwise "
-                  "cosine exceeds 0.7 -> one direction with several readouts, and 'refusal is "
-                  "multi-directional' is wrong.",
-        note="Layer 3. The decisive run is tulu2_dpo/baseline: it is the only configuration "
-             "that fits inability (78) AND identity (41) from one model, one prompt set, one "
-             "activation cache -- so the cosine between them is a within-model comparison "
-             "with nothing else varying.",
+        falsifier="FIRED. The pre-registered falsifier was: the stance arm fails to move the "
+                  "inability:identity ratio beyond the null arm at any coefficient -> "
+                  "d_stance is a prompt-content direction and multi-directionality does not "
+                  "survive. That is what happened, at all three magnitudes. The claim now "
+                  "standing is the BOUND, whose own falsifier is: a direction that DOES "
+                  "causally control stance is found at the eoi position -- by a contrast not "
+                  "built on prompt-derived labels, or on a model with enough of two stances "
+                  "to fit one without that confound.",
+        note="Layer 3. tulu2_dpo/baseline is the only configuration that fits inability (78) "
+             "AND identity (41) from one model, one prompt set, one activation cache. That "
+             "makes it decisive for the NEGATIVE, which needs no replication: a claim that "
+             "no actionable second axis was found in the one model where it could be looked "
+             "for is bounded by that model, and is stated that way. A POSITIVE would have "
+             "needed a second family before being written, which it never reached.",
     ),
     Claim(
         id="P1-E7", layer=2,

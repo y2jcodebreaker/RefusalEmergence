@@ -196,6 +196,63 @@ refusals *appear* (2 → 64) rather than surviving. Zephyr's condemnation 24 →
 OLMo 2 loses nearly all its inability refusals but gains 64 normative ones → 51 %. Tulu-2 loses
 70 and keeps 21 identity → 70 %. Zephyr has nothing to fall back on → 100 %.
 
+### A3 + A3b — is refusal multi-directional? **No.** (2026-09-22)
+
+B1 left one question: the identity refusals that survive ablation (20 → 21) — do they have a
+direction of their own? Three outcomes were pre-registered and all three were reportable.
+
+**The geometry says yes.** A direction fitted *within* the harmful prompts — `mean(inability) −
+mean(identity)`, both classes harmful, both refused, differing only in the stance rendered — is
+reproducible and nearly orthogonal to Arditi's:
+
+| | |
+|---|---|
+| split-half reliability | **0.688 ± 0.081** |
+| pseudo-stance null | 0.229 ± 0.075 (≈ 6σ) |
+| \|cos\| vs `d_arditi` | **0.191** (0.23 disattenuated) |
+| induces refusal | +0.157 @ c4.0 — negligible |
+
+*Positive control passed*: re-fitting `d_inability` by the same contrast selects **(pos 3, L14)**,
+the argmax of `run_stage`'s stored `steer` surface, with `cos(d_inability, d_arditi) = +0.996`
+there.
+
+**The intervention says no.** The stance classes are *different prompts*, and the model picks its
+stance from the prompt — so a reliable direction separating them is what a **topic** confound also
+looks like, and no cosine, null or reliability measure can tell the two apart. `stance_steer.py`
+steers on it: three magnitudes, both signs, against **five independent** norm-matched
+pseudo-stance nulls, 128-token generations, prefill-only injection.
+
+| \|c\| | tier | stance | **arditi** | null max | null μ+2σ | clears null? | stance > arditi? |
+|---|---|---|---|---|---|---|---|
+| 0.125 | in regime | 0.266 | **0.308** | 0.271 | 0.329 | **no** | **no** |
+| 0.25 | exploratory | 0.467 | **0.584** | 0.460 | 0.530 | **no** | **no** |
+| 0.5 | exploratory | 0.818 | **0.853** | 0.756 | 0.888 | **no** | **no** |
+
+*(composition = span of the inability:identity share. Degeneracy 0.000 in all 42 cells, so none
+of this is a broken-model artifact.)*
+
+`d_stance` never clears the null distribution, and **the refusal direction reshapes the stance mix
+more than the stance direction does, at every magnitude.** The falsifier fired.
+
+**What A3 reports is therefore the bound, not the headline.** The surviving refusal stance is
+**not linearly mediated at the end-of-instruction position in any actionable way** — a constraint
+on the linear-representation hypothesis. It reconciles with the 20 → 21 above without further
+assumptions, and needs no second family to stand.
+
+**The rate axis, stated at its real strength.** `d_arditi` specifically controls *how much*
+refusal, and `d_stance` leaves the rate alone (spans 0.022 / 0.045 / 0.136, all inside the
+pre-registered ±0.10 at the two smaller magnitudes). But the separation is narrower than first
+written: **0.076 vs null max 0.053 and μ+2σ 0.075** at the only in-regime magnitude — clearing by
+0.001, i.e. at threshold — **0.174 vs 0.121 / 0.140** at |c| = 0.25 where it clears properly, and
+**failing** at |c| = 0.5 (0.280 vs μ+2σ 0.283). Quote the |c| = 0.25 figure with its exploratory
+tier named. An earlier draft said "0.076 against a null of 0.008, ~10×"; that 0.008 was a single
+null draw and the claim is retired.
+
+Records: `results/tulu2_dpo_dpo_stance_directions.npz`, `results/tulu2_dpo_dpo_stance_steer.npz`.
+
+> **A4 is struck.** Joint ablation of two directions was gated on A3 finding a second actionable
+> axis. There is none, so there is nothing to jointly ablate.
+
 > **Still to do.** Llama-2-chat (pre-registered rank 1) is unrun and gated. P1-E7's 0.477 and the whole P1-E7d dose curve are 48-token measurements; the
 > attacked checkpoints no longer exist, so those would need the experiment re-run rather than
 > re-judged. Record: `results/b1_gen128_ANALYSIS.json`.

@@ -196,6 +196,37 @@ refusals *appear* (2 → 64) rather than surviving. Zephyr's condemnation 24 →
 OLMo 2 loses nearly all its inability refusals but gains 64 normative ones → 51 %. Tulu-2 loses
 70 and keeps 21 identity → 70 %. Zephyr has nothing to fall back on → 100 %.
 
+### P1-E7r — the central contrast replicates in three matched seeds (2026-09-23)
+
+P1-E7's attack arm was effectively one run and its control one seed; D1 then showed controls vary
+far more than that one seed suggested. So the contrast was replicated, pre-registered before any
+attack ran: three OLMo 2 attack seeds, each matched to D1's control of the same seed (same Alpaca
+subset and LoRA initialisation; the pair differs only in the 50 rehearsed refusals). Scripts:
+`p1e7r_run.sh`, `p1e7r_check.py` → `results/p1e7r_ANALYSIS.json`.
+
+| seed | re-fitted induce, attack | … control | frozen direction, attack | WildGuard, attack | … control | probe |
+|---|---|---|---|---|---|---|
+| 1 | **−2.29** | +2.90 | +3.72 | **0.537** | 0.976 | 1.000 |
+| 2 | **−3.92** | +3.13 | +2.57 | **0.451** | 0.939 | 1.000 |
+| 3 | **−6.27** | +0.57 | +2.59 | **0.329** | 0.744 | 1.000 |
+
+**All four pre-registered criteria hold in every seed**: the mapping is destroyed in the attack and
+intact in its matched control; the readout survives (the frozen pre-attack direction still
+induces refusal); the representation survives (probe 1.000 at every dose); behaviour degrades
+against its pair. P1-E7's original attacked checkpoint (WildGuard 0.477) sits inside the seed
+spread. *The control half of the contrast was seen before pre-registration — only the attack half
+was a prediction.*
+
+**Descriptive, not pre-registered — the pairs separate by recovery, not by collapse.** Every attack
+seed has **0 steerable layers at all 18 post-training doses**; controls reach 0 once in 18 (seed 1,
+dose 50) and recover every time they dip. At dose 50 the arms can look alike (seed 1: WildGuard
+0.415 vs 0.427) because both have mostly seen benign data; the rehearsal repairs the control after
+that. A detector built on "coupling fails to recover" would be a new hypothesis, not a result here —
+and on Tulu-2 it would fail anyway (D1).
+
+Scope, stated: **OLMo 2 only.** Tulu-2 is excluded because D1 showed its coupling metric collapses
+under a benign control, so no contrast exists there.
+
 ### D1 — coupling collapse is not a specific detector of safety removal (2026-09-23)
 
 Pre-registered before any run: does coupling collapse flag a safety-removing fine-tune at a lower

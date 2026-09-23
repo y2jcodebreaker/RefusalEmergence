@@ -203,28 +203,47 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         id="P1-E7r", layer=2,
-        statement="PLANNED, pre-registered 2026-09-23. P1-E7's attack/control contrast "
-                  "replicates across three matched OLMo 2 seeds at dose 1500: mapping "
-                  "destroyed (attack induce < 0, control > 0), readout intact (frozen >= 0), "
-                  "representation intact (probe >= 0.99), behaviour degraded vs the pair. The "
-                  "control half was seen before pre-registration.",
+        statement="CONFIRMED 2026-09-23. P1-E7's attack/control contrast replicates in all "
+                  "three matched OLMo 2 seeds at dose 1500, on all four pre-registered "
+                  "criteria. Re-fitted induce: attack -2.29 / -3.92 / -6.27 against matched "
+                  "controls +2.90 / +3.13 / +0.57 (mapping destroyed). Frozen dose-0 direction "
+                  "in the attack +3.72 / +2.57 / +2.59 (readout intact). Probe 1.000 at every "
+                  "dose (representation intact). WildGuard attack 0.537 / 0.451 / 0.329 "
+                  "against control 0.976 / 0.939 / 0.744 (behaviour degraded). P1-E7's "
+                  "original attacked checkpoint (0.477) sits inside the seed spread.",
         evidence=(
             Evidence("p1e7r_ANALYSIS", "p1e7r_check.py", "P1-E7r",
-                     "per-seed R1-R4 at the endpoint for matched attack/control pairs"),
+                     "per-seed R1-R4 at the endpoint for matched attack/control pairs, plus "
+                     "the full attack trajectories"),
         ),
         controls=(
             Control("matched pairs", "attack and control differing in data or init as well as "
-                    "rehearsal", False, "--seed k gives both arms the same Alpaca subset and "
-                    "LoRA init", script="dose_response.py"),
+                    "rehearsal", True, "2026-09-23: --seed k gave both arms the same Alpaca "
+                    "subset and LoRA init; each pair differs only in the 50 rehearsed "
+                    "refusals. Matched on data SUBSET and init, not ORDER: adding the 50 "
+                    "rehearsal examples reshuffles the list, so by dose 50 the arms have seen "
+                    "different examples. At dose 50 only seed 1's pair is near-identical "
+                    "(WildGuard 0.415 attack vs 0.427 control); seeds 2 and 3 already differ "
+                    "(0.439 vs 0.829, 0.220 vs 0.976).",
+                    script="dose_response.py"),
             Control("each criterion can fail alone", "a replication rule that cannot say no",
-                    False, "smoke_test drives pair_verdict with each criterion broken",
+                    True, "2026-09-23: smoke_test drives pair_verdict with each criterion "
+                    "broken; all four held on real data.", script="p1e7r_check.py"),
+            Control("control half declared as already seen", "presenting a partly-observed "
+                    "result as a blind prediction", True,
+                    "the control induce values were seen before pre-registration and the "
+                    "output says so; only the attack half was predicted.",
                     script="p1e7r_check.py"),
         ),
         depends_on=("P1-E7",),
-        falsifier="Any seed where the attack's re-fitted induce at dose 1500 is >= 0, or its "
-                  "frozen direction is < 0.",
-        note="Layer 2 -- it replicates the paper's central claim. OLMo 2 only; Tulu-2 excluded "
-             "because D1 showed its coupling metric collapses under a benign control.",
+        falsifier="Did not fire: no seed had attack induce >= 0 at dose 1500 or a negative "
+                  "frozen direction. What would still overturn it: the contrast failing on "
+                  "another family where the coupling metric is valid, or at scale.",
+        note="Layer 2 -- replicates the paper's central claim. OLMo 2 only; Tulu-2 excluded "
+             "because D1 showed its coupling metric collapses under a benign control. "
+             "Descriptive, NOT pre-registered: every attack seed loses all 13 steerable "
+             "layers by dose 50 and never recovers any, while every control that dips "
+             "recovers -- the pairs separate by recovery, not by the initial collapse.",
     ),
     Claim(
         id="D1", layer=3,

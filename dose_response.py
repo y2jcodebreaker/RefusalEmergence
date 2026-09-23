@@ -83,7 +83,7 @@ import torch
 
 from attack import build_benign, build_safety_examples, encode_sft, fill_responses
 from config import config_for
-from data import load_instructions
+from data import load_instructions, behavioural_split
 from probes import cache_activations, logistic_accuracy, mass_mean_accuracy
 from refusal_direction import (_addition_handles, _last_logits, _mean_refusal,
                                get_mean_diff, refusal_strength_curve,
@@ -138,7 +138,7 @@ def frozen_probe(model, tok, cfg, template, refusal_toks, frozen: torch.Tensor,
 
 
 def measure(model, tok, cfg, stage_tag: str, template: str, refusal_toks, n_eoi: int,
-            splits: dict, frozen: dict | None = None) -> dict:
+            splits: dict, frozen: dict | None = None, skip_ablated: bool = False) -> dict:
     """Behaviour + coupling + probe on the model AS IT CURRENTLY IS. No saving, no reloading.
 
     `frozen` carries the dose-0 direction and its layer/pos; when present, it is re-injected
@@ -176,7 +176,8 @@ def measure(model, tok, cfg, stage_tag: str, template: str, refusal_toks, n_eoi:
         # --- behaviour. Completions are KEPT; the rate here is a substring rate and is a
         # LOWER BOUND (see the module docstring). The classifier runs afterwards.
         p = int(res["pos_star"]) if out["l_star"] >= 0 else -1
-        abl_dir = dirs[p, res["l_star"]] if out["l_star"] >= 0 else None
+        abl_dir = (dirs[p, res["l_star"]] if out["l_star"] >= 0 and not skip_ablated
+                   else None)
         b_rate, a_rate, samples = behavioral_rates(
             model, tok, splits["beh"], template, abl_dir,
             cfg.gen_max_new_tokens, cfg.batch_size, n_samples=None)
@@ -274,6 +275,19 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--bs", type=int, default=4)
     ap.add_argument("--tag", default="olmo2_e7d", help="prefix for the output npz files")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="REPLICATE seed: draws a different Alpaca subset, a different data "
+                         "order and a different LoRA init, and is stamped into every output "
+                         "filename. Omit to reproduce P1-E7d exactly. D1 needs it -- without "
+                         "it, replicates are one run repeated")
+    ap.add_argument("--gen-tokens", type=int, default=None,
+                    help="generation length for the behavioural arm. D1 uses 128: at the "
+                         "48-token default the normative preamble is all a judge sees, which "
+                         "INFLATES refusal (O-139) -- and inflated behaviour makes the "
+                         "behavioural detector fire late, i.e. biases D1 toward its own claim")
+    ap.add_argument("--skip-ablated-gen", action="store_true",
+                    help="generate the baseline arm only. D1 scores baseline behaviour, and "
+                         "the ablated arm doubles generation time for a number D1 never reads")
     args = ap.parse_args()
 
     doses = sorted({int(d) for d in args.doses.split(",")})
@@ -282,7 +296,14 @@ def main() -> None:
                          "another run's baseline would confound the curve with run-to-run "
                          "variation (the very thing a dose-response is meant to rule out).")
 
-    cfg = config_for(args.lineage)
+    over = {"gen_max_new_tokens": args.gen_tokens} if args.gen_tokens else {}
+    cfg = config_for(args.lineage, **over)
+    run_seed = cfg.seed if args.seed is None else args.seed
+    # Filenames carry everything that distinguishes one run from another, so replicates and
+    # generation lengths can never overwrite each other -- run_stage learned this about
+    # _gen128 the hard way.
+    seed_tag = "" if args.seed is None else f"_s{args.seed}"
+    gen_tag = "" if cfg.gen_max_new_tokens == 48 else f"_gen{cfg.gen_max_new_tokens}"
     if not check_disk(cfg, stages=(args.src,)):
         raise SystemExit("free disk (or set HF_HOME) before loading weights.")
     ckpts = dict(cfg.checkpoints)
@@ -301,7 +322,10 @@ def main() -> None:
         "harmless_tr": load_instructions("harmless_train")[: cfg.n_train],
         "harmful_val": load_instructions("harmful_val")[: cfg.n_val],
         "harmless_val": load_instructions("harmless_val")[: cfg.n_val],
-        "beh": tail[: cfg.n_behavioral] if cfg.n_behavioral else tail,
+        # The EVALUATION half of the tail, identical for both arms. It used to be the whole
+        # tail, which contains the 50 prompts the safety-preserved arm rehearses -- so that
+        # arm was scored on its own training data (data.split_tail).
+        "beh": behavioural_split(cfg)["eval"],
         # The probe's held-out sets, taken EXACTLY as probe_representation._splits takes them
         # (harmless_train count-matched to the harmful tail, so chance is 0.500). Using a
         # different split here would make this curve incomparable with the probe numbers
@@ -317,20 +341,21 @@ def main() -> None:
                 len(splits["probe_test_pos"]) / (len(splits["probe_test_pos"])
                                                  + len(splits["harmless_test"])))
 
-    pairs = fill_responses(model, tok, build_benign(cfg, args.n, args.responses), template, cfg)
+    pairs = fill_responses(model, tok, build_benign(cfg, args.n, args.responses, seed=args.seed),
+                           template, cfg)
     n_benign, n_safety = len(pairs), 0
     if args.arm == "safety-preserved":
         safety = build_safety_examples(model, tok, cfg, template, args.n_safety)
         n_safety = len(safety)
         pairs = pairs + safety
     import random as _r
-    _r.Random(cfg.seed).shuffle(pairs)
+    _r.Random(run_seed).shuffle(pairs)
     examples = encode_sft(tok, pairs, template)
     logger.info("[%s] %d benign + %d safety -> %d encoded", args.arm, n_benign, n_safety,
                 len(examples))
 
     from peft import LoraConfig, get_peft_model
-    set_seed(cfg.seed)
+    set_seed(run_seed)                  # LoRA A-matrix init differs per replicate
     model = get_peft_model(model, LoraConfig(
         r=args.rank, lora_alpha=2 * args.rank, lora_dropout=0.0, bias="none",
         task_type="CAUSAL_LM",
@@ -339,9 +364,13 @@ def main() -> None:
     opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=args.lr)
 
     rows, step, frozen = [], 0, None
+    beh_n = len(splits["beh"])          # outside the notes f-string: a KeyError there aborts
+                                        # the run before anything is saved (O-157)
     with RunRecord(EXPERIMENT, "dose_response.py", cfg=cfg, question=QUESTION,
                    notes=f"arm={args.arm} doses={doses} rank={args.rank} lr={args.lr} "
-                         f"n={args.n} responses={args.responses}. Substring rates are LOWER "
+                         f"n={args.n} responses={args.responses} seed={run_seed} "
+                         f"gen={cfg.gen_max_new_tokens} beh_n={beh_n} "
+                         f"(eval half, disjoint from rehearsal). Substring rates are LOWER "
                          f"BOUNDS; run judge_wildguard.py on each dose npz.") as rec:
         for dose in doses:
             if dose > step:
@@ -350,7 +379,7 @@ def main() -> None:
                                 bs=args.bs, pad=tok.pad_token_id)
             logger.info("[%s] === measuring at dose %d ===", args.arm, step)
             m = measure(model, tok, cfg, f"{args.arm}@{step}", template, refusal_toks, n_eoi,
-                        splits, frozen=frozen)
+                        splits, frozen=frozen, skip_ablated=args.skip_ablated_gen)
 
             if frozen is None:
                 # Freeze dose 0's direction at its OWN l*. If l* = -1 here the untouched
@@ -396,17 +425,23 @@ def main() -> None:
                         m["max_induce"], m["frozen_induce_max"], m["n_steerable_layers"],
                         m["probe_peak_logistic"])
 
-            path = f"{cfg.results_dir}/{args.tag}_{args.arm}_dose_{step}_refusal.npz"
+            path = (f"{cfg.results_dir}/{args.tag}_{args.arm}{seed_tag}_dose_{step}"
+                    f"_refusal{gen_tag}.npz")
             np.savez(path,
                      stage=np.array(f"{args.arm}@{step}"),
                      model_id=np.array(f"{ckpts[args.src]}+lora@{step}"),
                      dose_steps=np.array(step),
                      n_behavioral=np.array(len(splits["beh"])),
+                     # The EXACT prompts the completions answer, so judge_wildguard.py pairs
+                     # them by record rather than by re-deriving a slice from a rule -- the
+                     # rule changed (eval half, 82 prompts) and a re-derived pairing would
+                     # have scored every response against the wrong question.
+                     beh_prompts=np.array(json.dumps(splits["beh"])),
                      sample_completions=np.array(json.dumps(m["sample_completions"])),
                      **{k: np.array(v) for k, v in m.items()
                         if k != "sample_completions" and not k.startswith("_")})
             if dose > 0:
-                model.save_pretrained(f"models/{args.tag}-{args.arm}-adapter-{step}")
+                model.save_pretrained(f"models/{args.tag}-{args.arm}{seed_tag}-adapter-{step}")
             rows.append({k: v for k, v in m.items()
                          if k in ("l_star", "peak_ablation", "max_induce",
                                   "n_steerable_layers", "probe_peak_logistic",
@@ -437,8 +472,8 @@ def main() -> None:
           "  The behavioural curve is only valid after:")
     for r in rows:
         print(f"    python judge_wildguard.py "
-              f"{cfg.results_dir}/{args.tag}_{args.arm}_dose_{r['dose']}_refusal.npz "
-              f"--lineage {args.lineage}")
+              f"{cfg.results_dir}/{args.tag}_{args.arm}{seed_tag}_dose_{r['dose']}"
+              f"_refusal{gen_tag}.npz --lineage {args.lineage}")
 
 
 if __name__ == "__main__":

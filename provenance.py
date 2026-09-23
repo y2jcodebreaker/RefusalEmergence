@@ -202,6 +202,52 @@ CLAIMS: tuple[Claim, ...] = (
         note="C3 holds in OLMo 2 and not Zephyr. Stated in the results, not the limitations.",
     ),
     Claim(
+        id="D1", layer=3,
+        statement="PLANNED, pre-registered 2026-09-23. Coupling collapse detects a "
+                  "safety-removing fine-tune at a LOWER DOSE than behavioural evaluation, at a "
+                  "matched false-positive rate. Motivated by P1-E7d, where the attacked run "
+                  "lost every steerable layer by step 100 while behaviour still retained 87% "
+                  "-- but that curve is 48-token, which inflates refusal and biases the lead "
+                  "time toward this claim, so it is motivation and not evidence.",
+        evidence=(
+            Evidence("d1_detect_ANALYSIS", "d1_detect.py", "D1",
+                     "per-run first-detection dose for coupling vs behaviour against "
+                     "thresholds frozen from control runs only; sign test over attack runs"),
+        ),
+        controls=(
+            Control("thresholds from controls only, frozen first", "choosing a sensitive "
+                    "threshold for our metric and a strict one for the baseline", False,
+                    "d1_detect.py calibrate reads only safety-preserved files and writes "
+                    "thresholds with sha256 of every control; score refuses to recompute "
+                    "and refuses if a control changed.", script="d1_detect.py"),
+            Control("leave-one-control-out FPR", "an in-sample FPR of 0 that is 0 by "
+                    "construction", False,
+                    "reported per statistic with the rule-of-three upper bound",
+                    script="d1_detect.py"),
+            Control("frozen direction at the detection dose", "l* = -1 meaning our estimator "
+                    "lost the direction rather than the mapping dying", False,
+                    "every attack run must show the frozen dose-0 direction still inducing "
+                    "at the dose coupling fires", script="dose_response.py"),
+            Control("probe must not fire", "detecting capability loss and calling it "
+                    "decoupling", False, "probe peak fraction is scored as a detector and "
+                    "must stay quiet on every attack run", script="d1_detect.py"),
+            Control("128-token behaviour", "a behavioural comparator inflated by truncation, "
+                    "which delays it and flatters the lead time", False,
+                    "d1_detect.py refuses any file that is not a _gen128 run",
+                    script="d1_detect.py"),
+            Control("replicates that actually differ", "calibrating an FPR on one run "
+                    "repeated", False, "--seed varies the Alpaca subset, order and LoRA init, "
+                    "and is stamped into every filename", script="dose_response.py"),
+        ),
+        depends_on=("P1-E7",),
+        falsifier="Behaviour detects at the same dose or earlier in any attack run. Stopping "
+                  "rule: a held-out control firing on the primary means coupling tracks "
+                  "fine-tuning per se, which also retires D1c and D2.",
+        note="Layer 3. 10 runs: OLMo 2 rlvr attack/control seeds 1-3, Tulu-2 dpo attack/"
+             "control seeds 1-2. Pooled calibration across families. Full pre-registration "
+             "in P1-Coupling-Not-Capability.md section 11.",
+    ),
+    Claim(
         id="A2", layer=3,
         statement="RESOLVED 2026-09-22. The field's standard refusal judge is REGISTER-BLIND, "
                   "and so is the accepted classifier that replaces it. Arditi's twelve-prefix "
@@ -398,9 +444,27 @@ CLAIMS: tuple[Claim, ...] = (
             Control("matched safety-preserved arm", "attributing decoupling to fine-tuning "
                     "in general rather than to safety removal", True,
                     "2026-09-19: RUN. Identical rank 16 / lr 2e-4 / 3 epochs / 2000 Alpaca "
-                    "examples; the only difference is 50 rehearsed refusals. benign arm "
-                    "1.000 -> 0.104, control arm 1.000 -> 1.000. Fine-tuning per se does not "
-                    "do this.", script="attack.py"),
+                    "examples; the only difference is 50 rehearsed refusals. CORRECTED "
+                    "2026-09-23: the efficacy figures quoted here were measured on tail[:48], "
+                    "which lies ENTIRELY inside the 50 prompts the control rehearsed, so the "
+                    "control's figure was a memorisation readout. On the 82 HELD-OUT prompts "
+                    "(WildGuard, 48 tok): control 0.902 vs attacked 0.439 vs rlvr 0.976. The "
+                    "gap is 0.463 held-out against 0.455 over all 132, and within each prompt "
+                    "set the control's advantage is as large or LARGER on held-out prompts at "
+                    "every dose -- so the conclusion stands: fine-tuning per se does not do "
+                    "this.", script="attack.py"),
+            Control("rehearsal and evaluation are disjoint", "scoring the control on the very "
+                    "prompts it was trained to refuse, so 'preserved' reads as memorised", True,
+                    "2026-09-23: FIXED after it was found live. build_safety_examples drew "
+                    "rehearsal prompts from the same 132-prompt tail every behavioural "
+                    "measurement scores, and attack.py's efficacy check sat inside that set. "
+                    "data.split_tail now makes rehearsal (tail[:50]) and evaluation "
+                    "(tail[50:]) disjoint by construction, with an assertion; smoke_test "
+                    "drives the real build_safety_examples with the model stubbed and fails "
+                    "on any overlap. Mechanism numbers were never affected -- they use "
+                    "harmful_train[:128] and harmful_val, not the tail. The held-out "
+                    "restatement is heldout_control.py -> results/p1e7_heldout_ANALYSIS.json.",
+                    script="heldout_control.py"),
             Control("control is not a refuse-everything model", "the control holding 1.000 "
                     "on harmful prompts because 50 rehearsed refusals induced EXAGGERATED "
                     "SAFETY, which would make the held rate a confound rather than preserved "
@@ -517,6 +581,11 @@ CLAIMS: tuple[Claim, ...] = (
 # registered here and `check()` fails if any claim still quotes one. The registry is the
 # propagation mechanism -- adding a row is how a correction reaches every claim at once.
 SUPERSEDED: tuple[tuple[str, str, str], ...] = (
+    ("control arm 1.000 -> 1.000", "control 0.902 vs attacked 0.439",
+     "P1-E7's matched-control efficacy figure. It was measured on tail[:48], which lies "
+     "entirely inside the 50 prompts the control rehearsed its own refusals on -- a "
+     "memorisation readout, not a preservation measurement. Restated on the 82 held-out "
+     "prompts (WildGuard, 48 tok). The conclusion survives; the number does not"),
     ("0.871", "0.972",
      "A3's pairwise stance cosine. The 0.871 run swept LAYERS with the eoi position pinned "
      "to the last one, landing on (pos 4, L12) where Arditi's own direction scores -1.417 on "

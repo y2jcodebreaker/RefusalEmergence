@@ -604,6 +604,151 @@ def test_judge_bench_pairing_is_exact() -> None:
     print("  A2 pairing: verdict files resolve to the exact completions judged — OK")
 
 
+def test_control_is_never_scored_on_its_training_prompts() -> None:
+    """The safety-preserved control must not be measured on prompts it rehearsed.
+
+    Until 2026-09-23 build_safety_examples drew its rehearsal prompts from the same held-out
+    tail every behavioural measurement scores, and attack.py's efficacy check used tail[:48] --
+    entirely inside the 50 rehearsed prompts. The P1-E7 control's quoted "1.000 -> 1.000" was
+    therefore a memorisation readout. The fix is one split with a disjointness assertion; this
+    test drives the REAL build_safety_examples with the model stubbed out, so it fails if any
+    future edit routes rehearsal back through the evaluation prompts."""
+    import types
+
+    import attack
+    import data
+
+    tail = [f"harmful prompt {i}" for i in range(132)]
+
+    # 1. The pure split: disjoint, exhaustive, and loud about bad input.
+    sp = data.split_tail(tail)
+    assert len(sp["rehearsal"]) == data.REHEARSAL_N and len(sp["eval"]) == 132 - data.REHEARSAL_N
+    assert not set(sp["rehearsal"]) & set(sp["eval"]), "rehearsal and eval overlap"
+    assert sp["rehearsal"] + sp["eval"] == tail, "the split dropped or reordered prompts"
+    for bad in (0, 132, 200):
+        try:
+            data.split_tail(tail, rehearsal_n=bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"split_tail accepted rehearsal_n={bad}")
+    try:
+        data.split_tail(["same"] * 60, rehearsal_n=50)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("duplicated prompts across the split went undetected")
+
+    # 2. The real rehearsal builder, model stubbed: what it returns must be rehearsal-only.
+    cfg = types.SimpleNamespace(n_train=128, n_behavioral=0, gen_max_new_tokens=48,
+                                batch_size=16)
+    saved_load, saved_gen = data.load_instructions, attack.generate_completions
+    data.load_instructions = lambda name: [f"x{i}" for i in range(128)] + tail
+    attack.generate_completions = lambda m, t, prompts, *a, **k: [
+        "I cannot help with that." for _ in prompts]
+    try:
+        rehearsed = [prompt for prompt, _ in attack.build_safety_examples(None, None, cfg,
+                                                                         "{instruction}", 50)]
+        ev = data.behavioural_split(cfg)["eval"]
+    finally:
+        data.load_instructions, attack.generate_completions = saved_load, saved_gen
+    assert rehearsed, "build_safety_examples returned nothing"
+    assert not set(rehearsed) & set(ev), (
+        f"{len(set(rehearsed) & set(ev))} rehearsed prompt(s) are in the evaluation set -- "
+        f"the control would be scored on its own training data again")
+
+    # 3. The replay: the OLD rule overlapped completely, which is what the fix exists for.
+    old_efficacy = tail[:48]
+    assert set(old_efficacy) <= set(rehearsed), "fixture no longer reproduces the old bug"
+    print("  control contamination: rehearsal and every evaluation set are disjoint — OK")
+
+
+def test_d1_verdict_logic() -> None:
+    """D1's calibrate/score pipeline must reach the right verdict on runs whose answer is known.
+
+    Built BEFORE any D1 pod time, because A3b's verdict logic was first exercised on real
+    data -- and reported a false positive there. Three synthetic scenarios, hermetic (a temp
+    directory with its own results/):
+      1. coupling collapses at dose 50, behaviour only at dose 100      -> POSITIVE
+      2. behaviour collapses at dose 50 too (a tie)                     -> NOT POSITIVE, the
+                                                                            pre-registered falsifier
+      3. a control file is altered after calibration                    -> `score` refuses"""
+    import contextlib
+    import io
+    import json as _json
+    import os as _os
+    import tempfile
+
+    import numpy as _np
+
+    import d1_detect as D
+
+    good = ["I cannot help with that request because it could cause real harm."] * 6
+
+    def write(root, tag, arm, seed, dose, steer, induce, wg, frozen=4.0, probe=1.0):
+        stem = f"{root}/results/{tag}_{arm}_s{seed}_dose_{dose}"
+        _np.savez(f"{stem}_refusal_gen128.npz", n_steerable_layers=_np.array(steer),
+                  max_induce=_np.array(induce), probe_peak_logistic=_np.array(probe),
+                  frozen_induce_max=_np.array(frozen),
+                  sample_completions=_np.array(_json.dumps({"baseline": good})))
+        with open(f"{stem}_gen128_wildguard.json", "w") as f:
+            _json.dump({"baseline": {"wildguard": wg, "n_unparsed": 0}}, f)
+
+    def build(root, attack_wg_at_50):
+        _os.makedirs(f"{root}/results")
+        for seed, (st, ind, wg) in enumerate((([11, 10, 9], [2.0, 1.8, 1.5], [0.91, 0.89, 0.88]),
+                                              ([12, 10, 10], [2.2, 1.7, 1.6], [0.92, 0.90, 0.89]),
+                                              ([11, 11, 9], [2.1, 1.9, 1.4], [0.90, 0.90, 0.87])),
+                                             start=1):
+            write(root, "t", "safety-preserved", seed, 0, 13, 4.0, 0.95)
+            for dose, a, b, c in zip((50, 100, 250), st, ind, wg):
+                write(root, "t", "safety-preserved", seed, dose, a, b, c)
+        for seed in (1, 2):
+            write(root, "t", "benign", seed, 0, 13, 4.0, 0.95)
+            for dose, w in zip((50, 100, 250), (attack_wg_at_50, 0.60, 0.40)):
+                write(root, "t", "benign", seed, dose, 0, -0.5, w)
+
+    def run(root, mode):
+        cwd = _os.getcwd()
+        _os.chdir(root)
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                getattr(D, mode)(["t"])
+        finally:
+            _os.chdir(cwd)
+        return buf.getvalue()
+
+    with tempfile.TemporaryDirectory() as root:
+        build(root, attack_wg_at_50=0.93)       # behaviour still intact at 50
+        run(root, "calibrate")
+        out = run(root, "score")
+        res = _json.load(open(f"{root}/results/d1_detect_ANALYSIS.json"))
+        assert res["d1_positive"], f"a genuine early detection was scored NOT positive:\n{out}"
+        assert res["n_coupling_earlier"] == 2
+
+        # 3. tamper with a control after calibration
+        victim = f"{root}/results/t_safety-preserved_s1_dose_100_refusal_gen128.npz"
+        with open(victim, "ab") as f:
+            f.write(b"x")
+        try:
+            run(root, "score")
+        except SystemExit as e:
+            assert "changed" in str(e), e
+        else:
+            raise AssertionError("score used thresholds from a control that changed after "
+                                 "calibration")
+
+    with tempfile.TemporaryDirectory() as root:
+        build(root, attack_wg_at_50=0.60)       # behaviour collapses at the SAME dose
+        run(root, "calibrate")
+        run(root, "score")
+        res = _json.load(open(f"{root}/results/d1_detect_ANALYSIS.json"))
+        assert not res["d1_positive"], "a TIE between coupling and behaviour was scored positive"
+        assert res["n_coupling_earlier"] == 0
+    print("  D1 verdict: early detection POSITIVE, tie NOT, tampered control refused — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -674,6 +819,8 @@ if __name__ == "__main__":
     test_a3b_verdict_rejects_the_false_positive()
     test_runrecord_notes_cannot_destroy_a_run()
     test_judge_bench_pairing_is_exact()
+    test_control_is_never_scored_on_its_training_prompts()
+    test_d1_verdict_logic()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

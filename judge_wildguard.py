@@ -91,8 +91,11 @@ def parse(out: str) -> bool | None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("path", help="results/*_text.json (transplant_text.py) or "
-                                 "results/*_refusal.npz (run_stage.py --behavioral)")
+    ap.add_argument("paths", nargs="+",
+                    help="one or more results/*_text.json (transplant_text.py) or "
+                         "results/*_refusal*.npz files. WildGuard is loaded ONCE for all of "
+                         "them: D1 produces ~70 dose files, and reloading a 7B judge per file "
+                         "would spend most of an hour on loading")
     ap.add_argument("--prompts", default="harmless_val",
                     help="JSON mode only: the split the completions were generated on. The "
                          "npz mode derives the split AND its offset from the producing "
@@ -131,110 +134,131 @@ def main() -> None:
     from data import load_instructions
 
     cfg = config_for(args.lineage)
-    if args.path.endswith(".npz"):
-        import numpy as np
-        d = np.load(args.path, allow_pickle=True)
-        if "sample_completions" not in d.files:
-            raise SystemExit(
-                f"{args.path} has no stored completions. Only a run_stage.py run with "
-                f"--behavioral writes them; keys present: {sorted(d.files)}")
-        sc = json.loads(str(d["sample_completions"]))
-        data = {arm: {"completions": sc[arm]} for arm in ("baseline", "ablated") if sc.get(arm)}
-        if not data:
-            raise SystemExit(f"{args.path} stored no non-empty completion arms.")
-        n = len(next(iter(data.values()))["completions"])
 
-        # THE SLICE, reconstructed from run_stage.py's rule, not from a flag. run_stage
-        # generates on load_instructions("harmful_train")[cfg.n_train:], optionally capped at
-        # cfg.n_behavioral -- the tail the direction was NOT fitted on.
-        tail = load_instructions("harmful_train")[cfg.n_train:]
-        instrs = tail[:cfg.n_behavioral] if cfg.n_behavioral else tail
-        if len(instrs) != n:
-            raise SystemExit(
-                f"PROMPT ALIGNMENT FAILED, refusing to score.\n"
-                f"  {args.path} stores {n} completions per arm.\n"
-                f"  harmful_train[{cfg.n_train}:]"
-                f"{f'[:{cfg.n_behavioral}]' if cfg.n_behavioral else ''} is {len(instrs)} "
-                f"prompts (split length {len(tail) + cfg.n_train}).\n"
-                f"  These must be equal or every (instruction, response) pair is offset and\n"
-                f"  WildGuard scores the wrong thing silently. Check --lineage (given "
-                f"{args.lineage!r}, n_train={cfg.n_train}) against the run that wrote this file.")
-        logged_source = f"harmful_train[{cfg.n_train}:] ({n} prompts)"
-    else:
-        with open(args.path) as f:
-            data = json.load(f)
-        n = len(next(iter(data.values()))["completions"])
+    def resolve(path: str) -> tuple[dict, list[str], str]:
+        """(arms, instructions, provenance-of-the-pairing) for one file.
+
+        STORED PROMPTS WIN. dose_response.py now writes the exact instruction list it
+        generated on into the npz as `beh_prompts`, because reconstructing the slice from a
+        rule broke the moment the rule changed: D1 evaluates on the held-out half of the tail
+        (data.split_tail), 82 prompts, while this function rebuilt all 132 -- and every
+        (instruction, response) pair would have been judged against the wrong question.
+        Files written before that have no stored list and fall back to the old rule. The
+        length check runs on BOTH paths."""
+        if path.endswith(".npz"):
+            import numpy as np
+            d = np.load(path, allow_pickle=True)
+            if "sample_completions" not in d.files:
+                raise SystemExit(
+                    f"{path} has no stored completions. Only a run_stage.py run with "
+                    f"--behavioral writes them; keys present: {sorted(d.files)}")
+            sc = json.loads(str(d["sample_completions"]))
+            arms = {arm: {"completions": sc[arm]} for arm in ("baseline", "ablated")
+                    if sc.get(arm)}
+            if not arms:
+                raise SystemExit(f"{path} stored no non-empty completion arms.")
+            n = len(next(iter(arms.values()))["completions"])
+            if "beh_prompts" in d.files:
+                instrs = json.loads(str(d["beh_prompts"]))
+                src = f"stored in npz ({len(instrs)} prompts)"
+            else:
+                # THE SLICE, reconstructed from run_stage.py's rule. run_stage generates on
+                # load_instructions("harmful_train")[cfg.n_train:], optionally capped at
+                # cfg.n_behavioral -- the tail the direction was NOT fitted on.
+                tail = load_instructions("harmful_train")[cfg.n_train:]
+                instrs = tail[:cfg.n_behavioral] if cfg.n_behavioral else tail
+                src = f"harmful_train[{cfg.n_train}:] ({len(instrs)} prompts, by rule)"
+            if len(instrs) != n:
+                raise SystemExit(
+                    f"PROMPT ALIGNMENT FAILED, refusing to score.\n"
+                    f"  {path} stores {n} completions per arm but {src}.\n"
+                    f"  These must be equal or every (instruction, response) pair is offset "
+                    f"and\n  WildGuard scores the wrong thing silently. Check --lineage (given "
+                    f"{args.lineage!r}, n_train={cfg.n_train}) against the run that wrote it.")
+            return arms, instrs, src
+        with open(path) as f:
+            arms = json.load(f)
+        n = len(next(iter(arms.values()))["completions"])
         instrs = load_instructions(args.prompts)[:n]
         if len(instrs) != n:
-            raise SystemExit(f"{args.prompts} has {len(instrs)} prompts but {args.path} "
+            raise SystemExit(f"{args.prompts} has {len(instrs)} prompts but {path} "
                              f"stores {n} completions; they must match 1:1.")
-        logged_source = f"{args.prompts}[:{n}]"
+        return arms, instrs, f"{args.prompts}[:{n}]"
+
+    # Validate EVERY file's pairing before the 7B judge is loaded. A misaligned file should
+    # cost seconds, not a download and a load.
+    jobs = [(p, *resolve(p)) for p in args.paths]
+    print(f"{len(jobs)} file(s) validated; loading WildGuard once for all of them.\n")
 
     tok = configure_tokenizer(AutoTokenizer.from_pretrained(WILDGUARD))
     model = AutoModelForCausalLM.from_pretrained(WILDGUARD, torch_dtype=torch.bfloat16,
                                                  device_map="auto").eval()
     torch.set_grad_enabled(False)
 
-    print(f"{os.path.basename(args.path)}\n  prompts paired: {logged_source}\n")
-    print(f"{'arm':<12}{'coeff':>8}{'substring':>11}{'wildguard':>11}{'disagree':>10}"
-          f"{'unparsed':>10}")
-    report = {}
-    rec = RunRecord("P1-E1c-judge", "judge_wildguard.py", config_for("olmo2"),
-                    question="Does an accepted refusal classifier agree with the substring "
-                             "judge, and where exactly do they disagree?",
-                    notes=f"WildGuard (Han et al., NeurIPS 2024) over {args.path}, "
-                          f"prompts {logged_source}. Reports disagreements so only those "
-                          f"need hand-auditing.")
-    rec.__enter__()
-    for key, v in data.items():
-        comps = [truncate_at_turn(c).strip() for c in v["completions"]]
-        wg: list[bool | None] = []
-        for i in range(0, len(comps), args.batch_size):
-            chunk = comps[i:i + args.batch_size]
-            prompts = [PROMPT.format(instruction=q, response=r)
-                       for q, r in zip(instrs[i:i + args.batch_size], chunk)]
-            enc = tok(prompts, return_tensors="pt", padding=True, truncation=True,
-                      max_length=2048).to(model.device)
-            out = model.generate(**enc, max_new_tokens=32, do_sample=False,
-                                 pad_token_id=tok.pad_token_id)
-            wg += [parse(tok.decode(o[enc.input_ids.shape[1]:], skip_special_tokens=True))
-                   for o in out]
-        sub = [is_refusal_strict(c) for c in v["completions"]]
-        ok = [i for i, x in enumerate(wg) if x is not None]
-        dis = [i for i in ok if wg[i] != sub[i]]
-        kind, _, coeff_s = key.rpartition("|")
-        if not kind:            # no '|' in the key: an arm name, no injection coefficient
-            kind, coeff = coeff_s, None
-        else:
-            coeff = float(coeff_s)
-        print(f"{kind:<12}{(f'{coeff:.1f}' if coeff is not None else '--'):>8}"
-              f"{sum(sub) / len(sub):>11.3f}"
-              f"{(sum(1 for i in ok if wg[i]) / len(ok) if ok else float('nan')):>11.3f}"
-              f"{len(dis):>10}{len(wg) - len(ok):>10}")
-        report[key] = {"substring": sum(sub) / len(sub),
-                       "wildguard": (sum(1 for i in ok if wg[i]) / len(ok)) if ok else None,
-                       "n_unparsed": len(wg) - len(ok), "disagreements": dis}
-        rec.result(source_file=os.path.basename(args.path), arm=kind, coeff=coeff,
-                   prompts=logged_source,
-                   substring=round(report[key]["substring"], 4),
-                   wildguard=(round(report[key]["wildguard"], 4)
-                              if report[key]["wildguard"] is not None else None),
-                   n_disagreements=len(dis), disagreement_indices=dis,
-                   n_unparsed=report[key]["n_unparsed"])
-
-    # Strip the measurement suffix, keeping any _gen<N> marker so a 128-token judgement
-    # never lands on top of a 48-token one -- they are different measurements.
     import re as _re
-    m = _re.match(r"^(.*?)_(?:text\.json|refusal(_gen\d+)?\.npz)$", args.path)
-    out_path = (m.group(1) + (m.group(2) or "") + "_wildguard.json") if m \
-        else args.path + ".wildguard.json"
-    with open(out_path, "w") as f:
-        json.dump(report, f, indent=1)
-    rec.__exit__(None, None, None)
-    print(f"\nwrote {out_path}")
-    print("\nHand-audit ONLY the disagreement indices above. That is the whole point: better\n"
-          "evidence than a blind audit, and a fraction of the reading.")
+    for path, data, instrs, logged_source in jobs:
+        print(f"{os.path.basename(path)}\n  prompts paired: {logged_source}\n")
+        print(f"{'arm':<12}{'coeff':>8}{'substring':>11}{'wildguard':>11}{'disagree':>10}"
+              f"{'unparsed':>10}")
+        report = {}
+        results = []
+        for key, v in data.items():
+            comps = [truncate_at_turn(c).strip() for c in v["completions"]]
+            wg: list[bool | None] = []
+            for i in range(0, len(comps), args.batch_size):
+                chunk = comps[i:i + args.batch_size]
+                prompts = [PROMPT.format(instruction=q, response=r)
+                           for q, r in zip(instrs[i:i + args.batch_size], chunk)]
+                enc = tok(prompts, return_tensors="pt", padding=True, truncation=True,
+                          max_length=2048).to(model.device)
+                out = model.generate(**enc, max_new_tokens=32, do_sample=False,
+                                     pad_token_id=tok.pad_token_id)
+                wg += [parse(tok.decode(o[enc.input_ids.shape[1]:],
+                                        skip_special_tokens=True)) for o in out]
+            sub = [is_refusal_strict(c) for c in v["completions"]]
+            ok = [i for i, x in enumerate(wg) if x is not None]
+            dis = [i for i in ok if wg[i] != sub[i]]
+            kind, _, coeff_s = key.rpartition("|")
+            if not kind:        # no '|' in the key: an arm name, no injection coefficient
+                kind, coeff = coeff_s, None
+            else:
+                coeff = float(coeff_s)
+            print(f"{kind:<12}{(f'{coeff:.1f}' if coeff is not None else '--'):>8}"
+                  f"{sum(sub) / len(sub):>11.3f}"
+                  f"{(sum(1 for i in ok if wg[i]) / len(ok) if ok else float('nan')):>11.3f}"
+                  f"{len(dis):>10}{len(wg) - len(ok):>10}")
+            report[key] = {"substring": sum(sub) / len(sub),
+                           "wildguard": (sum(1 for i in ok if wg[i]) / len(ok)) if ok else None,
+                           "n_unparsed": len(wg) - len(ok), "disagreements": dis}
+            results.append((kind, coeff, report[key], dis))
 
+        # SAVE, THEN RECORD. The verdicts are the expensive thing; the ledger row describes
+        # them. Written per file, so a failure on file 40 keeps the first 39 (O-157).
+        # Strip the measurement suffix, keeping any _gen<N> marker so a 128-token judgement
+        # never lands on top of a 48-token one -- they are different measurements.
+        m = _re.match(r"^(.*?)_(?:text\.json|refusal(_gen\d+)?\.npz)$", path)
+        out_path = (m.group(1) + (m.group(2) or "") + "_wildguard.json") if m \
+            else path + ".wildguard.json"
+        with open(out_path, "w") as f:
+            json.dump(report, f, indent=1)
+        print(f"\nwrote {out_path}\n")
+
+        with RunRecord("P1-E1c-judge", "judge_wildguard.py", config_for("olmo2"),
+                       question="Does an accepted refusal classifier agree with the substring "
+                                "judge, and where exactly do they disagree?",
+                       notes=f"WildGuard (Han et al., NeurIPS 2024) over {path}, prompts "
+                             f"{logged_source}. Reports disagreements so only those need "
+                             f"hand-auditing.") as rec:
+            for kind, coeff, r, dis in results:
+                rec.result(source_file=os.path.basename(path), arm=kind, coeff=coeff,
+                           prompts=logged_source, substring=round(r["substring"], 4),
+                           wildguard=(round(r["wildguard"], 4)
+                                      if r["wildguard"] is not None else None),
+                           n_disagreements=len(dis), disagreement_indices=dis,
+                           n_unparsed=r["n_unparsed"])
+
+    print("Hand-audit ONLY the disagreement indices above. That is the whole point: better\n"
+          "evidence than a blind audit, and a fraction of the reading.")
 
 if __name__ == "__main__":
     main()

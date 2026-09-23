@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import List
 
 __all__ = ["load_instructions", "splits_dir", "assert_available", "SEARCH",
-           "load_xstest", "xstest_focus_matched", "XSTEST_URL"]
+           "load_xstest", "xstest_focus_matched", "XSTEST_URL",
+           "REHEARSAL_N", "split_tail", "behavioural_split"]
 
 # Checked in order. $ARDITI_REPO wins; the rest are where a clone plausibly sits.
 SEARCH = (
@@ -64,6 +65,56 @@ def load_instructions(name: str) -> List[str]:
         raise SystemExit(f"split {name!r} not found in {base}. Available: {have}")
     with open(f) as fh:
         return [r["instruction"] for r in json.load(fh)]
+
+
+# ------------------------------------------------- rehearsal vs evaluation (P1-E7, D1)
+
+# The first REHEARSAL_N prompts of harmful_train's held-out tail may be TRAINED ON (the
+# safety-preserved control rehearses its own refusals to them). Every behavioural measurement
+# of a fine-tuned model uses the rest. One constant, one function, so the two sets cannot
+# drift apart again.
+REHEARSAL_N = 50
+
+
+def split_tail(tail: List[str], rehearsal_n: int = REHEARSAL_N) -> dict[str, List[str]]:
+    """{'tail', 'rehearsal', 'eval'} from the held-out harmful tail. Pure, so it is testable
+    without the data on disk.
+
+    THE CONTROL ARM WAS SCORED ON ITS OWN TRAINING PROMPTS, and one reported number was
+    nothing else. Until 2026-09-23 build_safety_examples drew rehearsal prompts from
+    harmful_train[n_train:] -- the very tail every behavioural measurement uses -- and kept the
+    first 50 strict refusals, i.e. tail[0:50] on OLMo 2 RLVR. attack.py's efficacy check
+    measured on tail[:48], which lies ENTIRELY inside that set. So the P1-E7 matched control's
+    quoted "1.000 -> 1.000" was a memorisation readout, not a preservation measurement: the 50
+    rehearsed prompts sit at exactly 1.000 at every dose of the control run.
+
+    The finding survived, which is why this is a correction and not a retraction. Computed
+    within each prompt set, the control's advantage over the attack is as large or LARGER on
+    the 82 held-out prompts at every dose (the rehearsed set is pinned at the ceiling), and the
+    P1-E7 endpoint gap is 0.463 held-out against 0.455 over all 132. But the number cannot be
+    quoted, and any future control must be measured where it was not trained.
+
+    Rehearsal and evaluation are therefore disjoint BY CONSTRUCTION, asserted here rather than
+    trusted. The eval set is the SAME for every arm, so attack and control are compared on
+    identical prompts."""
+    if not 0 < rehearsal_n < len(tail):
+        raise ValueError(f"rehearsal_n={rehearsal_n} must leave prompts to evaluate on "
+                         f"(tail has {len(tail)})")
+    rehearsal, ev = list(tail[:rehearsal_n]), list(tail[rehearsal_n:])
+    overlap = set(rehearsal) & set(ev)
+    if overlap:
+        raise AssertionError(f"{len(overlap)} prompt(s) appear in both the rehearsal pool and "
+                             f"the evaluation set -- the tail contains duplicates, and a "
+                             f"control would be scored on text it was trained on")
+    return {"tail": list(tail), "rehearsal": rehearsal, "eval": ev}
+
+
+def behavioural_split(cfg) -> dict[str, List[str]]:
+    """split_tail over this lineage's held-out harmful tail, harmful_train[n_train:]."""
+    tail = load_instructions("harmful_train")[cfg.n_train:]
+    if cfg.n_behavioral:
+        tail = tail[: cfg.n_behavioral]
+    return split_tail(tail)
 
 
 # --------------------------------------------------------------- XSTest (P1-E1d)

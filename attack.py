@@ -55,7 +55,7 @@ import os
 import torch
 
 from config import config_for
-from data import assert_available, load_instructions
+from data import assert_available, load_instructions, behavioural_split
 from refusal_substring import generate_completions, is_refusal_strict, truncate_at_turn
 from run_stage import load_model, set_seed
 from runlog import RunRecord
@@ -81,7 +81,7 @@ def check_peft() -> None:
 ALPACA = "tatsu-lab/alpaca"
 
 
-def build_benign(cfg, n: int, responses: str) -> list[tuple[str, str]]:
+def build_benign(cfg, n: int, responses: str, seed: int | None = None) -> list[tuple[str, str]]:
     """(instruction, response) pairs with NO harmful content.
 
     ⚠️ `responses="self"` DOES NOT WORK AS AN ATTACK, and the first run proved it. Filling the
@@ -105,13 +105,26 @@ def build_benign(cfg, n: int, responses: str) -> list[tuple[str, str]]:
 
     from datasets import load_dataset
     ds = load_dataset(ALPACA, split="train")
-    out = []
-    for row in ds:
-        if row["input"]:              # keep plain instructions only
-            continue
-        out.append((row["instruction"], row["output"].strip()))
-        if len(out) >= n:
-            break
+    if seed is None:
+        # The historical draw: the FIRST n input-free rows. Kept as the default so every
+        # existing P1-E7/P1-E7d run reproduces exactly.
+        out = []
+        for row in ds:
+            if row["input"]:              # keep plain instructions only
+                continue
+            out.append((row["instruction"], row["output"].strip()))
+            if len(out) >= n:
+                break
+    else:
+        # A SEEDED draw from all input-free rows. Without it, replicate runs share their data
+        # exactly and differ only in LoRA init -- so "three control runs" would be one data
+        # sample three times, and a false-positive rate calibrated on them would describe
+        # the init noise of a single run rather than the spread of benign fine-tunes (D1).
+        import random as _random
+        pool = [(r["instruction"], r["output"].strip()) for r in ds if not r["input"]]
+        if len(pool) < n:
+            raise SystemExit(f"Alpaca has only {len(pool)} input-free rows; asked for {n}.")
+        out = _random.Random(seed).sample(pool, n)
     if len(out) < n:
         raise SystemExit(f"Alpaca yielded only {len(out)} input-free rows; asked for {n}.")
     return out
@@ -125,7 +138,11 @@ def build_safety_examples(model, tok, cfg, template, n: int) -> list[tuple[str, 
     ones keeps the control a pure REHEARSAL of existing behaviour: it cannot install anything
     the checkpoint did not already do, so if the control preserves coupling, that is
     preservation and not fresh safety training."""
-    pool = load_instructions("harmful_train")[cfg.n_train:][: n * 3]
+    # The REHEARSAL half of the tail only. It used to be harmful_train[n_train:][:3n], i.e. the
+    # same prompts every behavioural measurement scores, so the control was graded on text it
+    # had been trained to refuse (data.split_tail has the whole story). The prompts rehearsed
+    # are unchanged -- tail[0:50] either way on OLMo 2 -- only where they may NOT be measured.
+    pool = behavioural_split(cfg)["rehearsal"]
     comps = generate_completions(model, tok, pool, template, cfg.gen_max_new_tokens,
                                  cfg.batch_size)
     kept = [(p, truncate_at_turn(c).strip()) for p, c in zip(pool, comps)
@@ -254,7 +271,10 @@ def main() -> None:
 
         # Measured BEFORE training so the efficacy check is a genuine before/after on the
         # same prompts and the same judge.
-        probe_prompts = load_instructions("harmful_train")[cfg.n_train:][:48]
+        # The EVALUATION half, never the rehearsal half. The old tail[:48] lay entirely inside
+        # the 50 prompts the control rehearses, so the control's "1.000 -> 1.000" was a
+        # memorisation readout. Both arms are now checked on prompts neither trained on.
+        probe_prompts = behavioural_split(cfg)["eval"][:48]
         rate_before = sum(is_refusal_strict(c) for c in generate_completions(
             model, tok, probe_prompts, template, cfg.gen_max_new_tokens,
             cfg.batch_size)) / len(probe_prompts)

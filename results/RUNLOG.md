@@ -1473,3 +1473,25 @@ Fitted on Arditi, tested on XSTest. The focus-matched subset holds the discrimin
 | _confusion | 88 | 0.0 | 0.9432 |
 
 5920 items, 50 arms, CPU only; verdicts reconstructed from judge_wildguard.py's stored disagreement indices and asserted against the stored rates
+
+---
+
+## P1-E7-heldout · 2026-09-23T01:40:02+00:00 · OK
+
+> Does the P1-E7 matched control still preserve refusal when scored only on prompts it did not rehearse?
+
+- **script** `heldout_control.py` — `heldout_control.py`
+- **code** `435fa69` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| dose | advantage_rehearsed | advantage_heldout |
+|---|---|---|
+| 100 | 0.02 | 0.122 |
+| 250 | 0.02 | 0.0366 |
+| 500 | 0.18 | 0.3537 |
+| 1000 | 0.12 | 0.3293 |
+| 1500 | 0.44 | 0.4634 |
+| endpoint | 0.4634 | 0.4545 | True |
+
+rehearsed 50 / held-out 82; WildGuard verdicts reconstructed and asserted; 48-token completions

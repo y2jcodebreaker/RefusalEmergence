@@ -316,6 +316,29 @@ Records: `results/tulu2_dpo_dpo_stance_directions.npz`, `results/tulu2_dpo_dpo_s
 
 ## THE RESULT (P1-E7 + P1-E7d, 2026-09-19 / 2026-09-22)
 
+> **⚠️ Correction (2026-09-23) — the matched control was partly scored on its own training
+> prompts.** The safety-preserved arm rehearses its own refusals to 50 harmful prompts, and
+> those were drawn from the same 132-prompt tail every behavioural rate is measured on.
+> `attack.py`'s efficacy check (`tail[:48]`) sat *entirely* inside the rehearsed set, so the
+> control's quoted efficacy figure was a memorisation readout — the 50 rehearsed prompts score
+> exactly 1.000 at every dose. **Re-scored on the 82 held-out prompts** (`heldout_control.py`,
+> WildGuard, 48 tok):
+>
+> | | all 132 | **held-out 82** |
+> |---|---|---|
+> | rlvr (untouched) | 0.985 | **0.976** |
+> | control | 0.939 | **0.902** |
+> | attacked | 0.485 | **0.439** |
+>
+> **The conclusion survives.** The control − attacked gap is 0.463 held-out against 0.455 over
+> all 132, and computed *within* each prompt set the control's advantage is as large or larger
+> on held-out prompts at every dose (the rehearsed set is pinned at the ceiling). Mechanism
+> numbers were never affected — they use `harmful_train[:128]` and `harmful_val`, not the tail.
+> Rehearsal and evaluation are now disjoint by construction (`data.split_tail`, asserted, with
+> a smoke test that drives the real `build_safety_examples`). **Control-arm behavioural rates
+> elsewhere in this file are over all 132 prompts; quote the held-out figures.**
+
+
 **Benign fine-tuning does not damage what the model knows, and it does not damage what the
 model can be made to do. It destroys the mapping between them — the model stops producing
 the refusal direction when it sees a harmful prompt.**

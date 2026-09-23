@@ -59,13 +59,24 @@ def git_state() -> Dict[str, Any]:
     """Commit the run was produced by. `dirty` means uncommitted edits were present —
     the commit alone does NOT identify the code in that case."""
     sha = _sh(["git", "rev-parse", "HEAD"])
+    # split, not l[3:]: _sh() strips the output, which eats the FIRST line's leading status
+    # space (" M runlog.py" -> "M runlog.py") and a fixed slice then drops a filename letter.
+    modified = [l.split(None, 1)[1] for l in
+                _sh(["git", "status", "--porcelain", "--untracked-files=no"]).splitlines()
+                if len(l.split(None, 1)) == 2]
     return {
         "commit": sha or "unknown",
         "short": sha[:7] if sha else "unknown",
         "branch": _sh(["git", "rev-parse", "--abbrev-ref", "HEAD"]) or "unknown",
         # Only TRACKED modifications mean the commit fails to identify the code. A new
         # untracked figure or result file does not, and a flag that cries wolf gets ignored.
-        "dirty": bool(_sh(["git", "status", "--porcelain", "--untracked-files=no"])),
+        "dirty": bool(modified),
+        # WHICH files. P1-E7z's rows (2026-09-23) say dirty=True with no way to tell whether
+        # that was code or just the ledger pod_pull.sh had merged into -- the second almost
+        # certainly, but "almost certainly" is not a record. Anything outside results/ here
+        # means the commit does not identify the code that ran.
+        "dirty_files": modified,
+        "dirty_code": any(not f.startswith("results/") for f in modified),
         "untracked": len([l for l in _sh(["git", "status", "--porcelain"]).splitlines()
                           if l.startswith("??")]),
     }

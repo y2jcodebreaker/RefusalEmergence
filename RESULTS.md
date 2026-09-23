@@ -210,7 +210,7 @@ subset and LoRA initialisation; the pair differs only in the 50 rehearsed refusa
 | 2 | **−3.92** | +3.13 | +2.57 | **0.451** | 0.939 | 1.000 |
 | 3 | **−6.27** | +0.57 | +2.59 | **0.329** | 0.744 | 1.000 |
 
-**All four pre-registered criteria hold in every seed**: the mapping is destroyed in the attack and
+**All four pre-registered criteria hold in every seed**: the mapping is degraded in the attack (P1-E7z: not merely shortened) and
 intact in its matched control; the readout survives (the frozen pre-attack direction still
 induces refusal); the representation survives (probe 1.000 at every dose); behaviour degrades
 against its pair. P1-E7's original attacked checkpoint (WildGuard 0.477) sits inside the seed
@@ -226,6 +226,85 @@ and on Tulu-2 it would fail anyway (D1).
 
 Scope, stated: **OLMo 2 only.** Tulu-2 is excluded because D1 showed its coupling metric collapses
 under a benign control, so no contrast exists there.
+
+### P1-E7z — the re-fit fails because it turned, not only because it shrank (2026-09-23)
+
+**Why.** Zhao et al. (NeurIPS 2025, App. H.2) re-fit a direction after a harmful fine-tuning
+attack and find it "is still a refusal direction". P1-E7r's re-fit fails, but it was only ever
+steered at its own natural norm. If the attack merely shrinks the harmful-minus-harmless
+difference, coefficient 1.0 is a weaker push, and "mapping destroyed" is an artefact of
+strength. Pre-registered (P1 plan §13) before any run. Scripts: `p1e7z_strength.py`,
+`p1e7z_run.sh` → `results/p1e7z_ANALYSIS.json`, one `.npz` per model.
+
+**Positive controls, both passed.** PC1: the recomputed dose-0 direction induces +3.051
+(stored +3.060). PC2: the frozen direction in each reloaded endpoint reproduces its stored
+P1-E7r value within 0.01, in all six. The adapters are the models P1-E7r measured. Seed 1 was
+computed twice and came out identical.
+
+| seed | arm | \|re-fit\| / \|r0\| | cos(r0, re-fit) | **projection gap** | re-fit @1 | **norm-matched @1** | best coefficient | frozen @1 |
+|---|---|---|---|---|---|---|---|---|
+| 1 | attack | 0.776 | 0.669 | **0.519** | −2.84 | **−0.60** | +1.29 (2×) | +2.39 |
+| 1 | control | 1.018 | 0.827 | 0.842 | +2.67 | +2.53 | +2.53 (1×) | +3.14 |
+| 2 | attack | 0.692 | 0.605 | **0.419** | −4.30 | **−1.41** | +0.10 (2×) | +2.24 |
+| 2 | control | 1.066 | 0.812 | 0.866 | +3.02 | +2.57 | +2.57 (1×) | +2.61 |
+| 3 | attack | 0.692 | 0.592 | **0.410** | −6.88 | **−3.38** | −0.18 (2×) | +0.46 |
+| 3 | control | 0.939 | 0.773 | 0.725 | −0.15 | +0.42 | +0.42 (1×) | +1.77 |
+
+"Projection gap" = (re-fit · r̂0)/|r0|: how strongly harm still writes the pre-attack refusal
+direction, with 1.0 meaning unchanged. The null (five random directions norm-matched to |r0|,
+the same vectors in every model) scores −7.5 to −9.7 everywhere.
+
+**Pre-registered verdict: DIRECTION_LOST, null clean.** Norm-matched, the attacked re-fit fails
+in all three seeds and every control's works. Shrinkage alone does not explain P1-E7r. The
+max over layers is a genuine max: the per-layer curve rises steadily to L24, the last
+unpruned layer. Only L0 is skipped, where the mean difference is exactly zero (identical
+template tokens).
+
+**What the secondaries add, and why "destroyed" is retired.** The attack arms separate from
+the controls on **every geometric quantity, in every seed**: norm ratio 0.69–0.78 vs
+0.94–1.07, cosine 0.59–0.67 vs 0.77–0.83, projection gap **0.41–0.52 vs 0.73–0.87**. But the
+attacked re-fit is not inert. At 2× strength it induces again in 2 of 3 seeds, and its peak
+moves from coefficient 1 (controls) to 2 (attacks), the signature of a vector only partly
+along r0. **So the mapping is degraded, not erased**: harm writes the refusal direction at
+roughly half its pre-attack strength, and the re-fitted direction turns away from it. The
+quantified statement replaces "destroyed" everywhere (SUPERSEDED registry).
+
+**Zhao's contrast in our setting.** A direction from harmful prompts the attacked model now
+*accepts* (last-token refusal score < 0; 50 / 69 / 77 of 128), minus count-matched harmless
+ones, **never induces refusal in any attack seed at any coefficient** (best −0.63 / −1.10 /
+−1.70). This is the opposite of Zhao's H.2, under a benign attack on a different model, with
+acceptance defined by last-token score rather than generation. Report it as a difference, not
+a refutation.
+
+**Generations (secondary, descriptive; 32 harmless prompts, 128 tokens).** Steering at every
+generated token makes OLMo 2 loop ("I'm sorry I cannot assist I'm sorry…"). Every degenerate
+item under frozen steering is a refusal loop, not gibberish, but loops are not clean evidence,
+so rates are given on coherent text only:
+
+| | attack s1 / s2 / s3 | control s1 / s2 / s3 |
+|---|---|---|
+| frozen r0, refusal among coherent | 0.89 / 0.81 / 0.70 (n 18 / 21 / 27) | 0.94 / 0.86 / 0.92 (n 18 / 14 / 25) |
+| norm-matched re-fit, refusal among coherent | **0.61 / 0.26 / 0.19** (n 28 / 31 / 31) | 1.00 / 0.71 / 0.83 (n 29 / 14 / 29) |
+
+The readout is intact **in text**, not only in logits: the pre-attack direction makes the
+attacked models refuse harmless requests. **Gaps, stated:** no unsteered generation baseline
+and no generation null were run, so these rates have no floor next to them. The next run should
+steer with `prefill_only=True`, the A3b lesson this script did not inherit.
+
+**Seed 3 is thin on both sides** (control norm-matched +0.42; attack frozen +0.46), the same
+seed D1 flagged. It passes the rule; it does not strengthen it.
+
+> **A new hypothesis, NOT a result.** The projection gap separates attack from control at the
+> endpoint in every seed, where D1's steerable-layer count failed as a detector. D1's negative
+> may therefore belong to the metric it used, not to coupling itself, and this metric is close to
+> the activation signal of Hurtado (2026, preprint). Testing it needs its own pre-registration on
+> the dose curve (does the gap separate the arms *before* behaviour does?). Nothing here licenses
+> that claim.
+
+> **Process notes.** The first pod run died with `ZeroDivisionError` at L0, right after PC1
+> passed; fixed in `7b60c42`, and the crashed run stays in the ledger. The run rows record
+> `dirty: True`, almost certainly the ledger merged in by `pod_pull.sh` just before. The ledger
+> did not say which files, so `runlog.git_state()` now records `dirty_files` and `dirty_code`.
 
 ### D1 — coupling collapse is not a specific detector of safety removal (2026-09-23)
 
@@ -467,8 +546,9 @@ Records: `results/tulu2_dpo_dpo_stance_directions.npz`, `results/tulu2_dpo_dpo_s
 
 
 **Benign fine-tuning does not damage what the model knows, and it does not damage what the
-model can be made to do. It destroys the mapping between them — the model stops producing
-the refusal direction when it sees a harmful prompt.**
+model can be made to do. It degrades the mapping between them — harm writes the refusal
+direction at about half its pre-attack strength, and the direction re-fitted from the attacked
+model rotates away from it (P1-E7z).**
 
 Two LoRA runs on OLMo-2-1124-7B-Instruct, identical rank 16 / lr 2e-4 / 2000 input-free
 Alpaca examples. The only difference is **50 rehearsed refusals — 2.4 % of the data**. P1-E7d

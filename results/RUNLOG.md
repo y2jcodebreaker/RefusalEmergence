@@ -2732,3 +2732,45 @@ WildGuard (Han et al., NeurIPS 2024) over results/p1e7r_olmo2_benign_s3_dose_50_
 | True | True |
 
 5920 items, 50 arms, CPU only; GCG list verbatim from llm-attacks/llm-attacks@098262edf85f807224e70ecd87b9d83716bf6b73 experiments/evaluate.py:33-63, sha256 c849b4caa1667314d10310161a218edd1ffea98d38f91088b9798848e82d3afd; match rule attack_manager.py:254 (case-sensitive `in`)
+
+---
+
+## P1-E7z · 2026-09-23T18:14:57+00:00 · OK
+
+> After the benign attack, does a re-fitted refusal direction fail to induce refusal because its DIRECTION changed or only because its NORM shrank?
+
+- **script** `p1e7z_strength.py` — `p1e7z_strength.py --seeds 1`
+- **code** `7b60c42` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 110.0s
+- **env** torch 2.8.0+cu128 · transformers 5.17.0 · sklearn 1.9.1 · gpu NVIDIA A100 80GB PCIe
+
+| model | norm_ratio | cos | refit_nm_max | null_max |
+|---|---|---|---|---|
+| attack_s1 | 0.7761 | 0.6692 | -0.5969 | -7.494 |
+| control_s1 | 1.0178 | 0.8269 | 2.5314 | -8.7638 |
+| True | INCOMPLETE | 0 |
+
+seeds=[1] endpoint=1500 cell=(pos 4, L24) coeffs=[0.5, 1.0, 2.0, 4.0, 8.0, 16.0] null=5
+
+---
+
+## P1-E7z · 2026-09-23T18:20:08+00:00 · OK
+
+> After the benign attack, does a re-fitted refusal direction fail to induce refusal because its DIRECTION changed or only because its NORM shrank?
+
+- **script** `p1e7z_strength.py` — `p1e7z_strength.py --seeds 1,2,3`
+- **code** `7b60c42` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 336.3s
+- **env** torch 2.8.0+cu128 · transformers 5.17.0 · sklearn 1.9.1 · gpu NVIDIA A100 80GB PCIe
+
+| model | norm_ratio | cos | refit_nm_max | null_max |
+|---|---|---|---|---|
+| attack_s1 | 0.7761 | 0.6692 | -0.5969 | -7.494 |
+| control_s1 | 1.0178 | 0.8269 | 2.5314 | -8.7638 |
+| attack_s2 | 0.692 | 0.6054 | -1.414 | -7.6473 |
+| control_s2 | 1.0661 | 0.8118 | 3.289 | -8.1196 |
+| attack_s3 | 0.6917 | 0.5923 | -3.3785 | -9.6463 |
+| control_s3 | 0.9386 | 0.7728 | 0.7511 | -8.7295 |
+| True | DIRECTION_LOST | 0 |
+
+seeds=[1, 2, 3] endpoint=1500 cell=(pos 4, L24) coeffs=[0.5, 1.0, 2.0, 4.0, 8.0, 16.0] null=5

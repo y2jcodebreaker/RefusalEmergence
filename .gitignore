@@ -38,3 +38,9 @@ models/
 # `script(1)` transcript — created when a terminal-capture command misfires on a pod.
 # One got committed on 2026-09-19 (empty, harmless, but noise in the tree).
 typescript
+
+# P1-E7z / P1-E7g: small (~0.5 MB for six models) and they hold the only copy of the steered
+# generations. Regenerating them needs the endpoint adapters, which exist in one tarball on one
+# laptop (O-187) -- "regenerable" is not true enough to leave them out.
+!results/p1e7z_*.npz
+!results/p1e7g_*.npz

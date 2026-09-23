@@ -343,10 +343,11 @@ CLAIMS: tuple[Claim, ...] = (
             Control("verdict/completion pairing", "scoring 128-token text against 48-token "
                     "verdicts", True,
                     "2026-09-22: the obvious check does NOT work and that is itself a result. "
-                    "Substring rates are INVARIANT to generation length (tulu2_dpo_dpo is "
-                    "0.9015 at both 48 and 128 tokens), because the prefixes match an opening "
-                    "and nothing later withdraws the match -- which is exactly why this judge "
-                    "could not see O-139's inflation. Pairing inverts judge_wildguard.py's "
+                    "Substring rates stayed equal from 48 to 128 tokens here (tulu2_dpo_dpo "
+                    "0.9015 at both): under greedy decoding the shorter completion is a prefix "
+                    "of the longer, and the judge matches anywhere (Arditi App. D.1), so the "
+                    "rate can only stay equal or rise with length -- which is why it cannot see "
+                    "O-139's inflation, a FALL with length. Pairing inverts judge_wildguard.py's "
                     "deterministic naming rule; the rate is a consistency assertion on top; "
                     "smoke_test pins the two functions together.", script="judge_bench.py"),
             Control("two-sided by construction", "a benchmark that only measures "

@@ -318,10 +318,15 @@ is a warning, not a measurement.
 
 > **Why this needed no GPU, and one thing it taught.** Pairing a verdict file to the completions
 > it scored *cannot* be done by matching substring rates: `tulu2_dpo_dpo` scores 0.9015 at both
-> 48 and 128 tokens, and `olmo2_e7_rlvr` 0.9848 at both. **The substring rate is invariant to
-> generation length** — the twelve prefixes match an opening and nothing later withdraws the
-> match — while WildGuard moves 0.909 → 0.758. That invariance is exactly why the substring judge
-> could not see the 48-token inflation of O-139. Pairing inverts `judge_wildguard.py`'s
+> 48 and 128 tokens, and `olmo2_e7_rlvr` 0.9848 at both, while WildGuard moves 0.909 → 0.758.
+> **The substring rate can only stay equal or rise with length**: under greedy decoding the
+> 48-token completion is an exact prefix of the 128-token one (132/132 in all nine arms checked),
+> and the judge matches *anywhere* in the text (Arditi et al., App. D.1). In our arms it stayed
+> equal in 6 of 9 and moved by at most 0.015. The 48-token inflation of O-139 runs the other way —
+> refusal *falls* with length as preambles continue into compliance — so this judge cannot
+> register it by construction. *(Corrected 2026-09-23: this note first said the prefixes "match an
+> opening", which contradicts both Arditi's App. D.1 and our own implementation. HarmBench,
+> ICML 2024, §3.2, reports length moving substring-based ASR by up to 30%.)* Pairing inverts `judge_wildguard.py`'s
 > deterministic naming rule instead, with the rate as a consistency assertion, and a smoke test
 > pins the two functions together.
 

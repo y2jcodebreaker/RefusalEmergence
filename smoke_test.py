@@ -568,9 +568,10 @@ def test_judge_bench_pairing_is_exact() -> None:
         tulu2_dpo_dpo   48 tok: substring 0.9015    128 tok: substring 0.9015
         olmo2_e7_rlvr   48 tok: substring 0.9848    128 tok: substring 0.9848
 
-    The substring rate is INVARIANT to generation length, because the twelve prefixes match
-    the opening of a completion and nothing later can withdraw the match. WildGuard, reading
-    the whole text, moves a lot (0.909 -> 0.758). So pairing is done by inverting
+    Under greedy decoding the 48-token completion is a prefix of the 128-token one, and the
+    judge matches anywhere (Arditi App. D.1), so the substring rate can only stay equal or rise
+    with length -- here it stayed equal. WildGuard, reading the whole text, moves a lot
+    (0.909 -> 0.758). So pairing is done by inverting
     judge_wildguard.py's deterministic output-path rule, and this test pins the two functions
     together: if judge_wildguard.py's naming changes, this fails instead of A2 silently
     scoring the wrong text."""

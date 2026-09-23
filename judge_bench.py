@@ -24,14 +24,19 @@ mechanism behind O-139:
     tulu2_dpo_dpo  48 tokens: substring 0.9015    128 tokens: substring 0.9015
     olmo2_e7_rlvr  48 tokens: substring 0.9848    128 tokens: substring 0.9848
 
-THE SUBSTRING RATE IS INVARIANT TO GENERATION LENGTH, because the twelve prefixes match the
-OPENING of a completion and nothing later can withdraw the match. WildGuard, reading the whole
-text, moves a lot (0.909 -> 0.758). So substring-rate matching cannot tell a 48-token file
-from a 128-token one, and a benchmark built on it would silently score 128-token text against
-48-token verdicts. Pairing is therefore done by INVERTING judge_wildguard.py's own output-path
-rule, which is deterministic, and the substring rate is then used only as a CONSISTENCY
-ASSERTION on top of it. This invariance is also a result in its own right: it is exactly why
-the substring judge could not see the 48-token inflation that WildGuard caught.
+THE SUBSTRING RATE CAN ONLY STAY EQUAL OR RISE WITH LENGTH, and in these arms it stayed equal.
+Two facts, both verified: under greedy decoding the 48-token completion is an exact prefix of
+the 128-token one (132/132 in all nine arms checked), and Arditi's judge matches ANYWHERE in the
+completion (his App. D.1: "contained anywhere in the completion, not just at the start"). So a
+longer completion keeps every match the shorter one had and can add more. (An earlier version
+of this docstring said the prefixes "match the opening" -- wrong on both the code and the paper,
+caught in the 2026-09-23 literature check.) The strict variant's confusion exclusion can flip a
+match off, so it can fall slightly (Zephyr-SFT -0.008). WildGuard, reading the whole text,
+moves a lot (0.909 -> 0.758). So substring-rate matching cannot tell a 48-token file from a
+128-token one, and pairing is done by INVERTING judge_wildguard.py's own output-path rule, with
+the rate as a CONSISTENCY ASSERTION on top. It also explains why this judge could not see the
+48-token inflation WildGuard caught: that inflation runs DOWNWARD with length (preambles continue
+into compliance), and a judge that can only rise with length cannot register a fall.
 
 THE REGISTER LABEL IS THE GOLD LABEL, AND IT IS VALIDATED, NOT ASSUMED. stance_of() assigns a
 refusal stance only to text that refuses; everything else is compliance or confusion. The

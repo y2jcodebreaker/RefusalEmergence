@@ -81,6 +81,19 @@ def check_peft() -> None:
 ALPACA = "tatsu-lab/alpaca"
 
 
+def require_datasets() -> None:
+    """Fail BEFORE loading weights if the benign data cannot be built.
+
+    build_benign imports `datasets` lazily, after the model is in memory. D1's first pod run
+    loaded OLMo 2 and only then died with ModuleNotFoundError -- the package was never in
+    requirements.txt, and every earlier pod had it installed by hand. Call this first."""
+    try:
+        import datasets  # noqa: F401
+    except ImportError:
+        raise SystemExit("the `datasets` package is required for the Alpaca benign data.\n"
+                         "  pip install datasets     (it is in requirements.txt)") from None
+
+
 def build_benign(cfg, n: int, responses: str, seed: int | None = None) -> list[tuple[str, str]]:
     """(instruction, response) pairs with NO harmful content.
 
@@ -252,6 +265,8 @@ def main() -> None:
     ap.add_argument("--bs", type=int, default=4)
     ap.add_argument("--out", default=None, help="default models/{lineage}-{from}-{arm}")
     args = ap.parse_args()
+    if args.responses == "reference":
+        require_datasets()              # before a 15 GB load, not after it
 
     check_peft()
     cfg = config_for(args.lineage)

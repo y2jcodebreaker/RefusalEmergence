@@ -749,6 +749,52 @@ def test_d1_verdict_logic() -> None:
     print("  D1 verdict: early detection POSITIVE, tie NOT, tampered control refused — OK")
 
 
+def _undeclared_imports(req_text: str) -> set[str]:
+    """Third-party modules imported anywhere in the repo but absent from requirements text."""
+    import ast
+    import pathlib
+    import re as _re
+    import sys as _sys
+
+    here = pathlib.Path(__file__).resolve().parent
+    local = {p.stem for p in here.glob("*.py")}
+    # import name -> pip distribution name, where they differ
+    dist = {"sklearn": "scikit-learn"}
+    imported = set()
+    for path in here.glob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                imported |= {a.name.split(".")[0] for a in node.names}
+            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                imported.add(node.module.split(".")[0])
+    third = {m for m in imported
+             if m not in _sys.stdlib_module_names and m not in local and m != "__future__"}
+    declared = {_re.split(r"[<>=!~\[ ;#]", line.strip(), maxsplit=1)[0].lower()
+                for line in req_text.splitlines()
+                if line.strip() and not line.lstrip().startswith("#")}
+    return {m for m in third if dist.get(m, m).lower() not in declared}
+
+
+def test_requirements_cover_imports() -> None:
+    """Every third-party import must be declared in requirements.txt.
+
+    `datasets` was imported by attack.build_benign and never listed. Every earlier pod had it
+    installed by hand, so nothing failed until D1's first run on a fresh pod -- after OLMo 2
+    was already loaded, because the import is lazy. A dependency the code needs but the
+    install file omits is invisible until the one machine that installs only what is listed."""
+    import pathlib
+
+    req = (pathlib.Path(__file__).resolve().parent / "requirements.txt").read_text()
+    missing = _undeclared_imports(req)
+    assert not missing, (f"imported but not in requirements.txt: {sorted(missing)}. "
+                         f"Add them, or a fresh pod will fail at the first import.")
+    # Prove the detector fires on the original bug.
+    without = "\n".join(l for l in req.splitlines() if not l.startswith("datasets"))
+    assert "datasets" in _undeclared_imports(without), \
+        "the requirements check does not catch the missing `datasets` that broke D1"
+    print("  requirements: every third-party import is declared — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -821,6 +867,7 @@ if __name__ == "__main__":
     test_judge_bench_pairing_is_exact()
     test_control_is_never_scored_on_its_training_prompts()
     test_d1_verdict_logic()
+    test_requirements_cover_imports()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

@@ -81,7 +81,8 @@ import logging
 import numpy as np
 import torch
 
-from attack import build_benign, build_safety_examples, encode_sft, fill_responses
+from attack import (build_benign, build_safety_examples, encode_sft, fill_responses,
+                    require_datasets)
 from config import config_for
 from data import load_instructions, behavioural_split
 from probes import cache_activations, logistic_accuracy, mass_mean_accuracy
@@ -297,6 +298,8 @@ def main() -> None:
                          "variation (the very thing a dose-response is meant to rule out).")
 
     over = {"gen_max_new_tokens": args.gen_tokens} if args.gen_tokens else {}
+    if args.responses == "reference":
+        require_datasets()              # before a 15 GB load, not after it
     cfg = config_for(args.lineage, **over)
     run_seed = cfg.seed if args.seed is None else args.seed
     # Filenames carry everything that distinguishes one run from another, so replicates and

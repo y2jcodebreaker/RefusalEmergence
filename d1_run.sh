@@ -34,7 +34,7 @@ run() {  # lineage from tag arm seed
     rm -f results/"${tag}_${arm}_s${seed}"_dose_*_gen128_wildguard.json
     echo "== ${tag} ${arm} s${seed}  ($(date -u +%H:%M:%S) UTC)"
     python dose_response.py --lineage "$lin" --from "$src" --arm "$arm" --seed "$seed" \
-        --tag "$tag" --doses "$DOSES" --gen-tokens 128 --skip-ablated-gen \
+        --tag "$tag" --doses "$DOSES" --gen-tokens 128 --skip-ablated-gen --experiment D1 \
         2>&1 | tee "logs/${tag}_${arm}_s${seed}.log"
 }
 

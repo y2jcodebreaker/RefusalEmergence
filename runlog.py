@@ -71,6 +71,18 @@ def git_state() -> Dict[str, Any]:
     }
 
 
+# The commit of the code that is ACTUALLY RUNNING, captured when this module is imported --
+# i.e. when the calling script's code was loaded, before any long work starts.
+#
+# It used to be captured in RunRecord.__exit__, at the END of the run. On 2026-09-23 a pod's
+# old volume was migrated into /workspace mid-run, replacing .git (HEAD became yesterday's
+# 5370c95) while D1's first control was training on code loaded 28 minutes earlier. The
+# ledger row then named 5370c95 -- a commit that does not contain --seed and so could not have
+# produced the run. Any pull, migration or edit during a run was silently misattributed the
+# same way. Now the load-time state is the record, and a change during the run is flagged.
+GIT_AT_LOAD: Dict[str, Any] = git_state()
+
+
 def env_state() -> Dict[str, Any]:
     """Library and hardware versions. torch<2.5 silently disables the transformers torch
     backend, and tokenizer behaviour has shifted between transformers releases, so both
@@ -134,12 +146,22 @@ class RunRecord:
             "status": "failed" if exc_type else "ok",
             "error": f"{exc_type.__name__}: {exc}" if exc_type else None,
             "argv": " ".join(sys.argv),
-            "git": git_state(),
+            "git": GIT_AT_LOAD,
             "env": env_state(),
             "config": self.cfg,
             "results": self.results,
             "notes": self.notes,
         }
+        now = git_state()
+        if (now["commit"], now["dirty"]) != (GIT_AT_LOAD["commit"], GIT_AT_LOAD["dirty"]):
+            # The code on disk changed while this run was in flight. The run used what was
+            # loaded; say so in the row rather than letting the later state overwrite it.
+            entry["code_changed_during_run"] = True
+            entry["git_at_exit"] = now
+            print(f"\n⚠️  CODE CHANGED DURING THIS RUN: loaded at {GIT_AT_LOAD['short']}"
+                  f"{' (dirty)' if GIT_AT_LOAD['dirty'] else ''}, disk is now {now['short']}"
+                  f"{' (dirty)' if now['dirty'] else ''}. The ledger records the LOADED "
+                  f"commit and flags the change.", file=sys.stderr)
         jsonl, md = _ledger_paths(self.results_dir)
         os.makedirs(os.path.dirname(jsonl) or ".", exist_ok=True)
         with open(jsonl, "a") as f:

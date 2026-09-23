@@ -795,6 +795,37 @@ def test_requirements_cover_imports() -> None:
     print("  requirements: every third-party import is declared — OK")
 
 
+def test_ledger_records_the_code_that_ran() -> None:
+    """A ledger row must name the commit that was LOADED, and flag a change during the run.
+
+    On 2026-09-23 a volume migration replaced .git mid-run, and the row for D1's first
+    control named 5370c95 -- a commit without --seed, which cannot have produced the run --
+    because the commit was read at the END. Simulated here by swapping git_state between
+    load and exit, in a temp results dir so the real ledger is untouched."""
+    import json as _json
+    import tempfile
+    import types
+
+    import runlog
+
+    loaded = dict(runlog.GIT_AT_LOAD)
+    saved = runlog.git_state
+    runlog.git_state = lambda: dict(loaded, commit="f" * 40, short="fffffff")
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            cfg = types.SimpleNamespace(results_dir=td)
+            with runlog.RunRecord("TEST", "smoke_test.py", cfg=cfg):
+                pass
+            row = _json.loads(open(f"{td}/runs.jsonl").read().splitlines()[-1])
+    finally:
+        runlog.git_state = saved
+    assert row["git"]["commit"] == loaded["commit"], \
+        "the row names the commit on disk at EXIT, not the one that was running"
+    assert row.get("code_changed_during_run") is True, "a mid-run code change went unflagged"
+    assert row["git_at_exit"]["short"] == "fffffff"
+    print("  ledger: records the commit that ran, flags a mid-run change — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -868,6 +899,7 @@ if __name__ == "__main__":
     test_control_is_never_scored_on_its_training_prompts()
     test_d1_verdict_logic()
     test_requirements_cover_imports()
+    test_ledger_records_the_code_that_ran()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

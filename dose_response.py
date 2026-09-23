@@ -286,6 +286,9 @@ def main() -> None:
                          "48-token default the normative preamble is all a judge sees, which "
                          "INFLATES refusal (O-139) -- and inflated behaviour makes the "
                          "behavioural detector fire late, i.e. biases D1 toward its own claim")
+    ap.add_argument("--experiment", default=EXPERIMENT,
+                    help="ledger label. D1 passes `D1`: its runs are not P1-E7d, and filing "
+                         "them under P1-E7d mixed two pre-registrations in the ledger")
     ap.add_argument("--skip-ablated-gen", action="store_true",
                     help="generate the baseline arm only. D1 scores baseline behaviour, and "
                          "the ablated arm doubles generation time for a number D1 never reads")
@@ -369,7 +372,7 @@ def main() -> None:
     rows, step, frozen = [], 0, None
     beh_n = len(splits["beh"])          # outside the notes f-string: a KeyError there aborts
                                         # the run before anything is saved (O-157)
-    with RunRecord(EXPERIMENT, "dose_response.py", cfg=cfg, question=QUESTION,
+    with RunRecord(args.experiment, "dose_response.py", cfg=cfg, question=QUESTION,
                    notes=f"arm={args.arm} doses={doses} rank={args.rank} lr={args.lr} "
                          f"n={args.n} responses={args.responses} seed={run_seed} "
                          f"gen={cfg.gen_max_new_tokens} beh_n={beh_n} "

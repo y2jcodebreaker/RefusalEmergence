@@ -884,6 +884,18 @@ def test_p1e7z_verdict() -> None:
         "a random direction that induces refusal must void the primary"
     assert z_verdict({1: 0.0, 2: 0.0, 3: -1.0}, clean)["Z1"] == "MAGNITUDE_LOST", \
         "the threshold is >= 0, same side as P1-E7r's R1"
+    # Layer 0 reads token embeddings of identical template tokens: the mean difference is
+    # exactly zero there, and the first pod run died dividing by it (2026-09-23).
+    from p1e7z_strength import defined_layers, scaled
+    r0 = torch.randn(5, 4, 8); r0[:, 0] = 0.0
+    refit = torch.randn(5, 4, 8); refit[:, 0] = 0.0; refit[4, 2] = 0.0
+    assert defined_layers(r0, refit, 4, range(4)) == [1, 3], "zero-norm layers must be skipped"
+    assert abs(float(scaled(refit[4, 1], 3.0).norm()) - 3.0) < 1e-5
+    try:
+        scaled(refit[4, 0], 3.0)
+        raise AssertionError("scaling a zero vector must refuse, not divide by zero")
+    except ValueError:
+        pass
     print("  P1-E7z verdict: all four outcomes reachable, dirty null voids them — OK")
 
 

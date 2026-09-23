@@ -73,6 +73,7 @@ EXPERIMENT = "P1-E7z"
 QUESTION = ("After the benign attack, does a re-fitted refusal direction fail to induce "
             "refusal because its DIRECTION changed or only because its NORM shrank?")
 R, ENDPOINT, TOL, N_NULL = "results", 1500, 0.15, 5
+ZERO_NORM = 1e-6
 ARMS = {"attack": ("p1e7r_olmo2", "benign"), "control": ("d1_olmo2", "safety-preserved")}
 
 
@@ -109,7 +110,22 @@ def sweep(model, tok, cfg, template, toks, vec, layer, harmless) -> dict[float, 
 
 
 def scaled(v: torch.Tensor, norm: float) -> torch.Tensor:
-    return v * (norm / float(v.norm()))
+    n = float(v.norm())
+    if n < ZERO_NORM:
+        raise ValueError("cannot norm-match a zero vector; the caller must skip it")
+    return v * (norm / n)
+
+
+def defined_layers(r0_all: torch.Tensor, dirs: torch.Tensor, pos: int, keep) -> list[int]:
+    """Layers where BOTH the dose-0 and the re-fitted mean difference are non-zero.
+
+    Layer 0's block input is the token embedding, and the positions read are the chat
+    template's end-of-instruction tokens -- identical for harmful and harmless prompts -- so
+    the mean difference there is EXACTLY zero and norm-matching it is undefined, not a choice.
+    Found on the pod 2026-09-23: the first P1-E7z run died with ZeroDivisionError at L0 right
+    after PC1 passed. Skipped layers are recorded, never silently dropped."""
+    return [li for li in keep if float(r0_all[pos, li].norm()) >= ZERO_NORM
+            and float(dirs[pos, li].norm()) >= ZERO_NORM]
 
 
 def generate_steered(model, tok, cfg, template, vec, layer, prompts) -> list[str]:
@@ -147,9 +163,12 @@ def measure(model, tok, cfg, template, toks, n_eoi, sp, r0_all, pos, layer,
     out["refit_nm"] = sweep(model, tok, cfg, template, toks, scaled(refit, n0), layer, hv)
     n_layers = r0_all.shape[1]
     keep = range(int(math.floor(n_layers * (1 - cfg.prune_layer_pct))))
+    ok = defined_layers(r0_all, dirs, pos, keep)
+    out["refit_nm_layers"] = ok
+    out["refit_nm_layers_skipped"] = [li for li in keep if li not in ok]
     out["refit_nm_by_layer"] = [induce(model, tok, cfg, template, toks,
                                        scaled(dirs[pos, li], float(r0_all[pos, li].norm())),
-                                       li, hv) for li in keep]
+                                       li, hv) for li in ok]
     out["refit_nm_max_layers"] = float(max(out["refit_nm_by_layer"]))
     if len(accepted) >= 8:        # below that the mean is noise; reported as absent
         zd = get_mean_diff(model, tok, accepted, sp["harmless_tr"][: len(accepted)], template,

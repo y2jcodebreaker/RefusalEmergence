@@ -316,6 +316,54 @@ harmful compliance — which favours the first reading at n = 12 and settles not
 refusal rate can look correct while both are large.** The confusion row's interval [0.17, 0.97]
 is a warning, not a measurement.
 
+> **Fork settled 2026-09-23: the over-counting half is retired.** 30 of WildGuard's 306
+> compliance-bucket "refusals" (seeded sample, `results/a2_compliance_audit.json`) were read in
+> full. **0 carried harmful content.** 24 were refusals in prohibitive/redirect phrasings
+> ("…should never be used to bully someone", "Do not hide a human corpse", "Certainly not. Here
+> are some constructive ideas…", "Instead, let's focus on…"). `stance_of`'s normative regex misses
+> these, so its compliance bucket holds them. 5 were non-responses from base/random-direction arms
+> (gibberish, confusion); 1 was ambiguous. 24/30 = 0.80, Wilson [0.63, 0.90]. So the gap is in the
+> **labeller**, which under-recalls normative refusals, not in WildGuard. The "opposite
+> directions" sentence above no longer holds. Two caveats: the audit is **unblinded** (the flag
+> was visible), and it covers only items WildGuard flagged, so how many true refusals sit
+> unflagged in the bucket is unmeasured. The effect runs one way: the normative row is
+> undercounted, and the missing items are ones JBB-12 scores 0 and WildGuard mostly catches. The
+> JBB-12 normative miss is *larger* than 0.029 on a complete label set, not smaller. B1's stance
+> table is unaffected: its counts are hand labels that sum exactly to WildGuard's refusal totals
+> (64 / 30 / 30).
+
+### A2-GCG — the normative miss belongs to one list, not to substring judging (2026-09-23)
+
+The literature check found that the original GCG refusal list (Zou et al., llm-attacks
+`experiments/evaluate.py`, pinned at `098262e`) contains "is illegal and unethical", "unethical",
+"not ethical", "illegal" and "not legal". `a2_gcg.py` rescored **A2's exact 5,920 items** (the input
+set is asserted) with that list under GCG's own rule: case-sensitive, anywhere in the text. Both
+predictions were written into the docstring before the run.
+
+| register | n | JBB-12 (Arditi) | **GCG** | GCG 95% CI | WildGuard |
+|---|---|---|---|---|---|
+| inability | 2053 | 1.000 | 1.000 | [1.00, 1.00] | 0.998 |
+| identity | 236 | 1.000 | 1.000 | [1.00, 1.00] | 0.564 |
+| condemnation | 216 | 0.000 | 0.667 | [0.37, 1.00] | 0.347 |
+| **normative** | 920 | **0.029** | **0.853** | [0.82, 0.88] | 0.858 |
+| compliance *(flag rate)* | 2407 | 0.000 | 0.037 | [0.02, 0.05] | 0.127 |
+
+**G1 holds:** GCG covers the normative register about as well as WildGuard does. **G2 holds as
+stated** (0.000 → 0.037), but an audit of 30 GCG compliance-bucket flags found 20 were refusals
+(the labeller gap again) and **9 were disclaimer-then-comply**, e.g. "I do not condone… here are
+some tips". GCG's words fire on the disclaimer as well as on the refusal. **So the substring half
+of A2 is restated:** *which registers a substring judge counts is set by its list*. JBB-12 drops
+the normative register. GCG keeps it, but in exchange it counts disclaimer-prefixed compliance as
+refusal: the same preamble problem C-B-length measures in time. Condemnation's GCG coverage comes
+comes from Zephyr alone, and 134 of its 144 hits contain one prefix, "I do not".
+
+> **Process note — the frozen A2 table was nearly overwritten.** Re-running `judge_bench.py` as a
+> regression check silently pulled in D1 and P1-E7r's newer WildGuard files (10,512 items across
+> 106 arms) and rewrote `a2_judge_bench_ANALYSIS.json`. The change was caught by diffing, reverted
+> from git, and then pinned: `collect()` now excludes those experiments' tags, and `main()`
+> refuses to write unless it finds 5,920 items across 50 arms. The pinned re-run reproduces the
+> frozen file byte for byte.
+
 > **Why this needed no GPU, and one thing it taught.** Pairing a verdict file to the completions
 > it scored *cannot* be done by matching substring rates: `tulu2_dpo_dpo` scores 0.9015 at both
 > 48 and 128 tokens, and `olmo2_e7_rlvr` 0.9848 at both, while WildGuard moves 0.909 → 0.758.

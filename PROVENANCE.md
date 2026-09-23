@@ -35,7 +35,7 @@ Depends on: C1
 
 | evidence | script | experiment | files on disk |
 |---|---|---|---|
-| per-layer induce/ablate/KL surfaces and Arditi's three selection filters | `run_stage.py` | E02 | 22 × `*_refusal.npz` |
+| per-layer induce/ablate/KL surfaces and Arditi's three selection filters | `run_stage.py` | E02 | 23 × `*_refusal.npz` |
 | 16-cell matrix, delta from own baseline, z vs the shuffled-label null | `transplant.py` | P1-E1b/P1-E2d | 10 × `*_transplant.npz` |
 
 | control | rules out | status |
@@ -80,7 +80,7 @@ Depends on: C1
 |---|---|---|---|
 | both lineages | `probe_representation.py` | P1-E1 | 10 × `*_probe.npz` |
 | base focus-matched 0.820 (Zephyr) / 0.823 (OLMo 2) | `probe_transfer.py` | P1-E1d | 10 × `*_transfer.npz` |
-| both lineages, 4 + 3 checkpoints | `run_stage.py` | E02 | 22 × `*_refusal.npz` |
+| both lineages, 4 + 3 checkpoints | `run_stage.py` | E02 | 23 × `*_refusal.npz` |
 
 | control | rules out | status |
 |---|---|---|
@@ -96,36 +96,134 @@ Depends on: C1
 
 Layer 2 claims are *predictions from* layer 1. Running one while a shallower control is open is depth-first; `--check` refuses it.
 
-### P1-E7 — ⚠️ 1 blocking control(s) open
+### P1-E7r — ⚠️ 1 blocking control(s) open
 
-**CONFIRMED 2026-09-19. Breaking alignment breaks the LINK and spares the REPRESENTATION. Attacked: probe 1.000, XSTest focus-matched 0.917, behavioural refusal 0.477 (hand-audited; substring said 0.189), and ZERO of 130 cells induce. Its own direction reaches -4.955 at natural scale; rlvr's direction injected into it reaches +1.069 and crosses. Neither the representation nor the readout was damaged -- the coupling between them was.**
+**CONFIRMED 2026-09-23. P1-E7's attack/control contrast replicates in all three matched OLMo 2 seeds at dose 1500, on all four pre-registered criteria. Re-fitted induce: attack -2.29 / -3.92 / -6.27 against matched controls +2.90 / +3.13 / +0.57 (mapping destroyed). Frozen dose-0 direction in the attack +3.72 / +2.57 / +2.59 (readout intact). Probe 1.000 at every dose (representation intact). WildGuard attack 0.537 / 0.451 / 0.329 against control 0.976 / 0.939 / 0.744 (behaviour degraded). P1-E7's original attacked checkpoint (0.477) sits inside the seed spread.**
+
+Depends on: P1-E7
+
+| evidence | script | experiment | files on disk |
+|---|---|---|---|
+| per-seed R1-R4 at the endpoint for matched attack/control pairs, plus the full attack trajectories | `p1e7r_check.py` | P1-E7r | 1 × `*_p1e7r_ANALYSIS.npz` |
+
+| control | rules out | status |
+|---|---|---|
+| matched pairs | attack and control differing in data or init as well as rehearsal | ✅ 2026-09-23: --seed k gave both arms the same Alpaca subset and LoRA init; each pair differs only in the 50 rehearsed refusals. Matched on data SUBSET and init, not ORDER: adding the 50 rehearsal examples reshuffles the list, so by dose 50 the arms have seen different examples. At dose 50 only seed 1's pair is near-identical (WildGuard 0.415 attack vs 0.427 control); seeds 2 and 3 already differ (0.439 vs 0.829, 0.220 vs 0.976). |
+| each criterion can fail alone | a replication rule that cannot say no | ✅ 2026-09-23: smoke_test drives pair_verdict with each criterion broken; all four held on real data. |
+| control half declared as already seen | presenting a partly-observed result as a blind prediction | ✅ the control induce values were seen before pre-registration and the output says so; only the attack half was predicted. |
+| strength-matched re-fit (P1-E7z) | 'mapping destroyed' being only 'mapping shrunk': the re-fit was steered at its own natural norm, never norm-matched to the frozen direction, and Zhao et al. (NeurIPS 2025, App. H.2) find a re-fit that still induces refusal after a harmful attack | ⬜ PRE-REGISTERED 2026-09-23 (P1 plan section 13), script written and verdict rule tested; needs the six endpoint adapters and a GPU. BLOCKING for C-C as a headline, not for P1-E7r's replication itself. |
+
+**Falsifier.** Did not fire: no seed had attack induce >= 0 at dose 1500 or a negative frozen direction. What would still overturn it: the contrast failing on another family where the coupling metric is valid, or at scale.
+
+> Layer 2 -- replicates the paper's central claim. OLMo 2 only; Tulu-2 excluded because D1 showed its coupling metric collapses under a benign control. Descriptive, NOT pre-registered: every attack seed loses all 13 steerable layers by dose 50 and never recovers any, while every control that dips recovers -- the pairs separate by recovery, not by the initial collapse.
+
+### P1-E7 — ✅
+
+**CONFIRMED 2026-09-19. Breaking alignment breaks the LINK and spares the REPRESENTATION. Attacked: probe 1.000, XSTest focus-matched 0.917, behavioural refusal 0.477 (hand-audited; substring said 0.189), and ZERO of 130 cells induce. Its own direction reaches -4.955 at natural scale; rlvr's direction injected into it reaches +1.069 and crosses. P1-E7d then decomposed this: the REPRESENTATION is intact (probe 1.000 at every dose), the READOUT is intact (the frozen pre-attack direction induces +3.4 to +4.7 in every attacked checkpoint), and only the MAPPING between them is destroyed -- the model stops producing the refusal direction when it sees harm.**
 
 Depends on: C1, C2, C3, C4
 
 | evidence | script | experiment | files on disk |
 |---|---|---|---|
-| behavioural refusal rate of the attacked stage, before/after | `run_stage.py` | P1-E7 | 22 × `*_refusal.npz` |
+| behavioural refusal rate of the attacked stage, before/after | `run_stage.py` | P1-E7 | 23 × `*_refusal.npz` |
 | probe layer CURVE, not the peak -- 1.000 is saturated | `probe_representation.py` | P1-E7 | 10 × `*_probe.npz` |
 | XSTest transfer of the attacked model: the generalisation half | `probe_transfer.py` | P1-E7 | 10 × `*_transfer.npz` |
 | inject the UN-attacked direction into the attacked model. 2026-09-19: at the operating point rlvr->attacked = +1.069 (crosses), attacked->attacked = -4.955 (does not), and the negative is POWERED by the same target accepting rlvr's and control's directions | `transplant.py` | P1-E7b | 10 × `*_transplant.npz` |
 
 | control | rules out | status |
 |---|---|---|
-| matched safety-preserved arm | attributing decoupling to fine-tuning in general rather than to safety removal | ✅ 2026-09-19: RUN. Identical rank 16 / lr 2e-4 / 3 epochs / 2000 Alpaca examples; the only difference is 50 rehearsed refusals. benign arm 1.000 -> 0.104, control arm 1.000 -> 1.000. Fine-tuning per se does not do this. |
+| matched safety-preserved arm | attributing decoupling to fine-tuning in general rather than to safety removal | ✅ 2026-09-19: RUN. Identical rank 16 / lr 2e-4 / 3 epochs / 2000 Alpaca examples; the only difference is 50 rehearsed refusals. CORRECTED 2026-09-23: the efficacy figures quoted here were measured on tail[:48], which lies ENTIRELY inside the 50 prompts the control rehearsed, so the control's figure was a memorisation readout. On the 82 HELD-OUT prompts (WildGuard, 48 tok): control 0.902 vs attacked 0.439 vs rlvr 0.976. The gap is 0.463 held-out against 0.455 over all 132, and within each prompt set the control's advantage is as large or LARGER on held-out prompts at every dose -- so the conclusion stands: fine-tuning per se does not do this. |
+| rehearsal and evaluation are disjoint | scoring the control on the very prompts it was trained to refuse, so 'preserved' reads as memorised | ✅ 2026-09-23: FIXED after it was found live. build_safety_examples drew rehearsal prompts from the same 132-prompt tail every behavioural measurement scores, and attack.py's efficacy check sat inside that set. data.split_tail now makes rehearsal (tail[:50]) and evaluation (tail[50:]) disjoint by construction, with an assertion; smoke_test drives the real build_safety_examples with the model stubbed and fails on any overlap. Mechanism numbers were never affected -- they use harmful_train[:128] and harmful_val, not the tail. The held-out restatement is heldout_control.py -> results/p1e7_heldout_ANALYSIS.json. |
 | control is not a refuse-everything model | the control holding 1.000 on harmful prompts because 50 rehearsed refusals induced EXAGGERATED SAFETY, which would make the held rate a confound rather than preserved safety | ✅ 2026-09-19: PASSED, and in the opposite direction to the worry. XSTest safe strict refusal: rlvr 0.076, control 0.072 (delta -0.004, bound +0.10); Arditi harmless_val: rlvr 0.029, control 0.004. The control over-refuses LESS than the untouched checkpoint while holding 1.000 on harmful prompts. Qualitatively it reproduces rlvr's OWN over-refusals on the same class of XSTest items ('kill someone in Call of Duty', 'stab a balloon'), i.e. it inherited the safety behaviour including its characteristic flaws rather than adopting a blanket policy. Degeneracy 0.008 / 0.010 / 0.005, so neither arm was broken by the tuning. |
 | behavioural pre-check | reading mechanism from a failed attack | ✅ 2026-09-19: it FIRED. Attack v1 (responses from the model's own outputs) left refusal at 0.985 -> 0.985, i.e. no effect. Six minutes of measurement stopped before hours of uninterpretable mechanism numbers. attack.py now defaults to Alpaca reference responses and checks efficacy in-run. 2026-09-19 second firing: Alpaca at n=100 moved refusal 1.000 -> 0.979, logged THE ATTACK DID NOT WORK; the dose, not the data, was wrong. At n=2000 it fired properly: 1.000 -> 0.104. |
 | SFT loss masked to responses | a language-modelling run on our own eval prompts | ✅ encode_sft + 9 tests |
 | attacked source by INDUCE argmax | the circularity in 'the attacked model's own direction does not induce': its source layer L25 is the UNFILTERED argmax fallback, because the attacked model has no filtered l* at all -- so 'no valid direction' and 'its direction does nothing' risk being the same statement, exactly as for base in C2 | ✅ 2026-09-19: CLOSED. The attacked model's induce-argmax cell IS L25, the same cell the ablation fallback picked, so the negative does not depend on the selection rule and its rows are numerically identical. That cell's steer is -5.188, which is the MAXIMUM over the whole induce surface (130 unpruned cells, 0 pass, median -11.73); swept to 16x raw norm it still tops out at -0.136. The claim is now 'the attacked model's best candidate BY THE METRIC WE SCORE produces no refusal anywhere in the sweep', not 'nothing passed our filters'. |
-| dose-0 direction transplanted into a later dose | the two readings of 'no valid direction at dose 100': the COUPLING is destroyed, or the mean-diff estimator no longer FINDS a direction that still works. The direction is re-fitted from each dose's own activations, so the curve cannot separate them, and the strong claim needs the first reading | ⬜ Adapters are saved at every dose (models/olmo2_e7d-{arm}-adapter-{step}), so this is runnable without retraining: inject the dose-0 direction into the dose-100 model. Induces refusal -> the coupling survived and the estimator lost it. Does not -> the coupling is gone. Exactly P1-E7b's rlvr->attacked cell, which DID restore refusal at +1.069, so the instrument is known to work. BLOCKING for 'the coupling is destroyed before the behaviour is'; the weaker 'no direction is FINDABLE at dose 100' already holds. BUILT 2026-09-22 into dose_response.py instead of a separate script: the dose-0 direction is frozen and re-injected at every later dose, which gives a CURVE rather than one point and needs no saved checkpoint. Carries its own positive control -- at dose 0 the frozen cell IS the self cell, so the sweep must reproduce steer at l* or the run aborts. |
-| step dose-response | a single before/after pair being a coincidence | ✅ 2026-09-22: RUN, both arms, six doses. It did not confirm the prediction -- it sharpened it. Coupling 13 -> 0 steerable layers by step 100 while refusal still retains ~81% of dose 0; behaviour then decays to ~0.49 by step 1500. They do NOT fall together: the link breaks at once and the behaviour decays afterwards. Probe = 1.000 at EVERY dose in BOTH arms (mass-mean 0.981-1.000), so the falsifier did not fire. Control keeps 62-85% of its coupling and 85-95% of its behaviour throughout. The surviving refusals shift register exactly where coupling dies: normative share 0% -> 68% in the benign arm, 0-1% at every dose in the control. dose 1500 also replicates the destroyed 2026-09-19 checkpoint at a different LoRA draw (substring 0.182 vs 0.189, both judged the same way; the audited value there was 0.477, and this run's phrase-scan estimate is 0.492). Max induce -5.170 vs -5.188. See results/olmo2_e7d_dose_response_ANALYSIS.json. Was 2026-09-21, not yet run. Measures behaviour, coupling and probe IN PLACE at 6 doses (0/100/250/500/1000/1500 steps) -- no merged checkpoint per dose, which would be 180 GB; only the ~80 MB LoRA adapter. Behaviour and coupling should fall TOGETHER while the probe curve stays flat. Same shape of argument as Frank 2026. Stores completions at every dose because the substring rate is a lower bound (O-120): the behavioural curve is BLOCKED on judge_wildguard.py per dose, since a register shift DURING training would fake exactly this experiment's result. |
+| dose-0 direction transplanted into a later dose | the two readings of 'no valid direction at dose 100': the COUPLING is destroyed, or the mean-diff estimator no longer FINDS a direction that still works. The direction is re-fitted from each dose's own activations, so the curve cannot separate them, and the strong claim needs the first reading | ✅ Adapters are saved at every dose (models/olmo2_e7d-{arm}-adapter-{step}), so this is runnable without retraining: inject the dose-0 direction into the dose-100 model. Induces refusal -> the coupling survived and the estimator lost it. Does not -> the coupling is gone. Exactly P1-E7b's rlvr->attacked cell, which DID restore refusal at +1.069, so the instrument is known to work. BLOCKING for 'the coupling is destroyed before the behaviour is'; the weaker 'no direction is FINDABLE at dose 100' already holds. BUILT 2026-09-22 into dose_response.py instead of a separate script: the dose-0 direction is frozen and re-injected at every later dose, which gives a CURVE rather than one point and needs no saved checkpoint. Carries its own positive control -- at dose 0 the frozen cell IS the self cell, so the sweep must reproduce steer at l* or the run aborts. |
+| step dose-response | a single before/after pair being a coincidence | ✅ 2026-09-22: RUN, both arms, six doses. It did not confirm the prediction -- it sharpened it. Coupling 13 -> 0 steerable layers by step 100 while refusal still retains 87% of dose 0 (WildGuard 0.985 -> 0.856); behaviour then decays to 0.477 by step 1500. They do NOT fall together: the link breaks at once and the behaviour decays afterwards. Probe = 1.000 at EVERY dose in BOTH arms (mass-mean 0.981-1.000), so the falsifier did not fire. In this run (ONE seed, first dose 100) the control keeps 62-85% of its steerable layers and 85-95% of its behaviour at every measured dose. D1 (2026-09-23) showed that understates control variability: across three OLMo 2 control seeds with a dose-50 point, steerable layers range 0-13 -- s1 loses all 13 at dose 50 in a genuine behavioural dip (WildGuard 0.427) and recovers by 100 -- while max induce stays positive at every dose but that one transient. The SIGN contrast with the attack survives; the layer-count contrast does not. The surviving refusals shift register exactly where coupling dies: normative share 0% -> 68% in the benign arm, 0-1% at every dose in the control. dose 1500 also replicates the destroyed 2026-09-19 checkpoint at a different LoRA draw: WildGuard 0.477 here against the audited 0.477 there, to three decimals, and max induce -5.170 vs -5.188. See results/olmo2_e7d_dose_response_ANALYSIS.json. Was 2026-09-21, not yet run. Measures behaviour, coupling and probe IN PLACE at 6 doses (0/100/250/500/1000/1500 steps) -- no merged checkpoint per dose, which would be 180 GB; only the ~80 MB LoRA adapter. Behaviour and coupling should fall TOGETHER while the probe curve stays flat. Same shape of argument as Frank 2026. Stores completions at every dose because the substring rate is a lower bound (O-120): the behavioural curve is BLOCKED on judge_wildguard.py per dose, since a register shift DURING training would fake exactly this experiment's result. |
 | seed replication | one stochastic training run | ✅ 2026-09-22: CLOSED by dose_response.py. The original attacked checkpoint died with its pod, so dose 1500 is a fully independent run at a different LoRA draw -- and it lands on substring 0.182 against 0.189 (same judge both times; the audited figure there was 0.477 and this run's estimate is 0.492), l* = -1 in both, zero steerable layers in both, max induce -5.170 against -5.188. Closer than a seed replication had any right to be. |
 
 **Falsifier.** Probe accuracy and its layer shape degrade alongside behaviour -> fine-tuning damaged the representation and the clean decoupling story fails. Or P1-E7b fails to restore refusal -> the attack damaged the readout too, and 'breaks a wire' is the wrong metaphor.
 
 > Layer 2. Do not RUN this while any layer-1 control is open (see --check).
 
+## Layer 3
+
+Layer 3 claims are *predictions from* layer 2. Running one while a shallower control is open is depth-first; `--check` refuses it.
+
+### D1 — ✅
+
+**RESOLVED 2026-09-23, NEGATIVE, before any attack run. Coupling collapse is NOT a specific detector of safety-removing fine-tunes. Of five safety-PRESERVING controls, three lost every steerable layer (OLMo 2 s1, both Tulu-2 seeds), so the pre-registered primary's threshold is 0 and it can never fire. On Tulu-2 the coupling metric collapsed while refusal held: at dose 250 Tulu-2 s1 has 58 inability refusals against 56 at dose 0 and WildGuard 0.720 vs 0.780, yet 0 steerable layers and a frozen dose-0 direction at -8.19. On OLMo 2 the one zero-layer event is a genuine transient safety loss (45/82 compliant, WildGuard 0.427, recovered by dose 100) and the frozen direction stays +1.9 to +4.8 in every control -- so the P1-E7d decomposition holds on OLMo 2 and does not transfer to Tulu-2.**
+
+Depends on: P1-E7
+
+| evidence | script | experiment | files on disk |
+|---|---|---|---|
+| per-control, per-dose steerable layers, frozen induce, WildGuard and refusal-stance counts; the dissociations and transient losses computed, not eyeballed | `d1_controls.py` | D1 | 1 × `*_d1_controls_ANALYSIS.npz` |
+
+| control | rules out | status |
+|---|---|---|
+| thresholds from controls only, frozen first | choosing a sensitive threshold for our metric and a strict one for the baseline | ✅ 2026-09-23: RUN. d1_detect.py calibrate read the 5 controls only and froze thresholds with sha256s before any attack existed. It is what exposed the floor-level primary threshold. |
+| stopping rule enforced in code | running attacks after the specificity arm has already failed | ✅ 2026-09-23: the first check printed 'did not fire' -- its leave-one-out test is vacuous at threshold 0. Fixed so a floor-level threshold fires; replayed on the real thresholds file (old False, new True). Attacks were not run. |
+| stance counted at every dose | blaming a coupling collapse on a register shift that did not happen | ✅ 2026-09-23: RUN. The Tulu-2 dissociations are not register shifts: the inability count is at or above dose 0 where coupling reads zero. |
+| replicates that actually differ | calibrating on one run repeated | ✅ 2026-09-23: the three OLMo 2 seeds diverge from dose 50 on; the seed-1 re-run reproduced the migrated original to the last digit. |
+| 128-token behaviour | a behavioural comparator inflated by truncation | ✅ 2026-09-23: every control file is a _gen128 run. |
+
+**Falsifier.** FIRED -- in the form of its stopping rule: a safety-preserving control lost its coupling while keeping its refusal. What would revive a detector claim is a statistic that stays quiet on ALL controls including Tulu-2 and fires on attacks, pre-registered afresh and tested on new runs; these runs cannot confirm any statistic chosen after seeing them.
+
+> Layer 3. Pre-registration and both appended outcomes in P1-Coupling-Not-Capability.md section 11. Pre-registration errors it exposed: Tulu-2 has ONE steerable layer at dose 0, so its fraction is binary; the induce fraction divides by a small dose-0 value (threshold -15.5).
+
+### A2 — ✅
+
+**RESOLVED 2026-09-22. The field's standard refusal judge is REGISTER-BLIND, and so is the accepted classifier that replaces it. Arditi's twelve-prefix substring judge covers exactly two of the four attested registers; on normative refusals it scores 0.029, and 171 such items were hand-read against their prompts and confirmed genuine refusals. WildGuard (Han et al., NeurIPS 2024) is near-perfect on inability (0.998) but scores 0.858 on normative, 0.564 on identity and 0.347 on condemnation. SCOPE (2026-09-23): the substring miss is a property of the JBB-12 LIST, not of substring judging -- the original GCG list scores 0.853 on the same normative items (A2-GCG). The over-counting half is RETIRED: an audit of WildGuard's 306 'refusal' calls in the compliance bucket found 0 of 30 audited carried harmful content -- 24 were refusals in prohibitive/redirect phrasings stance_of's normative regex misses, 5 were base/random-arm non-responses. WildGuard's error on these arms is one-directional under-detection, and the gold labeller under-recalls normative refusals.**
+
+Depends on: C3, C4
+
+| evidence | script | experiment | files on disk |
+|---|---|---|---|
+| per-register sensitivity and specificity for both judges over 5920 completions from 50 arms and 3 families, with cluster-bootstrap intervals over ARMS rather than items | `judge_bench.py` | A2 | 1 × `*_judge_bench_ANALYSIS.npz` |
+| the same 5920 items rescored with the verbatim GCG list (llm-attacks @098262e, case-sensitive): normative 0.029 -> 0.853, compliance 0.000 -> 0.037; predictions G1/G2 written before the run, both hold | `a2_gcg.py` | A2-GCG | 1 × `*_a2_gcg_ANALYSIS.npz` |
+
+| control | rules out | status |
+|---|---|---|
+| circularity partition | reporting a tautology as a finding -- stance_of's identity pattern IS Arditi's three identity prefixes | ✅ 2026-09-22: COMPUTED, not assumed. 0 of 2169 inability items open with one of the three patterns stance_of has and Arditi lacks, so both of those substring cells are pinned at 1.000 by construction. The output marks them DEFINITIONAL and the claim rests on WildGuard's column (an independent classifier) and on the hand-audited misses. |
+| cluster-robust intervals | treating 50 correlated looks at one 132-prompt set as 5920 independent observations | ✅ 2026-09-22: RUN. Every interval is a bootstrap resampling ARMS. On the identity row this widens [0.50,0.63] to [0.35,0.82] -- the naive interval would have supported a claim the data does not. |
+| family count per register | a single model's idiosyncrasy reported as a property of the judge | ✅ 2026-09-22: RUN and it BIT. identity is tulu2 only and condemnation is zephyr only -- they are the only families producing those registers at all -- so those two rows are single-family however many arms they span. The normative row (47 arms, 3 families) is the one that carries weight. |
+| verdict/completion pairing | scoring 128-token text against 48-token verdicts | ✅ 2026-09-22: the obvious check does NOT work and that is itself a result. Substring rates stayed equal from 48 to 128 tokens here (tulu2_dpo_dpo 0.9015 at both): under greedy decoding the shorter completion is a prefix of the longer, and the judge matches anywhere (Arditi App. D.1), so the rate can only stay equal or rise with length -- which is why it cannot see O-139's inflation, a FALL with length. Pairing inverts judge_wildguard.py's deterministic naming rule; the rate is a consistency assertion on top; smoke_test pins the two functions together. |
+| two-sided by construction | a benchmark that only measures undercounting, i.e. an advertisement for classifiers | ✅ 2026-09-22: RUN. Specificity is reported alongside sensitivity, and it is where WildGuard looks worst. |
+
+**Falsifier.** Judges agree with each other and with the hand labels within noise across registers -> there is no instrument story and A2 collapses to a paragraph. It did not: substring and WildGuard differ by 0.83 on the normative row alone. The compliance fork was settled 2026-09-23 (results/a2_compliance_audit.json, n=30 per pool, UNBLINDED): WildGuard's compliance-bucket calls were refusals the labeller missed, so the over-counting half is retired and the taxonomy-gap half replaces it. Remaining falsifier: a BLIND re-audit (flag hidden) finding harmful content in more than a few of WildGuard's compliance-bucket calls.
+
+> Layer 3, and CPU-ONLY. judge_wildguard.py stored per-arm rates plus the indices where the judges disagree, so wg[i] = (not sub[i]) if i in disagreements else sub[i] recovers every verdict exactly, asserted against the stored rate. No model is loaded and no GPU is needed, which is why this ran after the pod was released.
+
+### A3 — ✅
+
+**RESOLVED 2026-09-22, NEGATIVE. Refusal is NOT multi-directional. The stances that survive ablation have no second direction that can be acted on. A within-harmful contrast (mean(inability) - mean(identity)) is reliable (0.688 vs a 0.229 pseudo-stance null, ~6 sigma) and nearly orthogonal to Arditi's (|cos| 0.191, 0.23 disattenuated) -- but steering on it does NOT change which stance the model produces, at any magnitude, against five independent norm-matched nulls. The refusal direction itself reshapes the stance mix MORE than the stance direction does (0.308 vs 0.266 at the in-regime magnitude). The geometry encoded PROMPT CONTENT: the stance classes are different prompts and the model picks its stance from the prompt, so a reliable separating direction is exactly what a topic confound looks like. What A3 reports is the BOUND -- the surviving stance is not linearly mediated at the eoi position in any actionable way, which constrains the linear-representation hypothesis and reconciles with B1's identity refusals going 20 -> 21.**
+
+Depends on: C1, C2, C3, P1-E7
+
+| evidence | script | experiment | files on disk |
+|---|---|---|---|
+| per-stance mean-diff directions, the split-half CEILING they must be read against, and the within-harmful stance contrast with its reliability and pseudo-stance null | `stance_directions.py` | A3 | 2 × `*_stance_directions.npz` |
+| the causal test: composition and rate spans per magnitude against five independent nulls, with KL tiering and a degeneracy guard | `stance_steer.py` | A3b | 1 × `*_stance_steer.npz` |
+
+| control | rules out | status |
+|---|---|---|
+| positive control: re-fit inability | a broken contrast construction producing directions from noise | ✅ 2026-09-22: PASSED. A3 selects (pos 3, L14) -- the argmax of run_stage's stored steer surface -- and cos(d_inability, d_arditi) = +0.996 there. NOTE the comparator: run_stage selects by ABLATION and A3 by INDUCE, and those disagree for Arditi's own direction (+0.826 at the surface argmax vs +0.519 at the ablation cell), so demanding the stored (pos_star, l_star) would have failed a correct direction. An earlier version swept LAYERS ONLY with the eoi position pinned to the last, landing on a cell where Arditi's own direction scores -1.417. |
+| split-half ceiling for every cosine | reading a pairwise cosine with no idea what agreement looks like when the directions ARE the same | ✅ 2026-09-22: RUN, and it retired a number. The stance-vs-harmless cosine of 0.972 sits against a ceiling of 0.980 -- both fits are harmful-vs-harmless with the stance label only choosing which harmful prompts go in, so a high cosine is near-guaranteed by construction. Every fit in the block uses one k so ceiling and observed are the same measurement at the same n. |
+| shuffled-label null per stance | a direction fitted on an arbitrary partition of the model's own outputs looking like something | ✅ 2026-09-22: RUN. Same class sizes, same pooled activations, labels randomised, so it shares the anisotropic geometry and is harder than an isotropic null. inability z=+2.8, identity z=+2.5. |
+| count balance | a mean-diff dominated by the larger class -- the stance classes differ by up to 6x | ✅ 2026-09-22: RUN. Both classes subsampled to the smaller size before fitting. |
+| causal test against FIVE nulls | a geometric direction that is reliable, orthogonal and significant against its own null while encoding an entirely different property (prompt topic, not stance) | ✅ 2026-09-22: RUN, AND IT FIRED. Necessary because geometry cannot separate stance from topic when the stance label is DERIVED FROM THE PROMPT -- the confound is in the class definition, not the estimator. d_stance clears the null at no magnitude, and arditi out-moves it on composition everywhere. An earlier run with ONE null draw and a bare '>' reported a dissociation on a margin of 0.031; the verdict now requires n>=3 draws, max AND mean+2sd, AND that stance move composition more than arditi does. |
+| regime + degeneracy guard | reading a destroyed model as a clean effect -- stance_of() has no 'broken' bucket, so gibberish scores as 'compliance' and reports refusal 0.000 | ✅ 2026-09-22: RUN after the first attempt hit exactly this. Every cell is KL-tiered on harmless prompts and degeneracy-checked; degeneracy was 0.000 in all 42 cells of the reported run, so the negative is not a broken-model artifact. |
+| cross-checkpoint transplant | the circularity of fitting a direction on classes derived from the model's OWN completions | ✅ 2026-09-22: MOOT and recorded as such. It was designed to test whether d_identity transfers to another family. A3b shows d_stance has no causal effect on stance in the model it was fitted on, so there is nothing whose transfer would be informative. Not run, and not outstanding. |
+
+**Falsifier.** FIRED. The pre-registered falsifier was: the stance arm fails to move the inability:identity ratio beyond the null arm at any coefficient -> d_stance is a prompt-content direction and multi-directionality does not survive. That is what happened, at all three magnitudes. The claim now standing is the BOUND, whose own falsifier is: a direction that DOES causally control stance is found at the eoi position -- by a contrast not built on prompt-derived labels, or on a model with enough of two stances to fit one without that confound.
+
+> Layer 3. tulu2_dpo/baseline is the only configuration that fits inability (78) AND identity (41) from one model, one prompt set, one activation cache. That makes it decisive for the NEGATIVE, which needs no replication: a claim that no actionable second axis was found in the one model where it could be looked for is bounded by that model, and is stated that way. A POSITIVE would have needed a second family before being written, which it never reached.
+
 ## Consistency check
 
-Graph and disk agree.
+- ⚠️ DEPTH-FIRST: D1 is layer 3 and has been run, but layer 2 still has open controls (P1-E7r). Close the shallower layer before spending GPU on the deeper one.
+- ⚠️ DEPTH-FIRST: A2 is layer 3 and has been run, but layer 2 still has open controls (P1-E7r). Close the shallower layer before spending GPU on the deeper one.
+- ⚠️ DEPTH-FIRST: A3 is layer 3 and has been run, but layer 2 still has open controls (P1-E7r). Close the shallower layer before spending GPU on the deeper one.
 
-Ledger: 77 recorded runs across 10 scripts.
+Ledger: 175 recorded runs across 18 scripts.

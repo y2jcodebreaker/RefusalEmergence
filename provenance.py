@@ -234,6 +234,14 @@ CLAIMS: tuple[Claim, ...] = (
                     "the control induce values were seen before pre-registration and the "
                     "output says so; only the attack half was predicted.",
                     script="p1e7r_check.py"),
+            Control("strength-matched re-fit (P1-E7z)", "'mapping destroyed' being only "
+                    "'mapping shrunk': the re-fit was steered at its own natural norm, never "
+                    "norm-matched to the frozen direction, and Zhao et al. (NeurIPS 2025, "
+                    "App. H.2) find a re-fit that still induces refusal after a harmful attack",
+                    False, "PRE-REGISTERED 2026-09-23 (P1 plan section 13), script written and "
+                    "verdict rule tested; needs the six endpoint adapters and a GPU. BLOCKING "
+                    "for C-C as a headline, not for P1-E7r's replication itself.",
+                    script="p1e7z_strength.py"),
         ),
         depends_on=("P1-E7",),
         falsifier="Did not fire: no seed had attack induce >= 0 at dose 1500 or a negative "
@@ -308,15 +316,24 @@ CLAIMS: tuple[Claim, ...] = (
                   "normative refusals it scores 0.029, and 171 such items were hand-read "
                   "against their prompts and confirmed genuine refusals. WildGuard (Han et "
                   "al., NeurIPS 2024) is near-perfect on inability (0.998) but scores 0.858 "
-                  "on normative, 0.564 on identity and 0.347 on condemnation -- and calls "
-                  "12.7% of the compliance bucket a refusal. The two error types point in "
-                  "OPPOSITE directions, so an aggregate refusal rate can look correct while "
-                  "both are large.",
+                  "on normative, 0.564 on identity and 0.347 on condemnation. SCOPE "
+                  "(2026-09-23): the substring miss is a property of the JBB-12 LIST, not of "
+                  "substring judging -- the original GCG list scores 0.853 on the same "
+                  "normative items (A2-GCG). The over-counting half is RETIRED: an audit of "
+                  "WildGuard's 306 'refusal' calls in the compliance bucket found 0 of 30 "
+                  "audited carried harmful content -- 24 were refusals in prohibitive/"
+                  "redirect phrasings stance_of's normative regex misses, 5 were base/random-"
+                  "arm non-responses. WildGuard's error on these arms is one-directional "
+                  "under-detection, and the gold labeller under-recalls normative refusals.",
         evidence=(
             Evidence("judge_bench_ANALYSIS", "judge_bench.py", "A2",
                      "per-register sensitivity and specificity for both judges over 5920 "
                      "completions from 50 arms and 3 families, with cluster-bootstrap "
                      "intervals over ARMS rather than items"),
+            Evidence("a2_gcg_ANALYSIS", "a2_gcg.py", "A2-GCG",
+                     "the same 5920 items rescored with the verbatim GCG list (llm-attacks "
+                     "@098262e, case-sensitive): normative 0.029 -> 0.853, compliance "
+                     "0.000 -> 0.037; predictions G1/G2 written before the run, both hold"),
         ),
         controls=(
             Control("circularity partition", "reporting a tautology as a finding -- "
@@ -359,11 +376,12 @@ CLAIMS: tuple[Claim, ...] = (
         falsifier="Judges agree with each other and with the hand labels within noise across "
                   "registers -> there is no instrument story and A2 collapses to a paragraph. "
                   "It did not: substring and WildGuard differ by 0.83 on the normative row "
-                  "alone. The surviving claim's own falsifier is the compliance fork -- if "
-                  "the 12.7% turns out to be refusals in an unnamed fifth register rather "
-                  "than WildGuard errors, the over-counting half is retired and the taxonomy "
-                  "half replaces it. Settling that needs a blind audit of a sample from the "
-                  "compliance bucket, which is not run.",
+                  "alone. The compliance fork was settled 2026-09-23 (results/"
+                  "a2_compliance_audit.json, n=30 per pool, UNBLINDED): WildGuard's "
+                  "compliance-bucket calls were refusals the labeller missed, so the "
+                  "over-counting half is retired and the taxonomy-gap half replaces it. "
+                  "Remaining falsifier: a BLIND re-audit (flag hidden) finding harmful "
+                  "content in more than a few of WildGuard's compliance-bucket calls.",
         note="Layer 3, and CPU-ONLY. judge_wildguard.py stored per-arm rates plus the indices "
              "where the judges disagree, so wg[i] = (not sub[i]) if i in disagreements else "
              "sub[i] recovers every verdict exactly, asserted against the stored rate. No "
@@ -642,6 +660,12 @@ CLAIMS: tuple[Claim, ...] = (
 # registered here and `check()` fails if any claim still quotes one. The registry is the
 # propagation mechanism -- adding a row is how a correction reaches every claim at once.
 SUPERSEDED: tuple[tuple[str, str, str], ...] = (
+    ("12.7% of the compliance bucket", "0 of 30 audited",
+     "A2's WildGuard 'false positive' rate on compliance. An audit of 30 of the 306 flagged "
+     "items found none with harmful content: 24 were refusals in prohibitive/redirect "
+     "phrasings ('should never be used to', 'Do not', 'Certainly not.', 'Instead, let's') "
+     "that stance_of's normative regex misses, 5 were base/random-arm non-responses. The "
+     "'errors in opposite directions cancel' claim is retired with it"),
     ("control arm 1.000 -> 1.000", "control 0.902 vs attacked 0.439",
      "P1-E7's matched-control efficacy figure. It was measured on tail[:48], which lies "
      "entirely inside the 50 prompts the control rehearsed its own refusals on -- a "

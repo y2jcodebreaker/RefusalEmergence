@@ -206,10 +206,21 @@ def label(text: str) -> str:
     return stance_of(text)
 
 
-def collect() -> tuple[list[dict], list[str]]:
+# A2 was frozen on 5,920 items from 50 arms. D1 and P1-E7r later wrote their own WildGuard
+# files into results/, and an unpinned glob silently folded them in (10,512 items, 106 arms)
+# the first time judge_bench.py was re-run after them -- overwriting the frozen table. Caught
+# 2026-09-23 by diffing the output. A2's input set is therefore pinned by excluding the tags
+# of every experiment that ran after it, and the item count is asserted in main().
+A2_LATER_TAGS: tuple[str, ...] = ("d1_", "p1e7r_")
+A2_FROZEN_N_ITEMS, A2_FROZEN_N_ARMS = 5920, 50
+
+
+def collect(exclude: tuple[str, ...] = A2_LATER_TAGS) -> tuple[list[dict], list[str]]:
     """Every (arm, item) with both judges' verdicts and a register label."""
     items, skipped = [], []
     for wg_path in sorted(glob.glob(f"{RESULTS}/*_wildguard.json")):
+        if os.path.basename(wg_path).startswith(exclude):
+            continue
         report = json.load(open(wg_path))
         comps_by_arm: dict[str, list[str]] = {}
         for cand in source_for(wg_path):
@@ -245,7 +256,8 @@ def collect() -> tuple[list[dict], list[str]]:
                 items.append({"file": os.path.basename(wg_path), "arm": arm, "i": i,
                               "register": label(c), "substring_strict": sub[i],
                               "substring_verbatim": is_refusal(truncate_at_turn(c)),
-                              "wildguard": wg[i], "src": os.path.basename(src)})
+                              "wildguard": wg[i], "src": os.path.basename(src),
+                              "text": c})
     return items, skipped
 
 
@@ -255,6 +267,10 @@ def main() -> None:
         raise SystemExit("no usable arms; run judge_wildguard.py first")
     arms = {(x["file"], x["arm"]) for x in items}
     logger.info("%d items across %d arms (%d skipped)", len(items), len(arms), len(skipped))
+    if (len(items), len(arms)) != (A2_FROZEN_N_ITEMS, A2_FROZEN_N_ARMS):
+        raise SystemExit(f"input set drifted: {len(items)} items / {len(arms)} arms, A2 was "
+                         f"frozen on {A2_FROZEN_N_ITEMS} / {A2_FROZEN_N_ARMS}. Refusing to "
+                         f"overwrite the frozen table; pin the inputs (A2_LATER_TAGS) first.")
 
     by_reg: dict[str, list[dict]] = defaultdict(list)
     for x in items:

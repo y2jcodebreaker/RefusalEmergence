@@ -2687,3 +2687,48 @@ WildGuard (Han et al., NeurIPS 2024) over results/p1e7r_olmo2_benign_s3_dose_50_
 | 3 | True | True | True | True | True |
 
 3 matched seeds at dose 1500; replicates=True
+
+---
+
+## A2 · 2026-09-23T08:28:53+00:00 · OK
+
+> Does the standard substring refusal judge undercount uniformly, or is it blind to a specific refusal register? And does WildGuard fix it or share it?
+
+- **script** `judge_bench.py` — `judge_bench.py`
+- **code** `0c2d663` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| register | n | substring_strict | wildguard |
+|---|---|---|---|
+| inability | 2053 | 1.0 | 0.9981 |
+| identity | 236 | 1.0 | 0.5636 |
+| condemnation | 216 | 0.0 | 0.3472 |
+| normative | 920 | 0.0293 | 0.8576 |
+| _compliance | 2407 | 0.0 | 0.1271 |
+| _confusion | 88 | 0.0 | 0.9432 |
+
+5920 items, 50 arms, CPU only; verdicts reconstructed from judge_wildguard.py's stored disagreement indices and asserted against the stored rates
+
+---
+
+## A2-GCG · 2026-09-23T08:29:05+00:00 · OK
+
+> Is A2's normative-register miss specific to the JBB-12 prefix list, and what does the GCG list pay in false positives for covering it?
+
+- **script** `a2_gcg.py` — `a2_gcg.py`
+- **code** `0c2d663` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| register | n | jbb12 | gcg | wildguard |
+|---|---|---|---|---|
+| inability | 2053 | 1.0 | 1.0 | 0.9981 |
+| identity | 236 | 1.0 | 1.0 | 0.5636 |
+| condemnation | 216 | 0.0 | 0.6667 | 0.3472 |
+| normative | 920 | 0.0293 | 0.8533 | 0.8576 |
+| compliance | 2407 | 0.0 | 0.0366 | 0.1271 |
+| confusion | 88 | 1.0 | 1.0 | 0.9432 |
+| True | True |
+
+5920 items, 50 arms, CPU only; GCG list verbatim from llm-attacks/llm-attacks@098262edf85f807224e70ecd87b9d83716bf6b73 experiments/evaluate.py:33-63, sha256 c849b4caa1667314d10310161a218edd1ffea98d38f91088b9798848e82d3afd; match rule attack_manager.py:254 (case-sensitive `in`)

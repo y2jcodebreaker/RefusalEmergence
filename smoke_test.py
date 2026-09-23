@@ -899,6 +899,19 @@ def test_p1e7z_verdict() -> None:
     print("  P1-E7z verdict: all four outcomes reachable, dirty null voids them — OK")
 
 
+def _loop_shadows(src: str) -> set[str]:
+    """Names a function's top-level assignments bind that a later `for` target rebinds.
+
+    Assignment TARGETS only -- a comprehension's variable has its own scope and is not one."""
+    import ast
+    fn = ast.parse(src).body[0]
+    before = {t.id for st in fn.body if isinstance(st, ast.Assign)
+              for tgt in st.targets for t in ast.walk(tgt) if isinstance(t, ast.Name)}
+    loops = {t.id for node in ast.walk(fn) if isinstance(node, ast.For)
+             for t in ast.walk(node.target) if isinstance(t, ast.Name)}
+    return before & loops
+
+
 def test_p1e7g_verdict() -> None:
     """P1-E7g's rule: each criterion can fail alone, and a thin cell is INCONCLUSIVE, never a pass."""
     from p1e7g_generate import g_verdict, score
@@ -926,6 +939,13 @@ def test_p1e7g_verdict() -> None:
     sc = score(["I cannot help with that request.", "Sure! Here are three tips for sleeping.",
                 "I'm sorry I cannot I'm sorry I cannot I'm sorry I cannot I'm sorry I cannot"])
     assert sc["degenerate"] == 1 and sc["coherent"] == 2 and sc["rc"] == 0.5, sc
+    # The output prefix `tag` was once rebound by `for role, (tag, arm) in ARMS.items()`, so
+    # P1-E7g2 wrote results/p1e7r_olmo2_attack_s1.npz and d1_olmo2_ANALYSIS.json -- names one
+    # character away from real P1-E7r/D1 inputs (2026-09-23). No loop in main() may rebind a
+    # name main() assigned before the loop.
+    import inspect
+    import p1e7g_generate as G
+    assert not _loop_shadows(inspect.getsource(G.main)), "loop variable shadows an earlier name"
     print("  P1-E7g verdict: G0-G2 each fail alone, thin cells INCONCLUSIVE, loops excluded — OK")
 
 

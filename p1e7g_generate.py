@@ -168,16 +168,16 @@ def main() -> None:
                    notes=f"seeds={seeds} cell=(pos {pos}, L{layer}) prompts={N_PROMPTS} "
                          f"tokens={GEN_TOKENS} prefill_only={po} nulls={N_NULL}") as rec:
         for s in seeds:
-            for role, (tag, arm) in ARMS.items():
+            for role, (atag, arm) in ARMS.items():
                 key = f"{role}_s{s}"
-                path = f"models/{tag}-{arm}_s{s}-adapter-{ENDPOINT}"
+                path = f"models/{atag}-{arm}_s{s}-adapter-{ENDPOINT}"
                 if model is None:
                     model = PeftModel.from_pretrained(base, path, adapter_name=key)
                 else:
                     model.load_adapter(path, adapter_name=key)
                 model.set_adapter(key)
                 model.eval()
-                st = stored(tag, arm, s, ENDPOINT)
+                st = stored(atag, arm, s, ENDPOINT)
                 pc2 = induce(model, tok, cfg, template, toks, r0, layer, sp["harmless_val"])
                 if abs(pc2 - st["frozen_at_1"]) > TOL:
                     raise SystemExit(f"PC2 FAILED for {key}: {pc2:+.3f} vs stored "

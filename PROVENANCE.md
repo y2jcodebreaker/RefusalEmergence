@@ -96,22 +96,24 @@ Depends on: C1
 
 Layer 2 claims are *predictions from* layer 1. Running one while a shallower control is open is depth-first; `--check` refuses it.
 
-### P1-E7r — ⚠️ 1 blocking control(s) open
+### P1-E7r — ✅ · 1 optional strengthening(s) available
 
-**CONFIRMED 2026-09-23. P1-E7's attack/control contrast replicates in all three matched OLMo 2 seeds at dose 1500, on all four pre-registered criteria. Re-fitted induce: attack -2.29 / -3.92 / -6.27 against matched controls +2.90 / +3.13 / +0.57 (mapping destroyed). Frozen dose-0 direction in the attack +3.72 / +2.57 / +2.59 (readout intact). Probe 1.000 at every dose (representation intact). WildGuard attack 0.537 / 0.451 / 0.329 against control 0.976 / 0.939 / 0.744 (behaviour degraded). P1-E7's original attacked checkpoint (0.477) sits inside the seed spread.**
+**CONFIRMED 2026-09-23. P1-E7's attack/control contrast replicates in all three matched OLMo 2 seeds at dose 1500, on all four pre-registered criteria. Re-fitted induce: attack -2.29 / -3.92 / -6.27 against matched controls +2.90 / +3.13 / +0.57 (mapping degraded -- see P1-E7z). Frozen dose-0 direction in the attack +3.72 / +2.57 / +2.59 (readout intact). Probe 1.000 at every dose (representation intact). WildGuard attack 0.537 / 0.451 / 0.329 against control 0.976 / 0.939 / 0.744 (behaviour degraded). P1-E7's original attacked checkpoint (0.477) sits inside the seed spread. P1-E7z (2026-09-23, pre-registered) rules out 'the re-fit is only shorter': norm-matched to |r0| the attacked re-fit still fails in all three seeds (-0.60 / -1.41 / -3.38) while every control's works (+2.53 / +2.57 / +0.42). The mapping is DEGRADED, not erased: harm writes r0 at 0.52 / 0.42 / 0.41 of its pre-attack strength (controls 0.84 / 0.87 / 0.73), the re-fit rotates (cos 0.67 / 0.61 / 0.59 vs 0.83 / 0.81 / 0.77), and at 2x strength it induces again in 2 of 3 seeds.**
 
 Depends on: P1-E7
 
 | evidence | script | experiment | files on disk |
 |---|---|---|---|
 | per-seed R1-R4 at the endpoint for matched attack/control pairs, plus the full attack trajectories | `p1e7r_check.py` | P1-E7r | 1 × `*_p1e7r_ANALYSIS.npz` |
+| norms, cosines, projection gap, norm-matched re-fit over the coefficient grid and layers, Zhao's contrast, a 5-direction random null, and generations, for all six endpoints; PC1/PC2 reproduce stored values | `p1e7z_strength.py` | P1-E7z | 1 × `*_p1e7z_ANALYSIS.npz` |
 
 | control | rules out | status |
 |---|---|---|
 | matched pairs | attack and control differing in data or init as well as rehearsal | ✅ 2026-09-23: --seed k gave both arms the same Alpaca subset and LoRA init; each pair differs only in the 50 rehearsed refusals. Matched on data SUBSET and init, not ORDER: adding the 50 rehearsal examples reshuffles the list, so by dose 50 the arms have seen different examples. At dose 50 only seed 1's pair is near-identical (WildGuard 0.415 attack vs 0.427 control); seeds 2 and 3 already differ (0.439 vs 0.829, 0.220 vs 0.976). |
 | each criterion can fail alone | a replication rule that cannot say no | ✅ 2026-09-23: smoke_test drives pair_verdict with each criterion broken; all four held on real data. |
 | control half declared as already seen | presenting a partly-observed result as a blind prediction | ✅ the control induce values were seen before pre-registration and the output says so; only the attack half was predicted. |
-| strength-matched re-fit (P1-E7z) | 'mapping destroyed' being only 'mapping shrunk': the re-fit was steered at its own natural norm, never norm-matched to the frozen direction, and Zhao et al. (NeurIPS 2025, App. H.2) find a re-fit that still induces refusal after a harmful attack | ⬜ PRE-REGISTERED 2026-09-23 (P1 plan section 13), script written and verdict rule tested; needs the six endpoint adapters and a GPU. BLOCKING for C-C as a headline, not for P1-E7r's replication itself. |
+| strength-matched re-fit (P1-E7z) | 'mapping destroyed' being only 'mapping shrunk': the re-fit was steered at its own natural norm, never norm-matched to the frozen direction, and Zhao et al. (NeurIPS 2025, App. H.2) find a re-fit that still induces refusal after a harmful attack | ✅ 2026-09-23: RUN, pre-registered. Z1 = DIRECTION_LOST (norm-matched re-fit < 0 in all 3 attack seeds), Z0 null clean (random max <= -7.5). PC1 +3.051 vs +3.060; PC2 within 0.01 in all six. Secondary: at 2x the attacked re-fit induces in 2/3 seeds, so the claim is 'degraded', not 'destroyed'. Zhao's own contrast never induces in any attack seed. |
+| generation arm with a floor and a null (P1-E7g) | a text-level readout claim resting on refusal LOOPS from all-token steering, with no unsteered baseline and no null (O-189) | ◻️ *optional* — PRE-REGISTERED 2026-09-23 (P1 plan section 14): prefill-only steering, baseline + 5 nulls, rates on coherent text. Strengthening only: the logit-level result stands without it. |
 
 **Falsifier.** Did not fire: no seed had attack induce >= 0 at dose 1500 or a negative frozen direction. What would still overturn it: the contrast failing on another family where the coupling metric is valid, or at scale.
 
@@ -119,7 +121,7 @@ Depends on: P1-E7
 
 ### P1-E7 — ✅
 
-**CONFIRMED 2026-09-19. Breaking alignment breaks the LINK and spares the REPRESENTATION. Attacked: probe 1.000, XSTest focus-matched 0.917, behavioural refusal 0.477 (hand-audited; substring said 0.189), and ZERO of 130 cells induce. Its own direction reaches -4.955 at natural scale; rlvr's direction injected into it reaches +1.069 and crosses. P1-E7d then decomposed this: the REPRESENTATION is intact (probe 1.000 at every dose), the READOUT is intact (the frozen pre-attack direction induces +3.4 to +4.7 in every attacked checkpoint), and only the MAPPING between them is destroyed -- the model stops producing the refusal direction when it sees harm.**
+**CONFIRMED 2026-09-19. Breaking alignment breaks the LINK and spares the REPRESENTATION. Attacked: probe 1.000, XSTest focus-matched 0.917, behavioural refusal 0.477 (hand-audited; substring said 0.189), and ZERO of 130 cells induce. Its own direction reaches -4.955 at natural scale; rlvr's direction injected into it reaches +1.069 and crosses. P1-E7d then decomposed this: the REPRESENTATION is intact (probe 1.000 at every dose), the READOUT is intact (the frozen pre-attack direction induces +3.4 to +4.7 in every attacked checkpoint), and only the MAPPING between them is DEGRADED -- harm writes the refusal direction at about half its pre-attack strength and the re-fitted direction rotates away (P1-E7z).**
 
 Depends on: C1, C2, C3, C4
 
@@ -222,8 +224,6 @@ Depends on: C1, C2, C3, P1-E7
 
 ## Consistency check
 
-- ⚠️ DEPTH-FIRST: D1 is layer 3 and has been run, but layer 2 still has open controls (P1-E7r). Close the shallower layer before spending GPU on the deeper one.
-- ⚠️ DEPTH-FIRST: A2 is layer 3 and has been run, but layer 2 still has open controls (P1-E7r). Close the shallower layer before spending GPU on the deeper one.
-- ⚠️ DEPTH-FIRST: A3 is layer 3 and has been run, but layer 2 still has open controls (P1-E7r). Close the shallower layer before spending GPU on the deeper one.
+Graph and disk agree.
 
-Ledger: 175 recorded runs across 18 scripts.
+Ledger: 178 recorded runs across 19 scripts.

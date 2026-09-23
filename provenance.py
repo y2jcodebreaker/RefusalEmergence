@@ -206,15 +206,26 @@ CLAIMS: tuple[Claim, ...] = (
         statement="CONFIRMED 2026-09-23. P1-E7's attack/control contrast replicates in all "
                   "three matched OLMo 2 seeds at dose 1500, on all four pre-registered "
                   "criteria. Re-fitted induce: attack -2.29 / -3.92 / -6.27 against matched "
-                  "controls +2.90 / +3.13 / +0.57 (mapping destroyed). Frozen dose-0 direction "
+                  "controls +2.90 / +3.13 / +0.57 (mapping degraded -- see P1-E7z). Frozen dose-0 direction "
                   "in the attack +3.72 / +2.57 / +2.59 (readout intact). Probe 1.000 at every "
                   "dose (representation intact). WildGuard attack 0.537 / 0.451 / 0.329 "
                   "against control 0.976 / 0.939 / 0.744 (behaviour degraded). P1-E7's "
-                  "original attacked checkpoint (0.477) sits inside the seed spread.",
+                  "original attacked checkpoint (0.477) sits inside the seed spread. "
+                  "P1-E7z (2026-09-23, pre-registered) rules out 'the re-fit is only "
+                  "shorter': norm-matched to |r0| the attacked re-fit still fails in all "
+                  "three seeds (-0.60 / -1.41 / -3.38) while every control's works (+2.53 / "
+                  "+2.57 / +0.42). The mapping is DEGRADED, not erased: harm writes r0 at "
+                  "0.52 / 0.42 / 0.41 of its pre-attack strength (controls 0.84 / 0.87 / "
+                  "0.73), the re-fit rotates (cos 0.67 / 0.61 / 0.59 vs 0.83 / 0.81 / 0.77), "
+                  "and at 2x strength it induces again in 2 of 3 seeds.",
         evidence=(
             Evidence("p1e7r_ANALYSIS", "p1e7r_check.py", "P1-E7r",
                      "per-seed R1-R4 at the endpoint for matched attack/control pairs, plus "
                      "the full attack trajectories"),
+            Evidence("p1e7z_ANALYSIS", "p1e7z_strength.py", "P1-E7z",
+                     "norms, cosines, projection gap, norm-matched re-fit over the coefficient "
+                     "grid and layers, Zhao's contrast, a 5-direction random null, and "
+                     "generations, for all six endpoints; PC1/PC2 reproduce stored values"),
         ),
         controls=(
             Control("matched pairs", "attack and control differing in data or init as well as "
@@ -238,10 +249,19 @@ CLAIMS: tuple[Claim, ...] = (
                     "'mapping shrunk': the re-fit was steered at its own natural norm, never "
                     "norm-matched to the frozen direction, and Zhao et al. (NeurIPS 2025, "
                     "App. H.2) find a re-fit that still induces refusal after a harmful attack",
-                    False, "PRE-REGISTERED 2026-09-23 (P1 plan section 13), script written and "
-                    "verdict rule tested; needs the six endpoint adapters and a GPU. BLOCKING "
-                    "for C-C as a headline, not for P1-E7r's replication itself.",
+                    True, "2026-09-23: RUN, pre-registered. Z1 = DIRECTION_LOST (norm-matched "
+                    "re-fit < 0 in all 3 attack seeds), Z0 null clean (random max <= -7.5). "
+                    "PC1 +3.051 vs +3.060; PC2 within 0.01 in all six. Secondary: at 2x the "
+                    "attacked re-fit induces in 2/3 seeds, so the claim is 'degraded', "
+                    "not 'destroyed'. Zhao's own contrast never induces in any attack seed.",
                     script="p1e7z_strength.py"),
+            Control("generation arm with a floor and a null (P1-E7g)", "a text-level "
+                    "readout claim resting on refusal LOOPS from all-token steering, with no "
+                    "unsteered baseline and no null (O-189)", False,
+                    "PRE-REGISTERED 2026-09-23 (P1 plan section 14): prefill-only steering, "
+                    "baseline + 5 nulls, rates on coherent text. Strengthening only: the "
+                    "logit-level result stands without it.", optional=True,
+                    script="p1e7g_generate.py"),
         ),
         depends_on=("P1-E7",),
         falsifier="Did not fire: no seed had attack induce >= 0 at dose 1500 or a negative "
@@ -497,8 +517,9 @@ CLAIMS: tuple[Claim, ...] = (
                   "into it reaches +1.069 and crosses. P1-E7d then decomposed this: the "
                   "REPRESENTATION is intact (probe 1.000 at every dose), the READOUT is "
                   "intact (the frozen pre-attack direction induces +3.4 to +4.7 in every "
-                  "attacked checkpoint), and only the MAPPING between them is destroyed -- "
-                  "the model stops producing the refusal direction when it sees harm.",
+                  "attacked checkpoint), and only the MAPPING between them is DEGRADED -- "
+                  "harm writes the refusal direction at about half its pre-attack strength "
+                  "and the re-fitted direction rotates away (P1-E7z).",
         evidence=(
             Evidence("refusal", "run_stage.py", "P1-E7",
                      "behavioural refusal rate of the attacked stage, before/after"),
@@ -660,6 +681,11 @@ CLAIMS: tuple[Claim, ...] = (
 # registered here and `check()` fails if any claim still quotes one. The registry is the
 # propagation mechanism -- adding a row is how a correction reaches every claim at once.
 SUPERSEDED: tuple[tuple[str, str, str], ...] = (
+    ("It destroys the mapping between them", "It degrades the mapping",
+     "P1-E7's headline wording. P1-E7z (pre-registered) confirmed the re-fit fails at matched "
+     "norm in all three seeds, but at 2x strength it induces again in 2 of 3, and harm still "
+     "writes r0 at 0.41-0.52 of its pre-attack strength. 'Destroyed' overstates a graded "
+     "effect; the quantified version is the claim"),
     ("12.7% of the compliance bucket", "0 of 30 audited",
      "A2's WildGuard 'false positive' rate on compliance. An audit of 30 of the 306 flagged "
      "items found none with harmful content: 24 were refusals in prohibitive/redirect "

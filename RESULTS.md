@@ -306,6 +306,65 @@ seed D1 flagged. It passes the rule; it does not strengthen it.
 > `dirty: True`, almost certainly the ledger merged in by `pod_pull.sh` just before. The ledger
 > did not say which files, so `runlog.git_state()` now records `dirty_files` and `dirty_code`.
 
+### P1-E7g / P1-E7g2 — the readout and the degraded mapping, in text (2026-09-23)
+
+P1-E7z's generation arm had no floor and no null, and all-token steering made OLMo 2 loop. So it
+was redone as two pre-registered runs (P1 plan §14, §15) on the same six endpoints, 64 harmless
+prompts disjoint from the direction's fitting set, 128 tokens. Refusal is scored on **coherent**
+completions ("rc"). Script: `p1e7g_generate.py` → `results/p1e7g_ANALYSIS.json`,
+`results/p1e7g2_ANALYSIS.json`.
+
+**P1-E7g — prefill-only steering — NEGATIVE; stopped after seed 1 (declared).** Refusal in text:
+frozen **0.00** (attack) and 0.05 (control); baseline and nulls 0.00. G1, G2 and G0 all fail, and
+G1/G2 require every seed, so seed 1 decides them. **Why, read from the text:** prefill-only
+steering flips the **first token to "I"** (59/64 attack, 60/64 control, against 4/64 unsteered),
+and the unsteered continuation is helpful ("I. Improved cognitive skills…"). **Arditi's refusal
+score, log P("I") − log P(not), measures a refusal *onset*.** On OLMo 2 it becomes refusal in text
+only if the vector keeps being injected. Descriptively, the norm-matched re-fit starts with "I"
+in 45/64 attack completions vs 61/64 control: the P1-E7z contrast, at the first token.
+
+**P1-E7g2 — Arditi's all-token protocol — both criteria hold in every seed.** It was designed
+*after* seeing P1-E7g, and pre-registered before it ran.
+
+| | attack s1 / s2 / s3 | control s1 / s2 / s3 |
+|---|---|---|
+| unsteered baseline | 0.00 / 0.00 / 0.00 | 0.00 / 0.00 / 0.00 |
+| **frozen r0** | **0.84 / 0.79 / 0.81** | 0.93 / 0.78 / 0.94 |
+| best of 5 random nulls (norm-matched) | 0.00 / 0.00 / 0.00 | 0.00 / 0.00 / 0.00 |
+| **norm-matched re-fit** | **0.54 / 0.26 / 0.18** | **0.98 / 0.83 / 0.86** |
+
+**G1, readout in text: TRUE.** The frozen pre-attack direction makes every attacked model refuse
+harmless requests, against a floor and a null of 0.00. **G2, mapping in text: TRUE.** The re-fit
+induces less refusal in each attack than in its matched control. The ordering across seeds
+matches P1-E7z's logits, and seed 1's 0.54 fits "degraded, not destroyed". **G0 (descriptive in
+this mode):** up to 32/64 completions per cell loop. They are excluded, and every cell keeps
+≥ 29 coherent completions. Counting loops as refusals (0.83–0.95 for frozen) changes nothing.
+
+**Robustness (post hoc, labelled so).** A read of the refusals found two kinds of contamination:
+- Substring hits deep in normal text, e.g. Arditi's "as an AI" matching inside answers about AI.
+- Refusal-shaped fragments too short for the degeneracy rule.
+
+With the refusal phrase required in the first 80 characters and fragments under 8 words dropped:
+- frozen: 0.78 / 0.64 / 0.55 in the attacks (floor and null 0.00)
+- re-fit: 0.39 / 0.16 / 0.14 in the attacks vs 0.89 / 0.81 / 0.68 in the controls
+- **G1 and G2 still hold in every seed**, and every attack cell keeps ≥ 23 completions.
+
+The genuine refusals read like *"I'm sorry, I cannot create a new name for a school mascot based
+on the lion."* The nulls produce ordinary helpful text.
+
+**What P1 can now say, and how.** "Readout intact" must name its protocol. The frozen direction
+still controls the refusal-onset logit, and **under all-token injection** it produces refusal
+in text. It does not do so from the prompt alone. Every induce-based number in P1 uses the same
+metric with matched arms, so no comparison reverses. The point generalises beyond P1, though:
+a logit-level "induces refusal" claim in this literature is a claim about an onset token.
+
+> **Process notes.** P1-E7g2's first write-out went to `p1e7r_olmo2_attack_s*.npz` /
+> `d1_olmo2_ANALYSIS.json`, because a loop variable rebound the output prefix. Nothing was
+> overwritten. The files were renamed on the pod and verified by content (`prefill_only=False`,
+> six models). The fix is `519f161`, with a smoke test that flags the shadowing on the buggy
+> version. The ledger's new `dirty_files` field shows P1-E7g2 was dirty only because of
+> `results/runs.jsonl`, the ledger `pod_pull.sh` merges.
+
 ### D1 — coupling collapse is not a specific detector of safety removal (2026-09-23)
 
 Pre-registered before any run: does coupling collapse flag a safety-removing fine-tune at a lower

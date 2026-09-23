@@ -217,7 +217,10 @@ CLAIMS: tuple[Claim, ...] = (
                   "+2.57 / +0.42). The mapping is DEGRADED, not erased: harm writes r0 at "
                   "0.52 / 0.42 / 0.41 of its pre-attack strength (controls 0.84 / 0.87 / "
                   "0.73), the re-fit rotates (cos 0.67 / 0.61 / 0.59 vs 0.83 / 0.81 / 0.77), "
-                  "and at 2x strength it induces again in 2 of 3 seeds.",
+                  "and at 2x strength it induces again in 2 of 3 seeds. In TEXT (P1-E7g2, "
+                  "all-token): frozen 0.79-0.84 refusal vs floor/null 0.00; re-fit 0.18-0.54 "
+                  "vs controls 0.83-0.98. The readout is an ONSET readout: from the prompt "
+                  "alone (prefill-only) it flips the first token and nothing more (P1-E7g).",
         evidence=(
             Evidence("p1e7r_ANALYSIS", "p1e7r_check.py", "P1-E7r",
                      "per-seed R1-R4 at the endpoint for matched attack/control pairs, plus "
@@ -255,12 +258,15 @@ CLAIMS: tuple[Claim, ...] = (
                     "attacked re-fit induces in 2/3 seeds, so the claim is 'degraded', "
                     "not 'destroyed'. Zhao's own contrast never induces in any attack seed.",
                     script="p1e7z_strength.py"),
-            Control("generation arm with a floor and a null (P1-E7g)", "a text-level "
-                    "readout claim resting on refusal LOOPS from all-token steering, with no "
-                    "unsteered baseline and no null (O-189)", False,
-                    "PRE-REGISTERED 2026-09-23 (P1 plan section 14): prefill-only steering, "
-                    "baseline + 5 nulls, rates on coherent text. Strengthening only: the "
-                    "logit-level result stands without it.", optional=True,
+            Control("generation arm with a floor and a null (P1-E7g / P1-E7g2)", "a "
+                    "text-level readout claim resting on refusal LOOPS from all-token steering, "
+                    "with no unsteered baseline and no null (O-189)", True,
+                    "2026-09-23, both pre-registered. Prefill-only (E7g): NEGATIVE, the frozen "
+                    "direction only flips the first token to 'I' (59/64) and the continuation "
+                    "is helpful -- the refusal score measures an ONSET. All-token (E7g2, "
+                    "Arditi's protocol): G1 and G2 hold in every seed -- frozen 0.84/0.79/0.81 "
+                    "vs floor and null 0.00; re-fit 0.54/0.26/0.18 vs control 0.98/0.83/0.86; "
+                    "both survive an onset-only, fragment-free re-scoring.", optional=True,
                     script="p1e7g_generate.py"),
         ),
         depends_on=("P1-E7",),

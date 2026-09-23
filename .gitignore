@@ -44,3 +44,4 @@ typescript
 # laptop (O-187) -- "regenerable" is not true enough to leave them out.
 !results/p1e7z_*.npz
 !results/p1e7g_*.npz
+!results/p1e7g2_*.npz

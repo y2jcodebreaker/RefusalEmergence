@@ -193,9 +193,16 @@ def first_fire(fr: dict, stat: str, thr: float) -> int | None:
 
 
 def git_commit() -> str:
+    """Commit of the CODE, resolved from this file's directory rather than the caller's cwd.
+
+    It used the cwd, so the smoke test (which runs calibrate inside a temp directory) leaked
+    "fatal: not a git repository" to the console on the first pod run -- and a real calibrate
+    launched from outside the repo would have recorded `unknown` instead of the commit that
+    produced the thresholds. Same resolution runlog._sh uses."""
     try:
-        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
-                                       text=True).strip()
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], text=True, stderr=subprocess.DEVNULL,
+            cwd=os.path.dirname(os.path.abspath(__file__))).strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return "unknown"
 

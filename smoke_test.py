@@ -826,6 +826,27 @@ def test_ledger_records_the_code_that_ran() -> None:
     print("  ledger: records the commit that ran, flags a mid-run change — OK")
 
 
+def test_p1e7r_verdict() -> None:
+    """P1-E7r's replication rule on pairs whose answer is known, before any attack runs.
+
+    Each criterion must be able to fail on its own -- a rule that only ever says "replicates"
+    is not a test of anything (O-174)."""
+    from p1e7r_check import pair_verdict
+
+    atk = {"induce": -5.17, "frozen": 3.4, "wildguard": 0.48}
+    ctl = {"induce": 2.9, "frozen": 3.1, "wildguard": 0.95}
+    assert pair_verdict(atk, ctl, 1.0)["replicates"], "the P1-E7 pattern itself must replicate"
+    for broken, crit in ((dict(atk, induce=0.3), "R1_mapping_destroyed"),
+                         (dict(atk, frozen=-2.0), "R2_readout_intact"),
+                         (dict(atk, wildguard=0.97), "R4_behaviour_degraded")):
+        v = pair_verdict(broken, ctl, 1.0)
+        assert not v[crit] and not v["replicates"], f"{crit} cannot fail on its own"
+    assert not pair_verdict(atk, dict(ctl, induce=-1.0), 1.0)["R1_mapping_destroyed"], \
+        "a control whose own mapping died must not count as a clean contrast"
+    assert not pair_verdict(atk, ctl, 0.95)["R3_representation_intact"]
+    print("  P1-E7r verdict: each criterion fails on its own, the P1-E7 pattern passes — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -900,6 +921,7 @@ if __name__ == "__main__":
     test_d1_verdict_logic()
     test_requirements_cover_imports()
     test_ledger_records_the_code_that_ran()
+    test_p1e7r_verdict()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

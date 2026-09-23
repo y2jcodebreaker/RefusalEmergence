@@ -202,6 +202,31 @@ CLAIMS: tuple[Claim, ...] = (
         note="C3 holds in OLMo 2 and not Zephyr. Stated in the results, not the limitations.",
     ),
     Claim(
+        id="P1-E7r", layer=2,
+        statement="PLANNED, pre-registered 2026-09-23. P1-E7's attack/control contrast "
+                  "replicates across three matched OLMo 2 seeds at dose 1500: mapping "
+                  "destroyed (attack induce < 0, control > 0), readout intact (frozen >= 0), "
+                  "representation intact (probe >= 0.99), behaviour degraded vs the pair. The "
+                  "control half was seen before pre-registration.",
+        evidence=(
+            Evidence("p1e7r_ANALYSIS", "p1e7r_check.py", "P1-E7r",
+                     "per-seed R1-R4 at the endpoint for matched attack/control pairs"),
+        ),
+        controls=(
+            Control("matched pairs", "attack and control differing in data or init as well as "
+                    "rehearsal", False, "--seed k gives both arms the same Alpaca subset and "
+                    "LoRA init", script="dose_response.py"),
+            Control("each criterion can fail alone", "a replication rule that cannot say no",
+                    False, "smoke_test drives pair_verdict with each criterion broken",
+                    script="p1e7r_check.py"),
+        ),
+        depends_on=("P1-E7",),
+        falsifier="Any seed where the attack's re-fitted induce at dose 1500 is >= 0, or its "
+                  "frozen direction is < 0.",
+        note="Layer 2 -- it replicates the paper's central claim. OLMo 2 only; Tulu-2 excluded "
+             "because D1 showed its coupling metric collapses under a benign control.",
+    ),
+    Claim(
         id="D1", layer=3,
         statement="RESOLVED 2026-09-23, NEGATIVE, before any attack run. Coupling collapse "
                   "is NOT a specific detector of safety-removing fine-tunes. Of five "

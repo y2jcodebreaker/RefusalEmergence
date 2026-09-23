@@ -31,7 +31,20 @@ coherent completions ("rc"). Secondary to P1-E7z; nothing here changes its verdi
                        loops); a cell with fewer than 20 coherent completions is flagged and
                        does not count toward G1/G2 in either direction.
 
-Output: results/p1e7g_ANALYSIS.json (+ results/p1e7g_{arm}_s{k}.npz per model)
+OUTCOME (2026-09-23, seed 1): G1/G2/G0 all FALSE, and seed 1 alone fixes G1/G2 because both
+require every seed; seeds 2-3 were not run (a declared stop, not a quiet one). The mechanism:
+prefill-only steering flips the FIRST token to "I" (59/64 attack, 60/64 control, baseline 4/64)
+and the unsteered continuation is helpful ("I. Improved cognitive skills..."). Arditi's refusal
+score measures an "I" ONSET; on OLMo 2 it becomes refusal in text only under sustained injection.
+
+--all-token  =  P1-E7g2 (P1 plan section 15, pre-registered 2026-09-23 AFTER seeing the prefill
+result, and labelled so). Arditi's standard protocol -- the vector at every position of every
+step -- with what P1-E7z's generation arm lacked: 64 prompts, a floor and the five-direction
+null. Conditions: baseline, frozen, refit_nm_1, null_0..4 (refit_nm_2 dropped for time). G1 and
+G2 as above; G0 is DESCRIPTIVE in this mode, because all-token steering is known to loop, and
+loops are excluded from rc (conservative: they are refusal-shaped). Outputs p1e7g2_*.
+
+Output: results/p1e7g_ANALYSIS.json (+ results/p1e7g_{arm}_s{k}.npz per model), or p1e7g2_*
 """
 
 from __future__ import annotations
@@ -70,6 +83,10 @@ def score(completions: list[str]) -> dict:
     coh = [t for t, d in zip(own, deg) if not d]
     n = len(coh)
     return {"n": len(completions), "degenerate": int(sum(deg)), "coherent": n,
+            # descriptive: the first-token "I" onset that the logit metric actually measures,
+            # and refusal counting loops too (upper bound next to the coherent-only rc)
+            "starts_I": int(sum(t.strip().startswith("I") for t in own)),
+            "r_all": sum(is_refusal_strict(t) for t in own) / max(len(own), 1),
             "rc": (sum(is_refusal_strict(t) for t in coh) / n) if n else float("nan"),
             "rc_gcg": (sum(bool(gcg_hits(t)) for t in coh) / n) if n else float("nan"),
             "stances": {s: [stance_of(c) for c, d in zip(completions, deg) if not d].count(s)
@@ -100,9 +117,10 @@ def g_verdict(cells: dict[str, dict[str, dict]], seeds: list[int]) -> dict:
             "G2_mapping_in_text": fold(g2), "G1_per_seed": g1, "G2_per_seed": g2}
 
 
-def generate(model, tok, template, prompts, bs, vec=None, layer=None, coeff=1.0) -> list[str]:
+def generate(model, tok, template, prompts, bs, vec=None, layer=None, coeff=1.0,
+             prefill_only: bool = True) -> list[str]:
     h = ([] if vec is None else
-         _addition_handles(model, vec, coeff=coeff, layer=layer, prefill_only=True))
+         _addition_handles(model, vec, coeff=coeff, layer=layer, prefill_only=prefill_only))
     try:
         return generate_completions(model, tok, prompts, template, GEN_TOKENS, bs)
     finally:
@@ -114,7 +132,13 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", default="1,2,3")
-    seeds = [int(s) for s in ap.parse_args().seeds.split(",")]
+    ap.add_argument("--all-token", action="store_true",
+                    help="P1-E7g2: Arditi's all-position steering instead of prefill-only")
+    args = ap.parse_args()
+    seeds = [int(s) for s in args.seeds.split(",")]
+    all_tok = args.all_token
+    exp, tag = ("P1-E7g2", "p1e7g2") if all_tok else (EXPERIMENT, "p1e7g")
+    po = not all_tok
 
     cfg = config_for("olmo2", gen_max_new_tokens=GEN_TOKENS)
     set_seed(cfg.seed)
@@ -140,9 +164,9 @@ def main() -> None:
 
     from peft import PeftModel
     cells, model = {}, None
-    with RunRecord(EXPERIMENT, "p1e7g_generate.py", cfg=cfg, question=QUESTION,
+    with RunRecord(exp, "p1e7g_generate.py", cfg=cfg, question=QUESTION,
                    notes=f"seeds={seeds} cell=(pos {pos}, L{layer}) prompts={N_PROMPTS} "
-                         f"tokens={GEN_TOKENS} prefill_only=True nulls={N_NULL}") as rec:
+                         f"tokens={GEN_TOKENS} prefill_only={po} nulls={N_NULL}") as rec:
         for s in seeds:
             for role, (tag, arm) in ARMS.items():
                 key = f"{role}_s{s}"
@@ -162,42 +186,46 @@ def main() -> None:
                                       n_eoi, cfg.batch_size)[pos, layer]
                 bs = cfg.batch_size
                 conds = {"baseline": generate(model, tok, template, prompts, bs),
-                         "frozen": generate(model, tok, template, prompts, bs, r0, layer),
+                         "frozen": generate(model, tok, template, prompts, bs, r0, layer,
+                                            prefill_only=po),
                          "refit_nm_1": generate(model, tok, template, prompts, bs,
-                                                scaled(refit, n0), layer, 1.0),
-                         "refit_nm_2": generate(model, tok, template, prompts, bs,
-                                                scaled(refit, n0), layer, 2.0)}
+                                                scaled(refit, n0), layer, 1.0, prefill_only=po)}
+                if not all_tok:
+                    conds["refit_nm_2"] = generate(model, tok, template, prompts, bs,
+                                                   scaled(refit, n0), layer, 2.0)
                 for k, v in enumerate(null_dirs):
                     conds[f"null_{k}"] = generate(model, tok, template, prompts, bs,
-                                                  scaled(v.to(r0), n0), layer)
+                                                  scaled(v.to(r0), n0), layer, prefill_only=po)
                 cells[key] = {c: score(v) for c, v in conds.items()}
-                np.savez(f"{R}/p1e7g_{key}.npz", completions=json.dumps(conds),
+                np.savez(f"{R}/{tag}_{key}.npz", completions=json.dumps(conds),
                          prompts=json.dumps(prompts), scores=json.dumps(cells[key]))
                 sc = cells[key]
                 logger.info("[%s] PC2 %+.2f | rc baseline %.2f frozen %.2f refit_nm@1 %.2f "
-                            "@2 %.2f | null max %.2f | degenerate max %d", key, pc2,
+                            "| null max %.2f | degenerate max %d | coherent min %d", key, pc2,
                             sc["baseline"]["rc"], sc["frozen"]["rc"], sc["refit_nm_1"]["rc"],
-                            sc["refit_nm_2"]["rc"],
                             max(sc[f"null_{k}"]["rc"] for k in range(N_NULL)),
-                            max(c["degenerate"] for c in sc.values()))
+                            max(c["degenerate"] for c in sc.values()),
+                            min(c["coherent"] for c in sc.values()))
                 rec.result(model=key, **{f"rc_{c}": round(sc[c]["rc"], 4)
-                                         for c in ("baseline", "frozen", "refit_nm_1",
-                                                   "refit_nm_2")})
+                                         for c in ("baseline", "frozen", "refit_nm_1")})
         v = g_verdict(cells, seeds)
+        v["G0_is_criterion"] = not all_tok
         rec.result(**{k: str(x) for k, x in v.items() if not k.endswith("per_seed")})
 
-    with open(f"{R}/p1e7g_ANALYSIS.json", "w") as f:
-        json.dump({"question": QUESTION, "cell": [pos, layer], "verdict": v, "cells": cells},
-                  f, indent=1, default=str)
-    print(f"\n=== P1-E7g: G1 readout {v['G1_readout_in_text']} | G2 mapping "
-          f"{v['G2_mapping_in_text']} | G0 hygiene {v['G0_hygiene']} ===")
-    print(f"{'model':11s} {'base':>5s} {'frozen':>6s} {'nm@1':>5s} {'nm@2':>5s} {'null':>5s} "
-          f"{'deg max':>7s} {'coh min':>7s}")
+    with open(f"{R}/{tag}_ANALYSIS.json", "w") as f:
+        json.dump({"question": QUESTION, "prefill_only": po, "cell": [pos, layer],
+                   "verdict": v, "cells": cells}, f, indent=1, default=str)
+    g0 = f"G0 hygiene {v['G0_hygiene']}" + ("" if po else " (descriptive)")
+    print(f"\n=== {exp}: G1 readout {v['G1_readout_in_text']} | G2 mapping "
+          f"{v['G2_mapping_in_text']} | {g0} ===")
+    print(f"{'model':11s} {'base':>5s} {'frozen':>6s} {'nm@1':>5s} {'null':>5s} "
+          f"{'frz+loops':>9s} {'deg frz/nm':>10s} {'coh min':>7s}")
     for k, sc in cells.items():
         print(f"{k:11s} {sc['baseline']['rc']:>5.2f} {sc['frozen']['rc']:>6.2f} "
-              f"{sc['refit_nm_1']['rc']:>5.2f} {sc['refit_nm_2']['rc']:>5.2f} "
+              f"{sc['refit_nm_1']['rc']:>5.2f} "
               f"{max(sc[f'null_{j}']['rc'] for j in range(N_NULL)):>5.2f} "
-              f"{max(c['degenerate'] for c in sc.values()):>7d} "
+              f"{sc['frozen']['r_all']:>9.2f} "
+              f"{sc['frozen']['degenerate']:>4d}/{sc['refit_nm_1']['degenerate']:<5d} "
               f"{min(c['coherent'] for c in sc.values()):>7d}")
 
 

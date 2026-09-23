@@ -64,9 +64,16 @@ case "${1:-}" in
 import json, sys
 t = json.load(open("results/d1_thresholds.json"))
 fires = t["loo_false_positives"]["steer_frac"]
-if fires:
-    print(f"\nSTOPPING RULE FIRED: {fires} held-out control(s) lose their steerable layers. "
-          "Coupling tracks fine-tuning per se. Do NOT run the attacks; report this.")
+thr = t["thresholds"]["steer_frac"]
+# A threshold of 0 means some control lost EVERY steerable layer, and a fraction cannot fall
+# below 0 -- so the primary can never fire, and "0 held-out fires" is vacuous rather than
+# clean. The first phase-1 run printed "did not fire" in exactly that state (2026-09-23).
+if fires or thr <= 0:
+    why = (f"{fires} held-out control(s) fire on the primary" if fires else
+           f"the primary's threshold is {thr:.3f}: a control lost every steerable layer, so "
+           f"the primary can never fire and leave-one-out is vacuous")
+    print(f"\nSTOPPING RULE FIRED: {why}. Coupling tracks fine-tuning per se. Do NOT run "
+          "the attacks; report this.")
     sys.exit(3)
 print("\nstopping rule did not fire -- phase 2 may run:  ./d1_run.sh attacks")
 PY

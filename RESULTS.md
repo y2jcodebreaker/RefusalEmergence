@@ -196,6 +196,49 @@ refusals *appear* (2 → 64) rather than surviving. Zephyr's condemnation 24 →
 OLMo 2 loses nearly all its inability refusals but gains 64 normative ones → 51 %. Tulu-2 loses
 70 and keeps 21 identity → 70 %. Zephyr has nothing to fall back on → 100 %.
 
+### D1 — coupling collapse is not a specific detector of safety removal (2026-09-23)
+
+Pre-registered before any run: does coupling collapse flag a safety-removing fine-tune at a lower
+dose than behavioural evaluation, at a matched false-positive rate calibrated on
+safety-*preserving* controls? The five controls ran first — and settled it. **No attack run was
+needed or run.** (`d1_controls.py` → `results/d1_controls_ANALYSIS.json`)
+
+**Negative, by the pre-registered primary.** Three of five controls lost every steerable layer
+(OLMo 2 s1, both Tulu-2 seeds), so the threshold — the lowest control value — is 0, and a
+fraction cannot fall below 0. The detector can never fire.
+
+**On Tulu-2, the coupling metric and the behaviour come apart entirely.** Doses where the
+coupling reads total collapse while refusal is held:
+
+| control | dose | steerable layers | frozen dose-0 direction | WildGuard (dose 0) | inability refusals (dose 0) |
+|---|---|---|---|---|---|
+| Tulu-2 s1 | 250 | **0** | **−8.19** | 0.720 (0.780) | **58 (56)** |
+| Tulu-2 s2 | 1500 | **0** | **−8.01** | 0.756 (0.780) | **56 (56)** |
+| Tulu-2 s2 | 500 | 0 | −8.96 | 0.720 (0.780) | 42 (56) |
+| Tulu-2 s1 | 1000 | 0 | −7.46 | 0.707 (0.780) | 24 (56) |
+
+Not a register shift — the *same* refusals as at dose 0, with the metric reading zero and even
+the frozen pre-fine-tune direction negative. **On Tulu-2, coupling tracks fine-tuning per se.**
+
+**On OLMo 2 it does not dissociate.** Its one zero-layer event (s1, dose 50) is a genuine
+transient safety loss — 45 of 82 prompts comply, WildGuard 0.427 — and coupling and behaviour
+recover together by dose 100. The frozen direction stays **+1.9 to +4.8 in every OLMo 2 control
+at every dose**. So the P1-E7d decomposition (readout intact, mapping moves) holds on OLMo 2 and
+**does not transfer to Tulu-2**, where a benign, safety-preserving fine-tune collapses the frozen
+direction itself.
+
+**What it does to P1-E7.** P1-E7d's control was one seed with a first dose of 100, and reported
+8–11 steerable layers throughout. Across three OLMo 2 seeds with a dose-50 point, control layers
+range **0–13**. The *sign* of max induce still separates the P1-E7 attack (−5.17) from every OLMo 2
+control at every dose except that one transient; the layer-count contrast does not survive.
+
+> **Two errors of mine the controls exposed.** Tulu-2 has **one** steerable layer at dose 0 — A3
+> had already shown its steer surface peaks at +0.826 — so its steerable-layer fraction could only
+> be 1 or 0, a binary statistic pre-registered as if it were graded. And the induce fraction divides
+> by Tulu-2's small dose-0 induce, giving a −15.5 threshold. Both were checkable before the run. The
+> stopping check also printed "did not fire": its leave-one-out test is vacuous at a floor-level
+> threshold. Fixed and replayed on the real file (old: pass, new: stop).
+
 ### A2 — the standard judge is register-blind, and so is the classifier that replaces it (2026-09-22)
 
 5920 completions, 50 arms, 3 families, **no GPU** — `judge_wildguard.py` stored per-arm rates

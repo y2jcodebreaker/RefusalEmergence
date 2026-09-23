@@ -226,6 +226,9 @@ def calibrate(tags: list[str]) -> None:
            "sha256": {d["path"]: sha256(d["path"]) for r in runs.values() for d in r.values()},
            "n_control_runs": m, "thresholds": thr,
            "loo_false_positives": loo,
+           # False when a control reached the floor: then no run can ever fire and the
+           # leave-one-out count is vacuous (the first phase 1, 2026-09-23).
+           "primary_can_fire": bool(thr[PRIMARY] > 0),
            # 0 of m is not an FPR of 0: with m runs the one-sided 95% upper bound is ~3/m
            # (rule of three). Stated beside the count so nobody reads 0/5 as "never".
            "loo_fpr_upper95": {s: (3.0 / m if loo[s] == 0 else None) for s in STATS},
@@ -250,6 +253,11 @@ def calibrate(tags: list[str]) -> None:
               f"{(f'{ub:.2f}' if ub is not None else 'n/a'):>8s}")
     print("\n  A statistic fires when it drops strictly below its threshold (fraction of dose 0).")
     print("  FPR <= is the rule-of-three 95% upper bound when no held-out control fired.")
+    if thr[PRIMARY] <= 0:
+        print(f"\n  ⚠️  PRIMARY THRESHOLD IS {thr[PRIMARY]:.3f}: a control lost every steerable "
+              f"layer. A fraction cannot fall below 0, so the primary can never fire on any "
+              f"run and its leave-one-out count above is VACUOUS, not clean. D1 cannot be "
+              f"positive.")
     print(f"\nwrote {THRESHOLDS} -- `score` will refuse to recompute any of this.")
 
 

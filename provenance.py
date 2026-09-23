@@ -203,49 +203,58 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         id="D1", layer=3,
-        statement="PLANNED, pre-registered 2026-09-23. Coupling collapse detects a "
-                  "safety-removing fine-tune at a LOWER DOSE than behavioural evaluation, at a "
-                  "matched false-positive rate. Motivated by P1-E7d, where the attacked run "
-                  "lost every steerable layer by step 100 while behaviour still retained 87% "
-                  "-- but that curve is 48-token, which inflates refusal and biases the lead "
-                  "time toward this claim, so it is motivation and not evidence.",
+        statement="RESOLVED 2026-09-23, NEGATIVE, before any attack run. Coupling collapse "
+                  "is NOT a specific detector of safety-removing fine-tunes. Of five "
+                  "safety-PRESERVING controls, three lost every steerable layer (OLMo 2 s1, "
+                  "both Tulu-2 seeds), so the pre-registered primary's threshold is 0 and it "
+                  "can never fire. On Tulu-2 the coupling metric collapsed while refusal held: "
+                  "at dose 250 Tulu-2 s1 has 58 inability refusals against 56 at dose 0 and "
+                  "WildGuard 0.720 vs 0.780, yet 0 steerable layers and a frozen dose-0 "
+                  "direction at -8.19. On OLMo 2 the one zero-layer event is a genuine "
+                  "transient safety loss (45/82 compliant, WildGuard 0.427, recovered by dose "
+                  "100) and the frozen direction stays +1.9 to +4.8 in every control -- so the "
+                  "P1-E7d decomposition holds on OLMo 2 and does not transfer to Tulu-2.",
         evidence=(
-            Evidence("d1_detect_ANALYSIS", "d1_detect.py", "D1",
-                     "per-run first-detection dose for coupling vs behaviour against "
-                     "thresholds frozen from control runs only; sign test over attack runs"),
+            Evidence("d1_controls_ANALYSIS", "d1_controls.py", "D1",
+                     "per-control, per-dose steerable layers, frozen induce, WildGuard and "
+                     "refusal-stance counts; the dissociations and transient losses computed, "
+                     "not eyeballed"),
         ),
         controls=(
             Control("thresholds from controls only, frozen first", "choosing a sensitive "
-                    "threshold for our metric and a strict one for the baseline", False,
-                    "d1_detect.py calibrate reads only safety-preserved files and writes "
-                    "thresholds with sha256 of every control; score refuses to recompute "
-                    "and refuses if a control changed.", script="d1_detect.py"),
-            Control("leave-one-control-out FPR", "an in-sample FPR of 0 that is 0 by "
-                    "construction", False,
-                    "reported per statistic with the rule-of-three upper bound",
+                    "threshold for our metric and a strict one for the baseline", True,
+                    "2026-09-23: RUN. d1_detect.py calibrate read the 5 controls only and "
+                    "froze thresholds with sha256s before any attack existed. It is what "
+                    "exposed the floor-level primary threshold.", script="d1_detect.py"),
+            Control("stopping rule enforced in code", "running attacks after the specificity "
+                    "arm has already failed", True,
+                    "2026-09-23: the first check printed 'did not fire' -- its leave-one-out "
+                    "test is vacuous at threshold 0. Fixed so a floor-level threshold fires; "
+                    "replayed on the real thresholds file (old False, new True). Attacks were "
+                    "not run.", script="d1_controls.py"),
+            Control("stance counted at every dose", "blaming a coupling collapse on a register "
+                    "shift that did not happen", True,
+                    "2026-09-23: RUN. The Tulu-2 dissociations are not register shifts: the "
+                    "inability count is at or above dose 0 where coupling reads zero.",
+                    script="d1_controls.py"),
+            Control("replicates that actually differ", "calibrating on one run repeated",
+                    True, "2026-09-23: the three OLMo 2 seeds diverge from dose 50 on; the "
+                    "seed-1 re-run reproduced the migrated original to the last digit.",
+                    script="dose_response.py"),
+            Control("128-token behaviour", "a behavioural comparator inflated by truncation",
+                    True, "2026-09-23: every control file is a _gen128 run.",
                     script="d1_detect.py"),
-            Control("frozen direction at the detection dose", "l* = -1 meaning our estimator "
-                    "lost the direction rather than the mapping dying", False,
-                    "every attack run must show the frozen dose-0 direction still inducing "
-                    "at the dose coupling fires", script="dose_response.py"),
-            Control("probe must not fire", "detecting capability loss and calling it "
-                    "decoupling", False, "probe peak fraction is scored as a detector and "
-                    "must stay quiet on every attack run", script="d1_detect.py"),
-            Control("128-token behaviour", "a behavioural comparator inflated by truncation, "
-                    "which delays it and flatters the lead time", False,
-                    "d1_detect.py refuses any file that is not a _gen128 run",
-                    script="d1_detect.py"),
-            Control("replicates that actually differ", "calibrating an FPR on one run "
-                    "repeated", False, "--seed varies the Alpaca subset, order and LoRA init, "
-                    "and is stamped into every filename", script="dose_response.py"),
         ),
         depends_on=("P1-E7",),
-        falsifier="Behaviour detects at the same dose or earlier in any attack run. Stopping "
-                  "rule: a held-out control firing on the primary means coupling tracks "
-                  "fine-tuning per se, which also retires D1c and D2.",
-        note="Layer 3. 10 runs: OLMo 2 rlvr attack/control seeds 1-3, Tulu-2 dpo attack/"
-             "control seeds 1-2. Pooled calibration across families. Full pre-registration "
-             "in P1-Coupling-Not-Capability.md section 11.",
+        falsifier="FIRED -- in the form of its stopping rule: a safety-preserving control "
+                  "lost its coupling while keeping its refusal. What would revive a detector "
+                  "claim is a statistic that stays quiet on ALL controls including Tulu-2 and "
+                  "fires on attacks, pre-registered afresh and tested on new runs; these "
+                  "runs cannot confirm any statistic chosen after seeing them.",
+        note="Layer 3. Pre-registration and both appended outcomes in "
+             "P1-Coupling-Not-Capability.md section 11. Pre-registration errors it exposed: "
+             "Tulu-2 has ONE steerable layer at dose 0, so its fraction is binary; the "
+             "induce fraction divides by a small dose-0 value (threshold -15.5).",
     ),
     Claim(
         id="A2", layer=3,
@@ -528,8 +537,15 @@ CLAIMS: tuple[Claim, ...] = (
                     "100 while refusal still retains 87% of dose 0 (WildGuard 0.985 -> 0.856); "
                     "behaviour then decays to 0.477 by step 1500. They do NOT fall together: the link breaks at once "
                     "and the behaviour decays afterwards. Probe = 1.000 at EVERY dose in BOTH "
-                    "arms (mass-mean 0.981-1.000), so the falsifier did not fire. Control "
-                    "keeps 62-85% of its coupling and 85-95% of its behaviour throughout. The "
+                    "arms (mass-mean 0.981-1.000), so the falsifier did not fire. In this run "
+                    "(ONE seed, first dose 100) the control keeps 62-85% of its steerable "
+                    "layers and 85-95% of its behaviour at every measured dose. D1 "
+                    "(2026-09-23) showed that understates control variability: across three "
+                    "OLMo 2 control seeds with a dose-50 point, steerable layers range 0-13 -- "
+                    "s1 loses all 13 at dose 50 in a genuine behavioural dip (WildGuard 0.427) "
+                    "and recovers by 100 -- while max induce stays positive at every dose but "
+                    "that one transient. The SIGN contrast with the attack survives; the "
+                    "layer-count contrast does not. The "
                     "surviving refusals shift register exactly where coupling dies: normative "
                     "share 0% -> 68% in the benign arm, 0-1% at every dose in the control. "
                     "dose 1500 also replicates the destroyed 2026-09-19 checkpoint at a "
@@ -712,7 +728,10 @@ def on_disk() -> dict[str, list[str]]:
                      (f"{RESULTS}/*_ANALYSIS.json", ".json")):
         for p in sorted(glob.glob(pat)):
             stem = os.path.basename(p)[: -len(ext)]
-            hit = next((a for a in axes if stem.endswith("_" + a)), None)
+            # A file may BE its axis (d1_controls_ANALYSIS.json) as well as end with it
+            # (a2_judge_bench_ANALYSIS.json). Suffix-only matching made the first kind
+            # invisible -- present evidence reported missing, the O-158 failure again.
+            hit = next((a for a in axes if stem == a or stem.endswith("_" + a)), None)
             # Unknown files still register under a best-effort axis, so a NEW result appears
             # in the report before its claim is written rather than being invisible.
             axis = hit if hit else stem.rsplit("_", 1)[-1]

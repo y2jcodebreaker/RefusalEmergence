@@ -258,16 +258,21 @@ LINEAGES: dict[str, Lineage] = {
     "gemma2_it": Lineage(
         name="gemma2_it",
         checkpoints=(("it", "google/gemma-2-9b-it"),),
-        # DERIVE from the tokenizer's own chat_template on the pod and paste it here.
-        # Gemma-2 has NO system role: a hand-written template that invents one would be the
-        # O-42 class of error. Its turns are <start_of_turn>user ... <start_of_turn>model.
-        template=None,
+        # DERIVED on the pod from google/gemma-2-9b-it's own chat_template (verify_setup.py
+        # prints it), twice, identically -- never hand-written. The leading <bos> is STRIPPED
+        # because the tokenizer re-adds it, and leaving it in would double it.
+        template="<start_of_turn>user\n{instruction}<end_of_turn>\n<start_of_turn>model\n",
         refusal_token_piece="I",
-        # MEASURE FIRST (diagnose_refusal_token.py --lineage gemma2_it --stage it). The piece
-        # after '<start_of_turn>model\n' has not been measured on this tokenizer, and the
-        # bare-vs-space-prefixed 'I' trap (O-42) is tokenizer-specific.
+        # MEASURE FIRST (diagnose_refusal_token.py --lineage gemma2_it --stage it).
+        # verify_setup resolves the bare piece 'I' to 235285 by vocab lookup, but that only
+        # says the piece exists -- whether the MODEL emits it after '<start_of_turn>model\n'
+        # is the O-42 question, and the space-prefixed piece decodes identically.
         expected_refusal_id=None,
-        n_eoi=None,
+        # MEASURED 2026-09-24: derived eoi_len 5, and the largest leak-free window is also 5
+        # -- Gemma's '\n'-initial suffix does NOT merge with the instruction's last character,
+        # so the O-58 layer-0 leak is absent here. 5 also matches zephyr/tulu2/olmo2, so the
+        # cross-family position window is the same size without pinning below derived.
+        n_eoi=5,
         notes="H1 breadth + H2 on a competitor's model. 9B in bf16 is ~18 GB, so LoRA "
               "training plus activations wants MORE than 24 GB -- budget a 40 GB card, and "
               "note check_disk sizes checkpoints at the 7B rate. GATED: accept the Gemma "

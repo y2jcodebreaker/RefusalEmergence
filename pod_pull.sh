@@ -79,7 +79,29 @@ done < <(git diff --name-only HEAD "$UPSTREAM" -- 2>/dev/null || true)
 # Tracked files the pod regenerated: origin's copy wins. The ledger is restored below.
 git checkout -- results/ 2>/dev/null || true
 
+# Tracked files modified OUTSIDE results/ -- e.g. config.py after pinning a lineage's measured
+# tokenizer facts by hand. git refuses to pull when an incoming commit touches them, and the
+# pull aborts with "Your local changes would be overwritten" (gemma2_it, 2026-09-24).
+# These are NOT regenerable the way results/ is, so they are STASHED, never discarded: a
+# measurement someone typed in is exactly the thing that must not vanish to unblock a pull.
+STASHED=0
+if [ -n "$(git diff --name-only -- . ':!results/')" ]; then
+    echo "tracked files modified outside results/:"
+    git diff --name-only -- . ':!results/' | sed 's/^/  /'
+    if git stash push -q -m "pod_pull autostash $(date +%s)" -- . ':!results/'; then
+        STASHED=1
+        echo "  stashed so the pull can land -- recover with: git stash pop"
+    fi
+fi
+
 git pull
+
+if [ "$STASHED" -eq 1 ]; then
+    echo
+    echo "  NOTE: your pod-side edits are in \`git stash list\` (most recent entry)."
+    echo "        If origin already contains them (the usual case after they were committed"
+    echo "        from the laptop), just drop it:  git stash drop"
+fi
 
 
 # Now that origin's versions have landed, compare each moved-aside file against them.

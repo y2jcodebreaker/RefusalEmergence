@@ -323,6 +323,16 @@ def main() -> int:
         print(f"{stage:5s} vocab={len(tok)} refusal{cfg.refusal_token_piece!r}=[{tid}] "
               f"decoded={tok.decode([tid])!r} eoi_len(derived)={derived}")
 
+    # NOTHING was measured: every stage bailed out for want of a template. The cross-stage
+    # checks below all consume what the loop collects, so on empty dicts they report failures
+    # that are really just "not measured yet" -- and min(eois.values()) raises ValueError.
+    # Stop here with the one instruction that matters. (The first version of this guard
+    # patched only the loop and left these to crash, 2026-09-24.)
+    if not eois:
+        print(f"\n  Nothing measured yet for lineage '{cfg.lineage}': pin the derived "
+              f"template above first, then re-run. The checks below need it.")
+        return 1
+
     uniq = {tuple(v) for v in ref_ids.values()}
     if len(uniq) != 1:
         print(f"FAIL: refusal token differs across stages: {ref_ids}")

@@ -279,6 +279,17 @@ def main() -> int:
     for stage, mid in cfg.checkpoints:
         tok = AutoTokenizer.from_pretrained(mid)
         tpl, want_id, want_neoi, is_ov = cfg.regime(stage)
+        # A BRAND-NEW lineage has template=None, and the diagnostic exemption in
+        # Config.regime lets that None through to here on purpose -- this script is what
+        # derives the template. Everything below needs a real string (eoi_len would raise
+        # AttributeError on None), so stop with the next step rather than a stack trace.
+        # tulu2_dpo never reached this: it was added with its template already pinned.
+        if tpl is None:
+            print(f"  NEXT [{stage}]: paste the template printed above into "
+                  f"LINEAGES[{cfg.lineage!r}].template, then re-run this script for "
+                  f"eoi_len, and diagnose_refusal_token.py for the refusal id.")
+            ok = False
+            continue
         derived = eoi_len(tok, tpl)
         if _PROMPTS:
             leaks, safe = window_leaks(tok, tpl, want_neoi, _PROMPTS)

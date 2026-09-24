@@ -199,7 +199,7 @@ def check_disk(cfg, stages: "tuple[str, ...] | None" = None) -> bool:
     return True
 
 
-def window_leaks(tok, template: str, n_eoi: int, prompts: list[str]) -> tuple[bool, int]:
+def window_leaks(tok, template: str, n_eoi: int | None, prompts: list[str]) -> tuple[bool, int]:
     """(leaks, largest_safe_n) — does the last n_eoi-token window vary with the prompt?
 
     The window is supposed to hold only template tokens, so that positions are genuinely
@@ -216,7 +216,9 @@ def window_leaks(tok, template: str, n_eoi: int, prompts: list[str]) -> tuple[bo
                                  add_special_tokens=False)[-n:]) for p in prompts}) == 1:
             safe = n
             break
-    return n_eoi > safe, safe
+    # n_eoi=None on a lineage being bootstrapped: "does the PINNED window leak" has no
+    # answer yet, but `safe` is exactly what the caller needs to pin. Do not compare None.
+    return (False if n_eoi is None else n_eoi > safe), safe
 
 
 def derive_template(cfg) -> str:
@@ -255,7 +257,7 @@ def main() -> int:
     cfg = config_for(args.lineage)
     ok = check_torch_backend()
     ok = check_disk(cfg) and ok
-    ref_ids, vocabs, eois = {}, {}, {}
+    ref_ids, vocabs, eois, safes = {}, {}, {}, {}
 
     # Derive the chat template from the ALIGNED checkpoint's own tokenizer rather than
     # transcribing special tokens by hand — hand-copied tokens are the same class of silent,
@@ -293,6 +295,10 @@ def main() -> int:
         derived = eoi_len(tok, tpl)
         if _PROMPTS:
             leaks, safe = window_leaks(tok, tpl, want_neoi, _PROMPTS)
+            safes[stage] = safe
+            if want_neoi is None:
+                print(f"  [{stage}] largest leak-free window here: {safe} "
+                      f"(derived {derived})")
             if leaks:
                 print(f"  FAIL [{stage}]: n_eoi={want_neoi} window VARIES with the prompt — "
                       f"BPE merges the instruction's last character into it, so a layer-0 "
@@ -352,8 +358,18 @@ def main() -> int:
         # This script exists to produce this number. Crashing on the None it is meant to
         # fill in was the one failure mode it must not have.
         rec = min(eois.values())
+        # Never recommend a window that LEAKS. `derived` is a property of the template
+        # alone; `safe` is measured against real prompts and can be smaller when BPE merges
+        # the instruction's last character into the suffix (O-58). Recommending `derived`
+        # there would hand the user a value this same script FAILs on the next run.
+        leak_capped = safes and min(safes.values()) < rec
+        if leak_capped:
+            rec = min(safes.values())
         print(f"\n  n_eoi is NOT YET PINNED for lineage '{cfg.lineage}'.")
         print(f"  RECOMMENDED: n_eoi={rec}")
+        if leak_capped:
+            print(f"    CAPPED BY THE LEAK CHECK: derived is {min(eois.values())}, but only "
+                  f"the last {rec} tokens are identical across real prompts (O-58).")
         print("    = min(derived) across the lineage's checkpoints, so every stage gets the\n"
               "      SAME position window. Where the derived length is consistent (as here),\n"
               "      that is the FULL window and matches Arditi's use of all eoi positions.\n"

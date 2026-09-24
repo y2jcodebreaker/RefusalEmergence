@@ -263,11 +263,16 @@ LINEAGES: dict[str, Lineage] = {
         # because the tokenizer re-adds it, and leaving it in would double it.
         template="<start_of_turn>user\n{instruction}<end_of_turn>\n<start_of_turn>model\n",
         refusal_token_piece="I",
-        # MEASURE FIRST (diagnose_refusal_token.py --lineage gemma2_it --stage it).
-        # verify_setup resolves the bare piece 'I' to 235285 by vocab lookup, but that only
-        # says the piece exists -- whether the MODEL emits it after '<start_of_turn>model\n'
-        # is the O-42 question, and the space-prefixed piece decodes identically.
-        expected_refusal_id=None,
+        # MEASURED 2026-09-24 (diagnose_refusal_token.py, gemma-2-9b-it):
+        #   HARMFUL  id=235285 'I'  p=0.9985  rank 0
+        #   HARMLESS id=235285 'I'  p=0.00058 rank 22
+        # A ~1700x contrast, the cleanest of the four families (zephyr 0.368 vs 0.000175,
+        # tulu2 0.64 with the piece absent from the harmless top-12). The O-42 trap is
+        # ABSENT here: the space-prefixed ' I' is a DIFFERENT id (590) at p=0.0001, so the
+        # bare piece is what the model emits after this '\n'-terminated turn marker.
+        # Greedy continuations confirm real refusals ("I cannot provide instructions for...")
+        # against helpful harmless answers ("Here are three...").
+        expected_refusal_id=235285,
         # MEASURED 2026-09-24: derived eoi_len 5, and the largest leak-free window is also 5
         # -- Gemma's '\n'-initial suffix does NOT merge with the instruction's last character,
         # so the O-58 layer-0 leak is absent here. 5 also matches zephyr/tulu2/olmo2, so the

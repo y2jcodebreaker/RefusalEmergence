@@ -247,6 +247,35 @@ LINEAGES: dict[str, Lineage] = {
               "here ('[/INST]' is a few tokens), so n_eoi may have to drop below the 5 used "
               "elsewhere -- read it off verify_setup rather than assuming.",
     ),
+    # B-session second family, chosen 2026-09-23 AFTER the pre-registration literature check.
+    # Llama-3.1-8B-Instruct was the plan until that check found Guo et al. (Findings EMNLP
+    # 2026, arXiv 2609.01455): benign Alpaca fine-tuning on Llama-3.1-8B-Instruct, concluding
+    # that it "does not primarily erase safety-relevant representations, but perturbs the late
+    # computation" -- H1's framing on the same model and attack. Gemma-2 is untouched by them
+    # (Llama-3.1 / Qwen2.5), by Reblitz (OLMo-3 / Qwen / Llama) and by Malla, AND it is one of
+    # Joad et al.'s models, so one session serves H1 breadth and H2's register analysis on a
+    # competitor's setting.
+    "gemma2_it": Lineage(
+        name="gemma2_it",
+        checkpoints=(("it", "google/gemma-2-9b-it"),),
+        # DERIVE from the tokenizer's own chat_template on the pod and paste it here.
+        # Gemma-2 has NO system role: a hand-written template that invents one would be the
+        # O-42 class of error. Its turns are <start_of_turn>user ... <start_of_turn>model.
+        template=None,
+        refusal_token_piece="I",
+        # MEASURE FIRST (diagnose_refusal_token.py --lineage gemma2_it --stage it). The piece
+        # after '<start_of_turn>model\n' has not been measured on this tokenizer, and the
+        # bare-vs-space-prefixed 'I' trap (O-42) is tokenizer-specific.
+        expected_refusal_id=None,
+        n_eoi=None,
+        notes="H1 breadth + H2 on a competitor's model. 9B in bf16 is ~18 GB, so LoRA "
+              "training plus activations wants MORE than 24 GB -- budget a 40 GB card, and "
+              "note check_disk sizes checkpoints at the 7B rate. GATED: accept the Gemma "
+              "licence on HF first. Architecture: Gemma2ForCausalLM resolves through "
+              "transformer_layers()' first path (model.model.layers); its soft-capping and "
+              "alternating sliding-window attention do not touch a block-input hook, but the "
+              "dose-0 coupling check is the place to find out if they do.",
+    ),
     "tulu2": Lineage(
         name="tulu2",
         checkpoints=(

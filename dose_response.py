@@ -138,6 +138,40 @@ def frozen_probe(model, tok, cfg, template, refusal_toks, frozen: torch.Tensor,
             "frozen_layer": int(layer), "frozen_pos": int(pos)}
 
 
+def geometry_numbers(r0: torch.Tensor, refit: torch.Tensor) -> dict:
+    """Pure: norms, cosine and projection gap of `refit` against `r0` (tested in smoke_test)."""
+    n0, nr = float(r0.norm()), float(refit.norm())
+    cos = float(refit @ r0) / (n0 * nr) if nr > 1e-6 else float("nan")
+    return {"norm_r0": n0, "norm_refit_at_frozen": nr, "cos_r0_refit": cos,
+            "projection_gap": float(refit @ r0) / (n0 * n0)}
+
+
+def refit_geometry(model, tok, cfg, template, refusal_toks, frozen: dict, dirs,
+                   harmless) -> dict:
+    """How the re-fitted direction at the FROZEN cell relates to the frozen dose-0 one.
+
+    Recorded at every dose since 2026-09-23. P1-E7z measured these only at the endpoint, and
+    the adapters for intermediate doses were not kept, so the per-dose curve could not be
+    recovered -- yet it is exactly what the projection-gap detector hypothesis (O-190, P1 plan
+    section 16) needs. projection_gap = (refit . r0_hat) / |r0| is how strongly harm still
+    writes the pre-attack refusal direction (1.0 at dose 0 by construction); refit_nm_at_1 is
+    P1-E7z's primary, the re-fit norm-matched to |r0| at coefficient 1."""
+    r0 = frozen["vec"]
+    refit = dirs[frozen["pos"], frozen["layer"]]
+    out = geometry_numbers(r0, refit)
+    n0, nr = out["norm_r0"], out["norm_refit_at_frozen"]
+    out["refit_nm_at_1"] = float("nan")
+    if nr > 1e-6:
+        h = _addition_handles(model, refit * (n0 / nr), coeff=1.0, layer=frozen["layer"])
+        try:
+            out["refit_nm_at_1"] = _mean_refusal(
+                _last_logits(model, tok, harmless, template, cfg.batch_size), refusal_toks)
+        finally:
+            for x in h:
+                x.remove()
+    return out
+
+
 def measure(model, tok, cfg, stage_tag: str, template: str, refusal_toks, n_eoi: int,
             splits: dict, frozen: dict | None = None, skip_ablated: bool = False) -> dict:
     """Behaviour + coupling + probe on the model AS IT CURRENTLY IS. No saving, no reloading.
@@ -220,6 +254,8 @@ def measure(model, tok, cfg, stage_tag: str, template: str, refusal_toks, n_eoi:
             out.update(frozen_probe(model, tok, cfg, template, refusal_toks,
                                     frozen["vec"], frozen["layer"], frozen["pos"],
                                     splits["harmless_val"]))
+            out.update(refit_geometry(model, tok, cfg, template, refusal_toks, frozen, dirs,
+                                      splits["harmless_val"]))
         # Keep this dose's own directions so dose 0 can be frozen by the caller.
         out["_dirs"] = dirs
         out["_pos_star"] = int(res["pos_star"]) if out["l_star"] >= 0 else -1
@@ -406,6 +442,13 @@ def main() -> None:
                             float(frozen["vec"].norm()))
                 m.update(frozen_probe(model, tok, cfg, template, refusal_toks, frozen["vec"],
                                       frozen["layer"], frozen["pos"], splits["harmless_val"]))
+                # Same geometry code path at dose 0, where the re-fit IS the frozen vector:
+                # gap and cosine must be exactly 1 or the per-dose curve is miscomputed.
+                m.update(refit_geometry(model, tok, cfg, template, refusal_toks, frozen,
+                                        m["_dirs"], splits["harmless_val"]))
+                if abs(m["projection_gap"] - 1) > 1e-6 or abs(m["cos_r0_refit"] - 1) > 1e-6:
+                    raise SystemExit(f"dose-0 geometry self-check failed: gap "
+                                     f"{m['projection_gap']:.6f}, cos {m['cos_r0_refit']:.6f}")
                 # POSITIVE CONTROL for the frozen path. The grid includes coeff 1.0, and at
                 # coeff 1.0 the frozen injection at (pos*, l*) is EXACTLY what the re-fitted
                 # sweep already measured at that cell. So the frozen maximum must be at least
@@ -426,10 +469,12 @@ def main() -> None:
                             m["steer_at_l_star"])
 
             logger.info("[%s] dose %4d | refusal(substring) %.3f | l*=%2d | refit induce "
-                        "%+.3f | FROZEN induce %+.3f | steerable %2d | probe %.3f",
+                        "%+.3f | FROZEN induce %+.3f | steerable %2d | probe %.3f | gap %.3f "
+                        "cos %.3f nm@1 %+.2f",
                         args.arm, step, m["substring_baseline_rate_strict"], m["l_star"],
                         m["max_induce"], m["frozen_induce_max"], m["n_steerable_layers"],
-                        m["probe_peak_logistic"])
+                        m["probe_peak_logistic"], m.get("projection_gap", float("nan")),
+                        m.get("cos_r0_refit", float("nan")), m.get("refit_nm_at_1", float("nan")))
 
             path = (f"{cfg.results_dir}/{args.tag}_{args.arm}{seed_tag}_dose_{step}"
                     f"_refusal{gen_tag}.npz")
@@ -455,6 +500,8 @@ def main() -> None:
                                   "substring_baseline_rate_strict",
                                   "substring_ablated_rate_strict",
                                   "frozen_induce_max", "frozen_induce_at_coeff",
+                                  "projection_gap", "cos_r0_refit", "refit_nm_at_1",
+                                  "norm_refit_at_frozen",
                                   "frozen_induce_at_1")}
                         | {"dose": step})
             rec.result(arm=args.arm, dose=step, path=path,

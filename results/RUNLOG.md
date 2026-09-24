@@ -2774,3 +2774,105 @@ seeds=[1] endpoint=1500 cell=(pos 4, L24) coeffs=[0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
 | True | DIRECTION_LOST | 0 |
 
 seeds=[1, 2, 3] endpoint=1500 cell=(pos 4, L24) coeffs=[0.5, 1.0, 2.0, 4.0, 8.0, 16.0] null=5
+
+---
+
+## B1 · 2026-09-24T06:12:55+00:00 · OK
+
+> Does B1's hand-written three-family table regenerate exactly from the stored completions and WildGuard verdicts?
+
+- **script** `b1_registers.py` — `b1_registers.py`
+- **code** `1c05fc8` on `main`
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| family | removed_pct | baseline | ablated |
+|---|---|---|---|
+| zephyr_dpo | 100.0 | 0.227 | 0.0 |
+| tulu2_dpo | 70.1 | 0.758 | 0.227 |
+| olmo2_rlvr | 50.8 | 0.985 | 0.485 |
+| REPRODUCED | 0 | 0 |
+
+CPU only; regenerates the hand-written B1 table
+
+---
+
+## B1 · 2026-09-24T06:13:25+00:00 · OK
+
+> Does B1's hand-written three-family table regenerate exactly from the stored completions and WildGuard verdicts?
+
+- **script** `b1_registers.py` — `b1_registers.py`
+- **code** `1c05fc8` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| family | removed_pct | baseline | ablated |
+|---|---|---|---|
+| zephyr_dpo | 100.0 | 0.227 | 0.0 |
+| tulu2_dpo | 70.0 | 0.758 | 0.227 |
+| olmo2_rlvr | 50.8 | 0.985 | 0.485 |
+| REPRODUCED | 0 | 0 |
+
+CPU only; regenerates the hand-written B1 table
+
+---
+
+## B1 · 2026-09-24T06:13:36+00:00 · OK
+
+> Does B1's hand-written three-family table regenerate exactly from the stored completions and WildGuard verdicts?
+
+- **script** `b1_registers.py` — `b1_registers.py`
+- **code** `1c05fc8` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| family | removed_pct | baseline | ablated |
+|---|---|---|---|
+| zephyr_dpo | 100.0 | 0.227 | 0.0 |
+| tulu2_dpo | 70.0 | 0.758 | 0.227 |
+| olmo2_rlvr | 50.8 | 0.985 | 0.485 |
+| REPRODUCED | 0 | 0 |
+
+CPU only; regenerates the hand-written B1 table
+
+---
+
+## A2 · 2026-09-24T06:19:10+00:00 · OK
+
+> Does the standard substring refusal judge undercount uniformly, or is it blind to a specific refusal register? And does WildGuard fix it or share it?
+
+- **script** `judge_bench.py` — `judge_bench.py`
+- **code** `1c05fc8` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| register | n | substring_strict | wildguard |
+|---|---|---|---|
+| inability | 2053 | 1.0 | 0.9981 |
+| identity | 236 | 1.0 | 0.5636 |
+| condemnation | 216 | 0.0 | 0.3472 |
+| normative | 920 | 0.0293 | 0.8576 |
+| _compliance | 2407 | 0.0 | 0.1271 |
+| _confusion | 88 | 0.0 | 0.9432 |
+
+5920 items, 50 arms, CPU only; verdicts reconstructed from judge_wildguard.py's stored disagreement indices and asserted against the stored rates
+
+---
+
+## B1 · 2026-09-24T06:19:14+00:00 · OK
+
+> Does B1's hand-written three-family table regenerate exactly from the stored completions and WildGuard verdicts?
+
+- **script** `b1_registers.py` — `b1_registers.py`
+- **code** `1c05fc8` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| family | removed_pct | baseline | ablated |
+|---|---|---|---|
+| zephyr_dpo | 100.0 | 0.227 | 0.0 |
+| tulu2_dpo | 70.0 | 0.758 | 0.227 |
+| olmo2_rlvr | 50.8 | 0.985 | 0.485 |
+| REPRODUCED | 0 | 0 |
+
+CPU only; regenerates the hand-written B1 table

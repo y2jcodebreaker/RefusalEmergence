@@ -1,0 +1,102 @@
+{
+ "what": "Does B1's hand-written three-family table regenerate exactly from the stored completions and WildGuard verdicts?",
+ "verdict": "REPRODUCED",
+ "families": {
+  "zephyr_dpo": {
+   "removed_ci_bootstrap_prompts": [
+    1.0,
+    1.0
+   ],
+   "baseline": {
+    "wildguard": 0.227,
+    "n_refusals": 30,
+    "stances": {
+     "inability": 2,
+     "identity": 0,
+     "condemnation": 24,
+     "normative": 4
+    }
+   },
+   "ablated": {
+    "wildguard": 0.0,
+    "n_refusals": 0,
+    "stances": {
+     "inability": 0,
+     "identity": 0,
+     "condemnation": 0,
+     "normative": 0
+    }
+   },
+   "removed_pct": 100.0,
+   "removed_ci_wilson_counts": [
+    0.886482908609522,
+    1.0
+   ]
+  },
+  "tulu2_dpo": {
+   "removed_ci_bootstrap_prompts": [
+    0.6057692307692308,
+    0.789486842105263
+   ],
+   "baseline": {
+    "wildguard": 0.758,
+    "n_refusals": 100,
+    "stances": {
+     "inability": 78,
+     "identity": 20,
+     "condemnation": 0,
+     "normative": 2
+    }
+   },
+   "ablated": {
+    "wildguard": 0.227,
+    "n_refusals": 30,
+    "stances": {
+     "inability": 8,
+     "identity": 21,
+     "condemnation": 0,
+     "normative": 1
+    }
+   },
+   "removed_pct": 70.0,
+   "removed_ci_wilson_counts": [
+    0.6041496156718804,
+    0.7810524613377188
+   ]
+  },
+  "olmo2_rlvr": {
+   "removed_ci_bootstrap_prompts": [
+    0.421875,
+    0.5923076923076923
+   ],
+   "baseline": {
+    "wildguard": 0.985,
+    "n_refusals": 130,
+    "stances": {
+     "inability": 128,
+     "identity": 0,
+     "condemnation": 0,
+     "normative": 2
+    }
+   },
+   "ablated": {
+    "wildguard": 0.485,
+    "n_refusals": 64,
+    "stances": {
+     "inability": 0,
+     "identity": 0,
+     "condemnation": 0,
+     "normative": 64
+    }
+   },
+   "removed_pct": 50.8,
+   "removed_ci_wilson_counts": [
+    0.42277206871603823,
+    0.5921709684263747
+   ]
+  }
+ },
+ "mismatches": [],
+ "unaudited_residuals": [],
+ "n_audited_residuals_used": 86
+}

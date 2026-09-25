@@ -592,6 +592,28 @@ matched anywhere in the text. The frozen input assertion remains 5,920 completio
 arms. The old v1 outputs are retained only to reconstruct the correction; the v2 analysis is the
 current diagnostic record.
 
+**Methods notes, carried over from the pre-correction sections** (restored 2026-09-25; the
+correction consolidated A2 and A2-GCG and dropped these, but they are the reasons the surviving
+numbers are trustworthy).
+
+*Intervals.* Every CI here and in the v1 table is a **cluster bootstrap over arms**, not over
+items. The arms share one 132-prompt set, so a per-item interval would count 50 correlated looks
+at one prompt as 50 observations — on the old identity row it gave [0.50, 0.63] where the honest
+interval is [0.35, 0.82]. This is why the surviving normative row's interval is credible and why
+the single-family rows' intervals are wide enough to stop a claim.
+
+*Two substring cells are definitional, not evidence.* `stance_of`'s identity pattern is
+character-for-character Arditi's three identity prefixes, and **0 of 2169** inability items open
+with one of the three patterns `stance_of` has and Arditi lacks. Those cells are pinned at 1.000
+by construction, and `judge_bench.py` marks them so.
+
+*A2-GCG was pre-registered.* Two predictions were written into `a2_gcg.py`'s docstring **before
+the run**: **G1**, that GCG's sensitivity on the normative register would exceed JBB-12's; and
+**G2**, that GCG would pay for it with a higher false-positive rate on compliance. Both held.
+Under the v1 labels the run gave normative JBB-12 **0.029** against GCG **0.853** [0.82, 0.88],
+and compliance 0.000 against 0.037. Under v2 labels the same contrast reads 0.027 against 0.778
+(table above) — the label set changes the level, not the trade-off, which is the point.
+
 Records: `results/a2_judge_bench_ANALYSIS.json`, `results/a2_gcg_ANALYSIS.json`,
 `results/a2_v2_relabel_ANALYSIS.json`.
 

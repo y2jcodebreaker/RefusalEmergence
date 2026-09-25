@@ -287,14 +287,20 @@ def main() -> None:
     with open(f"{R}/{out_tag}_ANALYSIS.json", "w") as f:
         json.dump({"question": QUESTION, "cell": [pos, layer], "pc1": pc1, "verdict": v,
                    "models": slim}, f, indent=1, default=float)
-    print(f"\n=== P1-E7z: {v['Z1']}  (null clean: {v['Z0_null_clean']}) ===")
+    # Single-arm runs (P1-E7hz) have no matched control, so z_verdict is bypassed and there
+    # is no Z1. Reporting must not assume the paired shape -- this printed fine for three
+    # seeds and raised KeyError on the one-arm run, AFTER every measurement was on disk
+    # (which is why nothing was lost; same lesson as O-157).
+    head = v.get("Z1", "single arm -- no paired verdict")
+    print(f"\n=== {args.experiment}: {head}  (null clean: {v['Z0_null_clean']}) ===")
     print(f"{'model':12s} {'|refit|/|r0|':>12s} {'cos':>6s} {'gap':>6s} {'refit@1':>8s} "
-          f"{'nm@1':>7s} {'nm max-L':>8s} {'frozen@1':>8s} {'null max':>8s}")
+          f"{'nm@1':>7s} {'nm max-L':>8s} {'frozen@1':>8s} {'null max':>8s} {'zhao best':>9s}")
     for k, r in results.items():
         print(f"{k:12s} {r['norm_refit'] / r['norm_r0']:>12.3f} {r['cos_r0_refit']:>6.3f} "
               f"{r['projection_gap']:>6.3f} {r['refit_raw'][1.0]:>+8.2f} "
               f"{r['refit_nm'][1.0]:>+7.2f} {r['refit_nm_max_layers']:>+8.2f} "
-              f"{r['frozen'][1.0]:>+8.2f} {r['null_max']:>+8.2f}")
+              f"{r['frozen'][1.0]:>+8.2f} {r['null_max']:>+8.2f} "
+              + (f"{max(r['zhao_nm'].values()):>+9.2f}" if r.get("zhao_nm") else f"{'n/a':>9s}"))
 
 
 if __name__ == "__main__":

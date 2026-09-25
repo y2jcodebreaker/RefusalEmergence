@@ -898,7 +898,20 @@ def test_p1e7z_verdict() -> None:
         raise AssertionError("scaling a zero vector must refuse, not divide by zero")
     except ValueError:
         pass
+    # --arms / --endpoint must reach EVERY use, not just some. Three replacements silently
+    # missed on 2026-09-26 (the loop variable is `tag`, not `atag`), so the run loaded the
+    # default benign adapter and died on a 404. main() must reference no module-level default.
+    import inspect
+    import p1e7z_strength as Z
+    msrc = inspect.getsource(Z.main)
+    for bad, why in (("ARMS.items()", "the arms override must reach the model loop"),
+                     ("ARMS.values()", "the arms override must reach the cell check"),
+                     ("adapter-{ENDPOINT}", "the endpoint override must reach the adapter path"),
+                     ("s, ENDPOINT)", "the endpoint override must reach the stored() lookup")):
+        assert bad not in msrc, f"{why} (found {bad!r})"
+    assert msrc.count("arms = dict(ARMS)") == 1, "exactly one place may read the default"
     print("  P1-E7z verdict: all four outcomes reachable, dirty null voids them — OK")
+    print("  P1-E7z overrides: --arms and --endpoint reach every use — OK")
 
 
 def _loop_shadows(src: str) -> set[str]:

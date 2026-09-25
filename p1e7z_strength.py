@@ -247,16 +247,16 @@ def main() -> None:
                    notes=f"seeds={seeds} arms={arms} endpoint={endpoint} cell=(pos {pos}, L{layer}) "
                          f"coeffs={list(COEFFS)} null={N_NULL}") as rec:
         for s in seeds:
-            for role, (tag, arm) in ARMS.items():
+            for role, (tag, arm) in arms.items():
                 key = f"{role}_s{s}"
-                path = f"models/{tag}-{arm}_s{s}-adapter-{ENDPOINT}"
+                path = f"models/{tag}-{arm}_s{s}-adapter-{endpoint}"
                 if model is None:
                     model = PeftModel.from_pretrained(base, path, adapter_name=key)
                 else:
                     model.load_adapter(path, adapter_name=key)
                 model.set_adapter(key)
                 model.eval()
-                st = stored(tag, arm, s, ENDPOINT)
+                st = stored(tag, arm, s, endpoint)
                 m = measure(model, tok, cfg, template, toks, n_eoi, sp, r0_all, pos, layer,
                             null_dirs)
                 if abs(m["frozen"][1.0] - st["frozen_at_1"]) > TOL:

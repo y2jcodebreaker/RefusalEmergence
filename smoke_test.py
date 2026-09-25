@@ -1022,6 +1022,39 @@ def test_p1e7f_verdict() -> None:
     print("  P1-E7f verdict: seed 1 pinned as F5-only failure, each criterion fails alone — OK")
 
 
+def test_stance_labeller_switch() -> None:
+    """A3's labeller is a switch, v1 by default, and the two runs cannot cross-contaminate.
+
+    The hazard this pins: stance_steer read the directions file by a FIXED name, so a v2 run
+    would have loaded v1 directions and scored them with v2 labels -- treatment defined one
+    way, outcome another, and nothing would error (caught 2026-09-26, before the first run)."""
+    import inspect
+    import stance_directions as SD
+    import stance_steer as SS
+    from stance_v2 import stance_of_v2
+
+    assert SD.labeller_for("v1") is SD.stance_of and SD.labeller_for("v2") is stance_of_v2
+    try:
+        SD.labeller_for("v3")
+        raise AssertionError("an unknown labeller must be refused, not defaulted")
+    except SystemExit:
+        pass
+    # Default stays v1 everywhere, or every pre-2026-09-26 result silently changes.
+    for mod in (SD, SS):
+        src = inspect.getsource(mod.main)
+        assert '"--labels", default="v1"' in src, f"{mod.__name__} must default to v1"
+    # Both the read path and the write path must carry the suffix.
+    ssrc = inspect.getsource(SS.main)
+    assert ssrc.count('suffix = "" if args.labels == "v1"') == 1, "suffix computed exactly once"
+    assert ssrc.index("suffix =") < ssrc.index("_stance_directions{suffix}"), \
+        "the suffix must be computed BEFORE the directions file is read"
+    assert "_stance_steer{suffix}" in ssrc
+    # classify() must take the labeller, or the outcome silently stays v1.
+    assert "labeller" in inspect.signature(SS.classify).parameters
+    assert "labeller" in inspect.signature(SD.label_prompts).parameters
+    print("  A3 labeller switch: v1 default, v2 isolated, read and write both suffixed — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -1103,6 +1136,7 @@ if __name__ == "__main__":
     test_refit_geometry_numbers()
     test_stance_v2()
     test_p1e7f_verdict()
+    test_stance_labeller_switch()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

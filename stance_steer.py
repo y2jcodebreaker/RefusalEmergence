@@ -85,7 +85,7 @@ distinguished them. So:
   i.e. at ceiling, so ADDING d_arditi cannot show anything. The rate control is the NEGATIVE
   coefficient: subtracting the refusal direction must drive refusal DOWN.
 
-Output: results/{lineage}_{stage}_stance_steer.npz
+Output: results/{lineage}_{stage}_stance_steer.npz  (v2 run: ..._stance_steer_v2.npz)
 """
 
 from __future__ import annotations
@@ -107,7 +107,7 @@ from refusal_substring import (CONFUSION_SUBSTRINGS, generate_completions,
                                is_refusal_strict, truncate_at_turn)
 from run_stage import load_model, set_seed
 from runlog import RunRecord
-from stance_directions import label_prompts, stance_of
+from stance_directions import label_prompts, labeller_for, stance_of
 from verify_setup import check_disk
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -120,13 +120,13 @@ QUESTION = ("Does d_stance change WHICH KIND of refusal the model produces, whil
 RATE_TOLERANCE = 0.10          # pre-registered: "leaves the rate alone" means within this
 
 
-def classify(completions: list[str]) -> dict:
+def classify(completions: list[str], labeller=None) -> dict:
     """Stance composition and overall refusal rate for one arm."""
     # Same labelling as A3, confusion check included -- a completion the model
     # could not parse is not a stance, and counting it as one would let a broken
     # arm look like a composition shift.
     labs = ["confusion" if any(x in truncate_at_turn(c).lower()
-                               for x in CONFUSION_SUBSTRINGS) else stance_of(c)
+                               for x in CONFUSION_SUBSTRINGS) else (labeller or stance_of)(c)
             for c in completions]
     refusals = [x for x in labs if x not in ("compliance", "confusion")]
     n_in = labs.count("inability")
@@ -240,6 +240,10 @@ def main() -> None:
                     help="128, not 48: at 48 the normative and identity stances are cut off "
                          "mid-sentence and the stance label is unreliable (O-138/O-139)")
     ap.add_argument("--n", type=int, default=0, help="cap prompts (0 = all 132); for a dry run")
+    ap.add_argument("--labels", default="v1", choices=("v1", "v2"),
+                    help="stance labeller for BOTH the fitted classes and the OUTCOME "
+                         "measure. Must match the --labels used by stance_directions.py, or "
+                         "the treatment and the outcome are defined differently.")
     args = ap.parse_args()
 
     cfg = config_for(args.lineage)
@@ -250,9 +254,14 @@ def main() -> None:
         raise SystemExit(f"unknown stage {args.stage!r}; have {list(ckpts)}")
     stem = f"{cfg.lineage}_{args.stage}"
 
-    src = f"{cfg.results_dir}/{stem}_stance_directions.npz"
+    # The suffix is computed HERE, not at save time: reading the v1 directions while
+    # labelling outcomes with v2 would pair a treatment defined one way with an outcome
+    # defined another, and nothing would error. Caught before the first v2 run, 2026-09-26.
+    suffix = "" if args.labels == "v1" else f"_{args.labels}"
+    src = f"{cfg.results_dir}/{stem}_stance_directions{suffix}.npz"
     if not os.path.exists(src):
-        raise SystemExit(f"{src} missing -- run stance_directions.py first")
+        raise SystemExit(f"{src} missing -- run stance_directions.py --labels "
+                         f"{args.labels} first")
     z = np.load(src, allow_pickle=True)
     if "dir__stance_contrast" not in z.files:
         raise SystemExit(f"{src} has no stance contrast (A3 could not fit both stances); "
@@ -265,7 +274,8 @@ def main() -> None:
     logger.info("cell (pos %d, L%d) | ||d_inability||=%.3f ||d_stance||=%.3f",
                 c_pos, c_lay, ref_norm, float(np.linalg.norm(d_stance)))
 
-    labs, _ = label_prompts(stem, args.arm)
+    lab_fn = labeller_for(args.labels)
+    labs, _ = label_prompts(stem, args.arm, lab_fn)
     tail = load_instructions("harmful_train")[cfg.n_train:]
     prompts = tail[: cfg.n_behavioral] if cfg.n_behavioral else tail
     if len(prompts) != len(labs):
@@ -332,7 +342,7 @@ def main() -> None:
     logger.info("baseline (c=0), %d prompts @ %d tokens", len(prompts), args.gen_tokens)
     base_comp = generate_completions(model, tok, prompts, template,
                                      args.gen_tokens, cfg.batch_size)
-    base = classify(base_comp)
+    base = classify(base_comp, lab_fn)
     base["degenerate"] = float(np.mean([degenerate(c) for c in base_comp]))
     logger.info("[c=0] refusal %.3f | inab %d iden %d share %.3f | degen %.3f",
                 base["refusal_rate"], base["n_inability"], base["n_identity"],
@@ -355,7 +365,7 @@ def main() -> None:
                 for x in h:
                     x.remove()
             done += 1
-            r = classify(comp)
+            r = classify(comp, lab_fn)
             r["degenerate"] = float(np.mean([degenerate(x) for x in comp]))
             r["kl"] = kls[name][c]
             r["in_regime"] = bool(r["kl"] <= args.kl_max)
@@ -429,7 +439,7 @@ def main() -> None:
     # completed generations -- 22 minutes of pod time -- with nothing written to disk. The
     # expensive artefact is now on disk before any string that could fail is built, and the
     # ledger row is written against a file that already exists.
-    path = f"{cfg.results_dir}/{stem}_stance_steer.npz"
+    path = f"{cfg.results_dir}/{stem}_stance_steer{suffix}.npz"
     np.savez(path, stage=np.array(args.stage), cell=np.array([c_pos, c_lay]),
              results=np.array(json.dumps(results)),
              completions=np.array(json.dumps(completions)))

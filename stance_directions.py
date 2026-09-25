@@ -45,7 +45,7 @@ third-person refusals vs baseline compliances". Baselines contain ~0 third-perso
 that positive class is EMPTY and the fit would have returned a direction from noise with
 nothing flagging it. The contrast must be drawn where the stance actually occurs.
 
-Output: results/{lineage}_{stage}_stance_directions.npz
+Output: results/{lineage}_{stage}_stance_directions.npz  (v2 run: ..._v2.npz)
 """
 
 from __future__ import annotations
@@ -107,7 +107,24 @@ def _looks_normative(t: str) -> bool:
     return bool(_NORM.search(t[:200]))
 
 
-def label_prompts(stem: str, arm: str) -> tuple[list[str], list[str]]:
+def labeller_for(name: str):
+    """v1 or v2, chosen explicitly. v1 is the DEFAULT so every pre-2026-09-26 result
+    reproduces untouched; v2 is what the A3 rerun uses (P1 plan section 18).
+
+    The difference is not cosmetic: v1 assigns a register from the completion's OPENING, so
+    "I do not condone X. However, here are the steps: 1. ..." counts as a condemnation
+    refusal. v2 reads the whole completion. On Tulu-2's baseline arm that moves 20 of 41
+    identity items into compliance -- and A3's treatment classes AND its outcome measure are
+    both built from these labels."""
+    if name == "v1":
+        return stance_of
+    if name == "v2":
+        from stance_v2 import stance_of_v2
+        return stance_of_v2
+    raise SystemExit(f"unknown labeller {name!r}; use v1 or v2")
+
+
+def label_prompts(stem: str, arm: str, labeller=None) -> tuple[list[str], list[str]]:
     """(stance per prompt, completions). Reads the stored behavioural arm."""
     path = f"results/{stem}_refusal_gen128.npz"
     if not os.path.exists(path):
@@ -116,11 +133,12 @@ def label_prompts(stem: str, arm: str) -> tuple[list[str], list[str]]:
         raise SystemExit(f"no stored completions for {stem}; run run_stage --behavioral first")
     z = np.load(path, allow_pickle=True)
     comps = json.loads(str(z["sample_completions"]))[arm]
+    lab_fn = labeller or stance_of
     labs = []
     for c in comps:
         t = truncate_at_turn(c)
         labs.append("confusion" if any(x in t.lower() for x in CONFUSION_SUBSTRINGS)
-                    else stance_of(c))
+                    else lab_fn(c))
     logger.info("[%s/%s] stance counts: %s", stem, arm,
                 {s: labs.count(s) for s in sorted(set(labs))})
     return labs, comps
@@ -223,6 +241,10 @@ def main() -> None:
     ap.add_argument("--stage", default="dpo")
     ap.add_argument("--arm", default="baseline", choices=("baseline", "ablated"))
     ap.add_argument("--n-null", type=int, default=10)
+    ap.add_argument("--labels", default="v1", choices=("v1", "v2"),
+                    help="which stance labeller defines the classes. v1 reproduces the "
+                         "2026-09-22 result; v2 is the rerun that retired it (P1 plan 18). "
+                         "Outputs are suffixed so the two never overwrite each other.")
     args = ap.parse_args()
 
     cfg = config_for(args.lineage)
@@ -233,7 +255,7 @@ def main() -> None:
         raise SystemExit(f"unknown stage {args.stage!r}; have {list(ckpts)}")
     stem = f"{cfg.lineage}_{args.stage}"
 
-    labs, _ = label_prompts(stem, args.arm)
+    labs, _ = label_prompts(stem, args.arm, labeller_for(args.labels))
     tail = load_instructions("harmful_train")[cfg.n_train:]
     prompts = tail[: cfg.n_behavioral] if cfg.n_behavioral else tail
     if len(prompts) != len(labs):
@@ -468,9 +490,11 @@ def main() -> None:
         logger.info("pairwise |cos| between stance directions: %s",
                     {k: round(abs(v), 3) for k, v in cos.items()})
 
-    path = f"{cfg.results_dir}/{stem}_stance_directions.npz"
+    suffix = "" if args.labels == "v1" else f"_{args.labels}"
+    path = f"{cfg.results_dir}/{stem}_stance_directions{suffix}.npz"
     with RunRecord(EXPERIMENT, "stance_directions.py", cfg=cfg, question=QUESTION,
-                   notes=f"arm={args.arm}, stances fitted against HARMLESS (not compliance), "
+                   notes=f"labels={args.labels}, arm={args.arm}, stances fitted against "
+                         f"HARMLESS (not compliance), "
                          f"count-balanced, cell by induce@c1.0 over the full (pos, layer) "
                          f"surface, {args.n_null} shuffled-label nulls per stance; "
                          f"positive control passed={ctrl.get('passed')}") as rec:

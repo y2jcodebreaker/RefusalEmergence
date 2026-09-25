@@ -993,6 +993,33 @@ def test_stance_v2() -> None:
     print("  stance v2: prohibitive/redirect recovered, disclaimer-then-comply refused, v1 intact — OK")
 
 
+def test_p1e7f_verdict() -> None:
+    """P1-E7f's rule on a second family: each criterion fails alone, and the REAL seed-1
+    numbers must come out as a partial replication -- F5 failing at +0.21 is the result,
+    so a later edit that quietly rescues it has to break this test."""
+    from p1e7f_check import pair_verdict
+
+    atk = {"induce": -1.56, "frozen": 5.40, "nm1": -0.80, "wildguard": 0.476}
+    ctl = {"induce": 5.03, "frozen": 5.61, "nm1": 3.60, "wildguard": 0.890}
+    assert pair_verdict(atk, ctl, 1.0)["replicates"], "seed 2 passes every criterion"
+    # Seed 1 as measured: everything holds EXCEPT F5 (+0.21 >= 0).
+    s1 = pair_verdict(dict(atk, induce=-1.44, frozen=5.09, nm1=0.21, wildguard=0.402),
+                      dict(ctl, induce=5.87, frozen=6.30, nm1=2.65, wildguard=0.866), 1.0)
+    assert not s1["replicates"] and not s1["F5_not_explained_by_norm"], s1
+    assert all(s1[f] for f in ("F1_mapping_degraded", "F2_readout_intact",
+                               "F3_representation_intact", "F4_behaviour_degraded")), s1
+    for broken, crit in ((dict(atk, induce=0.3), "F1_mapping_degraded"),
+                         (dict(atk, frozen=-2.0), "F2_readout_intact"),
+                         (dict(atk, wildguard=0.95), "F4_behaviour_degraded"),
+                         (dict(atk, nm1=0.5), "F5_not_explained_by_norm")):
+        v = pair_verdict(broken, ctl, 1.0)
+        assert not v[crit] and not v["replicates"], f"{crit} cannot fail on its own"
+    assert not pair_verdict(atk, dict(ctl, induce=-1.0), 1.0)["F1_mapping_degraded"], \
+        "a control whose own mapping died must not count as a clean contrast"
+    assert not pair_verdict(atk, ctl, 0.95)["F3_representation_intact"]
+    print("  P1-E7f verdict: seed 1 pinned as F5-only failure, each criterion fails alone — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -1073,6 +1100,7 @@ if __name__ == "__main__":
     test_p1e7g_verdict()
     test_refit_geometry_numbers()
     test_stance_v2()
+    test_p1e7f_verdict()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

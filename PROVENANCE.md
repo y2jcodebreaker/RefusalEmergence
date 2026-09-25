@@ -119,6 +119,28 @@ Depends on: P1-E7
 
 > Layer 2 -- replicates the paper's central claim. OLMo 2 only; Tulu-2 excluded because D1 showed its coupling metric collapses under a benign control. Descriptive, NOT pre-registered: every attack seed loses all 13 steerable layers by dose 50 and never recovers any, while every control that dips recovers -- the pairs separate by recovery, not by the initial collapse.
 
+### P1-E7f — ✅ · 1 optional strengthening(s) available
+
+**PARTIAL 2026-09-25. On a SECOND family (Gemma-2-9B-it) the attack/control decomposition replicates on four of five pre-registered criteria in all three matched seeds -- mapping degraded (re-fit -1.44 / -1.56 / -1.06 against controls +5.87 / +5.03 / +4.08), readout intact (frozen +5.09 / +5.40 / +5.71), representation intact (probe 1.000 at every dose), behaviour degraded (WildGuard 0.402 / 0.476 / 0.585 against 0.866 / 0.890 / 0.927) -- and steerable layers separate perfectly, 0 in every attack against 15-17 in every control. F5 HOLDS IN ONLY 2 OF 3: the attacked norm-matched re-fit is +0.21 / -0.80 / -0.22, i.e. about ZERO, where OLMo 2's was clearly negative (-0.60 / -1.41 / -3.38). The attack renders Gemma's coupling INERT and OLMo 2's REVERSED; the pre-registered threshold was written to OLMo 2's severity and is NOT redefined.**
+
+Depends on: P1-E7r
+
+| evidence | script | experiment | files on disk |
+|---|---|---|---|
+| F1-F5 per matched seed at dose 1500, plus the endpoint geometry, steerable-layer counts and both judges' rates | `p1e7f_check.py` | P1-E7f | 1 × `*_p1e7f_ANALYSIS.npz` |
+
+| control | rules out | status |
+|---|---|---|
+| family usable at all (Gate 0) | reading a null result out of a model that never had a steerable direction | ✅ 2026-09-24: pre-registered gate passed on all four criteria -- l*=23, 20 steerable layers of 34 unpruned, probe 1.000 with L0=0.500, baseline refusal 1.000; peak ablation 22.87 vs norm-matched random 0.222. |
+| control arm valid on this family (Gate 1) | Tulu-2's failure mode: safety-PRESERVING controls losing coupling too, leaving no contrast | ✅ 2026-09-24: pre-registered gate run on control seed 1 BEFORE any attack. Re-fit +5.87 and norm-matched +2.65 at dose 1500, both > 0. |
+| seed 1's failure pinned against quiet rescue | a later edit relaxing F5 until the family passes | ✅ 2026-09-25: the rule is p1e7f_check.pair_verdict, a pure function; smoke_test drives it with seed 1's MEASURED numbers and asserts F5 is the only criterion that fails, so relaxing F5 breaks the test suite. |
+| endpoint judge disagreements read | reporting a behavioural rate whose substring/WildGuard gap has not been inspected | ✅ 2026-09-24: all 14 of seed 1's endpoint disagreements read against their prompts -- 14/14 genuine refusals the substring judge misses. F4 holds under BOTH judges. Seeds 2-3 (12, 15) not individually read. |
+| third and fourth families | a two-family result presented as general | ◻️ *optional* — OPEN: OLMo-3-7B (Reblitz's) and Llama-3-8B-Instruct (Joad's) would test whether 'inert vs reversed' tracks anything identifiable. |
+
+**Falsifier.** Any seed where the attack's norm-matched re-fit is >= 0 while its control's is > 0. IT FIRED, on seed 1 (+0.21 against +2.65), which is why this claim is PARTIAL rather than confirmed.
+
+> Layer 2. Second family chosen AFTER the pre-registration literature check found Guo et al. (Findings EMNLP 2026) already own Llama-3.1 + Alpaca for this framing. Seeds 2-3 ran at doses 0 and 1500 only (P1 plan amendment 2, written before any attack run); F1-F5 all test the endpoint.
+
 ### P1-E7 — ✅
 
 **CONFIRMED 2026-09-19. Breaking alignment breaks the LINK and spares the REPRESENTATION. Attacked: probe 1.000, XSTest focus-matched 0.917, behavioural refusal 0.477 (hand-audited; substring said 0.189), and ZERO of 130 cells induce. Its own direction reaches -4.955 at natural scale; rlvr's direction injected into it reaches +1.069 and crosses. P1-E7d then decomposed this: the REPRESENTATION is intact (probe 1.000 at every dose), the READOUT is intact (the frozen pre-attack direction induces +3.4 to +4.7 in every attacked checkpoint), and only the MAPPING between them is DEGRADED -- harm writes the refusal direction at about half its pre-attack strength and the re-fitted direction rotates away (P1-E7z).**
@@ -247,4 +269,4 @@ Depends on: C1, C2, C3, P1-E7
 
 Graph and disk agree.
 
-Ledger: 205 recorded runs across 21 scripts.
+Ledger: 218 recorded runs across 22 scripts.

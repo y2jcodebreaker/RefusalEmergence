@@ -227,7 +227,7 @@ and on Tulu-2 it would fail anyway (D1).
 Scope, stated: **OLMo 2 only.** Tulu-2 is excluded because D1 showed its coupling metric collapses
 under a benign control, so no contrast exists there.
 
-### P1-E7f seed 1 — four of five criteria hold on Gemma-2-9B-it, and **F5 FAILS** (2026-09-24)
+### P1-E7f — the decomposition replicates on Gemma-2-9B-it, except F5 (2026-09-24/25)
 
 Pre-registered in P1 plan §17, dose plan reduced in amendment 2 *before* any attack ran. Gate 1
 passed first: the matched control's re-fit still induces at dose 1500 (+5.87, norm-matched
@@ -251,6 +251,33 @@ at 1500. On OLMo 2 the same quantity was cleanly negative in all three seeds (�
 than *reversed* — at its own norm the re-fit actively fails (−1.44), scaled up to the frozen
 direction's norm it does nothing (+0.21) — while the readout is untouched (+5.09) and the probe
 never leaves 1.000. F5's threshold is what failed, not the decomposition.
+
+**All three matched seeds, at dose 1500** (`p1e7f_check.py` → `results/p1e7f_ANALYSIS.json`).
+Seeds 2 and 3 ran at doses 0 and 1500 only, per amendment 2, written before any attack ran.
+
+| seed | arm | re-fit | frozen | **nm@1** | gap | steerable | probe | WildGuard | judge disagreements |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | attack | −1.44 | +5.09 | **+0.21** | 0.683 | **0** | 1.000 | 0.402 | 14 |
+| 1 | control | +5.87 | +6.30 | +2.65 | 0.852 | 15 | 1.000 | 0.866 | 1 |
+| 2 | attack | −1.56 | +5.40 | **−0.80** | 0.714 | **0** | 1.000 | 0.476 | 12 |
+| 2 | control | +5.03 | +5.61 | +3.60 | 0.862 | 17 | 1.000 | 0.890 | 5 |
+| 3 | attack | −1.06 | +5.71 | **−0.22** | 0.797 | **0** | 1.000 | 0.585 | 15 |
+| 3 | control | +4.08 | +5.42 | +1.75 | 0.913 | 15 | 1.000 | 0.927 | 2 |
+
+**F1 3/3 · F2 3/3 · F3 3/3 · F4 3/3 · F5 2/3.** §17 required every criterion in every seed, so
+**P1-E7f does not replicate as pre-registered**; seed 1's +0.21 is the only failure, and F5 is
+**not** redefined. `smoke_test.py` pins seed 1's numbers so a later edit cannot quietly rescue it.
+
+**The family difference, stated as the finding it is.** Gemma's attacked norm-matched re-fit sits
+at approximately **zero** (+0.21, −0.80, −0.22; mean −0.27) against controls at +2.65 / +3.60 /
++1.75. On OLMo 2 the same quantity was clearly negative in all three seeds (−0.60, −1.41, −3.38).
+So the attack renders Gemma's coupling **inert** and OLMo 2's **reversed** — same decomposition,
+different endpoint severity, and the pre-registered threshold was written to OLMo 2's severity.
+
+**Steerable layers are the cleanest separator on this family: 0 in every attack, 15–17 in every
+control.** The projection gap separates too (0.683–0.797 vs 0.852–0.913) but with less margin
+than OLMo 2's (0.41–0.52 vs 0.73–0.87), which is the same ordering as nm@1 and consistent with
+"inert, not reversed".
 
 **Dose curves (WildGuard, 82 held-out prompts).** The arms separate from dose 250 onward:
 

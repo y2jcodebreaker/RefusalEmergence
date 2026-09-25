@@ -1,0 +1,218 @@
+{
+ "what": "How much of A2's apparent WildGuard register bias is v1 labelling disclaimer-then-comply completions as refusals?",
+ "n_items": 5920,
+ "skipped": [],
+ "v1_registers_and_what_v2_demotes": {
+  "inability": {
+   "n_v1": 2053,
+   "v2_demoted_to_compliance": 18,
+   "wildguard_called_compliance": 4,
+   "of_those_wildguard_missed_v2_demotes": 2,
+   "families": [
+    "olmo2",
+    "tulu2",
+    "zephyr"
+   ]
+  },
+  "identity": {
+   "n_v1": 236,
+   "v2_demoted_to_compliance": 103,
+   "wildguard_called_compliance": 103,
+   "of_those_wildguard_missed_v2_demotes": 75,
+   "families": [
+    "tulu2"
+   ]
+  },
+  "condemnation": {
+   "n_v1": 216,
+   "v2_demoted_to_compliance": 120,
+   "wildguard_called_compliance": 141,
+   "of_those_wildguard_missed_v2_demotes": 114,
+   "families": [
+    "zephyr"
+   ]
+  },
+  "normative": {
+   "n_v1": 920,
+   "v2_demoted_to_compliance": 36,
+   "wildguard_called_compliance": 131,
+   "of_those_wildguard_missed_v2_demotes": 31,
+   "families": [
+    "olmo2",
+    "tulu2",
+    "zephyr"
+   ]
+  }
+ },
+ "judges_on_v2_refusals": {
+  "inability": {
+   "n": 2120,
+   "n_arms": 31,
+   "families": [
+    "olmo2",
+    "tulu2",
+    "zephyr"
+   ],
+   "jbb12": 1.0,
+   "jbb12_ci": [
+    1.0,
+    1.0
+   ],
+   "gcg": 1.0,
+   "gcg_ci": [
+    1.0,
+    1.0
+   ],
+   "wildguard": 0.9981132075471698,
+   "wildguard_ci": [
+    0.9958455120899593,
+    0.9996009815296791
+   ]
+  },
+  "identity": {
+   "n": 133,
+   "n_arms": 4,
+   "families": [
+    "tulu2"
+   ],
+   "jbb12": 1.0,
+   "jbb12_ci": [
+    1.0,
+    1.0
+   ],
+   "gcg": 1.0,
+   "gcg_ci": [
+    1.0,
+    1.0
+   ],
+   "wildguard": 0.7894736842105263,
+   "wildguard_ci": [
+    0.6041666666666666,
+    0.9395973154362416
+   ]
+  },
+  "condemnation": {
+   "n": 96,
+   "n_arms": 4,
+   "families": [
+    "zephyr"
+   ],
+   "jbb12": 0.0,
+   "jbb12_ci": [
+    0.0,
+    0.0
+   ],
+   "gcg": 0.4375,
+   "gcg_ci": [
+    0.2702702702702703,
+    1.0
+   ],
+   "wildguard": 0.71875,
+   "wildguard_ci": [
+    0.5454545454545454,
+    0.8217054263565892
+   ]
+  },
+  "normative": {
+   "n": 1014,
+   "n_arms": 46,
+   "families": [
+    "olmo2",
+    "tulu2",
+    "zephyr"
+   ],
+   "jbb12": 0.026627218934911243,
+   "jbb12_ci": [
+    0.013792684289945789,
+    0.052962630231030164
+   ],
+   "gcg": 0.7781065088757396,
+   "gcg_ci": [
+    0.737541269315267,
+    0.815594573369297
+   ],
+   "wildguard": 0.8964497041420119,
+   "wildguard_ci": [
+    0.8509278728437245,
+    0.928135957821985
+   ]
+  },
+  "compliance": {
+   "n": 2557,
+   "n_arms": 49,
+   "families": [
+    "olmo2",
+    "tulu2",
+    "zephyr"
+   ],
+   "jbb12": 0.048494329292139225,
+   "jbb12_ci": [
+    0.011375638651173307,
+    0.10312320577245193
+   ],
+   "gcg": 0.12123582323034807,
+   "gcg_ci": [
+    0.06879509281678774,
+    0.18296276677859602
+   ],
+   "wildguard": 0.09229565897536175,
+   "wildguard_ci": [
+    0.06369870829465346,
+    0.12761347228325687
+   ]
+  }
+ },
+ "a3_stance_classes_v1_vs_v2": {
+  "tulu2_dpo_dpo": {
+   "compliance": {
+    "n_v1": 10,
+    "v2_demotes": 0
+   },
+   "identity": {
+    "n_v1": 41,
+    "v2_demotes": 20
+   },
+   "inability": {
+    "n_v1": 78,
+    "v2_demotes": 0
+   },
+   "normative": {
+    "n_v1": 3,
+    "v2_demotes": 2
+   }
+  },
+  "olmo2_e7_rlvr": {
+   "compliance": {
+    "n_v1": 2,
+    "v2_demotes": 0
+   },
+   "inability": {
+    "n_v1": 128,
+    "v2_demotes": 2
+   },
+   "normative": {
+    "n_v1": 2,
+    "v2_demotes": 0
+   }
+  },
+  "zephyr_dpo": {
+   "compliance": {
+    "n_v1": 63,
+    "v2_demotes": 0
+   },
+   "condemnation": {
+    "n_v1": 57,
+    "v2_demotes": 23
+   },
+   "inability": {
+    "n_v1": 5,
+    "v2_demotes": 3
+   },
+   "normative": {
+    "n_v1": 7,
+    "v2_demotes": 0
+   }
+  }
+ },
+ "caveat": "v2 is a heuristic with measured gaps of its own (it misses 'I strongly disagree' and engage-then-redirect openings). These numbers bound the v1 labelling error; they are not gold. Blind human labels remain the fix."
+}

@@ -211,7 +211,11 @@ def label(text: str) -> str:
 # the first time judge_bench.py was re-run after them -- overwriting the frozen table. Caught
 # 2026-09-23 by diffing the output. A2's input set is therefore pinned by excluding the tags
 # of every experiment that ran after it, and the item count is asserted in main().
-A2_LATER_TAGS: tuple[str, ...] = ("d1_", "p1e7r_")
+# Every experiment that wrote WildGuard files into results/ AFTER A2 was frozen. Extended
+# 2026-09-25 when the Gemma runs landed and the item-count assertion caught them -- which is
+# the guard doing its job, not a nuisance. A new experiment that judges completions must be
+# added here, or A2's table silently absorbs it.
+A2_LATER_TAGS: tuple[str, ...] = ("d1_", "p1e7r_", "p1e7f_", "gemma2_it_")
 A2_FROZEN_N_ITEMS, A2_FROZEN_N_ARMS = 5920, 50
 
 

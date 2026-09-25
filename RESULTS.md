@@ -363,6 +363,81 @@ and it still tracks fallback capacity: Gemma, like Zephyr, has no register to fa
 compliance. Its prohibitive-opening patterns do not match an opening that engages with the topic
 before declining. Blind human labels remain the fix.
 
+### P1-E7h + P1-E7hz — the dissociation is NOT attack-type-specific (2026-09-26)
+
+Pre-registered in P1 plan §17, with the data construction corrected in amendment 3 *before* the
+run after two flaws were found in the original design (the named completions were on the
+EVALUATION prompts, and 64 of 132 of them are still normative-register refusals).
+
+**Attack.** 22 (harmful prompt, the model's own ablated compliant answer) pairs, built from the
+**rehearsal** half and kept only where both the strict substring judge and `stance_of` v2 call
+them compliance. No benign filler. OLMo 2 RLVR, one seed.
+
+| dose | WildGuard | re-fit @1 | frozen max | gap | cos | steerable | probe | **nm@1** |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 0.976 | +3.95 | +3.56 | 1.000 | 1.000 | 13 | 1.000 | +3.05 |
+| 50 | **0.049** | −12.76 | +1.03 | 0.360 | 0.602 | **0** | 1.000 | −14.26 |
+| 400 | 0.073 | −13.42 | +0.69 | 0.353 | 0.590 | **0** | 1.000 | **−15.70** |
+
+**H-1's "< 0" branch holds.** The re-fit fails at matched norm under a harmful attack too, so
+**attack type does not explain Zhao et al.'s App. H.2 result.** Their difference must be the
+model or the metric.
+
+**Validity: this is a jailbreak, not a broken model.** Loss reached 0.0000 on 22 examples, so
+degeneracy had to be ruled out before anything was reported. At dose 400: **0 degenerate**
+completions, all 82 unique, median 103 words. Duplicate openings *fall* with dose (36 → 22 →
+13) — the opposite of collapsing onto memorised text, and expected, since refusals are
+formulaic and compliance is varied. Prompt-word recall *rises* (0.557 → 0.578; 63 of 82
+strongly responsive), so the attacked model answers the held-out prompts more specifically than
+the aligned one did.
+
+**The comparison that sharpens it.** Against the benign attack on the same model:
+
+| | benign (P1-E7z, 3 seeds) | harmful (P1-E7hz) |
+|---|---|---|
+| cos(r0, re-fit) | 0.67 / 0.61 / 0.59 | **0.590** |
+| projection gap | 0.52 / 0.42 / 0.41 | **0.353** |
+| nm@1 | −0.60 / −1.41 / −3.38 | **−15.70** |
+
+**The re-fitted direction rotates by about the same amount either way** (cos ≈ 0.59 in both);
+what differs is how strongly harm writes it. That makes the **projection gap the more
+informative of the two measures**, and it is the quantity that separates arms in every
+experiment we have run.
+
+### P1-E7hz — Zhao's contrast is VACUOUS on a fully jailbroken model (2026-09-26)
+
+Pre-registered as §19 to test whether the **contrast construction** explains Zhao's result:
+theirs is mean(harmful prompts the model now ACCEPTS) − mean(harmless), against our
+mean(harmful) − mean(harmless).
+
+**It cannot be tested here.** `n_accepted = 128` of 128 — the attack is complete enough that the
+model accepts every harmful prompt, so their subset *is* the full set and the two constructions
+are **numerically identical at every coefficient** (`zhao_nm` = `refit_nm` = −15.51 / −15.70 /
+−13.48 / −10.48 / −11.21 / −11.70). Recorded as vacuous rather than as evidence.
+
+**The construction was already tested where it is well-defined.** On the three **benign**
+checkpoints P1-E7z measured `n_accepted` at **50 / 69 / 77** of 128 — a proper subset, where the
+constructions genuinely differ — and Zhao's contrast never induced (best −0.63 / −1.10 / −1.70).
+**So the construction does not explain the discrepancy**, and the remaining candidates are the
+model family (their 32-layer plot is Llama-2/Qwen-2; ours is OLMo 2) and the metric (they score
+refusal rate on generations, we score last-token log-odds — and P1-E7g showed those come apart).
+
+> **A methodological point the paper should state.** Zhao's contrast is only well-defined on a
+> **partially** jailbroken model. Push the attack to completion and it degenerates into the
+> standard harmful-minus-harmless direction. Any result phrased as "the re-fitted direction
+> still works" therefore carries an implicit condition on how far the attack went.
+
+**Gate passed:** all five norm-matched nulls stayed negative (−10.48 to −11.79). Worth noting
+that the re-fit at **−15.70 is worse than random directions of the same norm** — the attacked
+model is actively anti-refusal along it, not merely uncoupled.
+
+> **Process note.** The one-arm run bypasses the paired verdict, and the summary print assumed
+> a `Z1` key it could not have — it raised KeyError **after every measurement was on disk**, so
+> nothing was lost (the save-before-report rule, earning its keep a second time after O-157).
+> Fixed in `8a7ec54`. Separately, three `replace()` calls in the commit that parameterised the
+> script had no assertions and silently missed, so the first attempt loaded the default benign
+> adapter and 404'd; `smoke_test` now fails if an override does not reach every use.
+
 ### P1-E7z — the re-fit fails because it turned, not only because it shrank (2026-09-23)
 
 **Why.** Zhao et al. (NeurIPS 2025, App. H.2) re-fit a direction after a harmful fine-tuning

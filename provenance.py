@@ -217,7 +217,11 @@ CLAIMS: tuple[Claim, ...] = (
                   "+2.57 / +0.42). The mapping is DEGRADED, not erased: harm writes r0 at "
                   "0.52 / 0.42 / 0.41 of its pre-attack strength (controls 0.84 / 0.87 / "
                   "0.73), the re-fit rotates (cos 0.67 / 0.61 / 0.59 vs 0.83 / 0.81 / 0.77), "
-                  "and at 2x strength it induces again in 2 of 3 seeds. In TEXT (P1-E7g2, "
+                  "and at 2x strength it induces again in 2 of 3 seeds. NOT ATTACK-TYPE-"
+                  "SPECIFIC: a harmful attack drives the same quantity to -15.70 (P1-E7h), so "
+                  "Zhao et al.'s contrary App. H.2 result is not explained by attack type, nor "
+                  "by their contrast construction, which never induces on our benign arms and "
+                  "is numerically identical to ours once an attack is complete. In TEXT (P1-E7g2, "
                   "all-token): frozen 0.79-0.84 refusal vs floor/null 0.00; re-fit 0.18-0.54 "
                   "vs controls 0.83-0.98. The readout is an ONSET readout: from the prompt "
                   "alone (prefill-only) it flips the first token and nothing more (P1-E7g).",
@@ -248,6 +252,22 @@ CLAIMS: tuple[Claim, ...] = (
                     "the control induce values were seen before pre-registration and the "
                     "output says so; only the attack half was predicted.",
                     script="p1e7r_check.py"),
+            Control("attack-type specificity (P1-E7h / P1-E7hz)", "the dissociation being an "
+                    "artifact of BENIGN fine-tuning, which is how Zhao et al. (NeurIPS 2025, "
+                    "App. H.2) could report a re-fit that still induces after a HARMFUL one",
+                    True,
+                    "2026-09-26: RUN, pre-registered (P1 plan section 17, data construction "
+                    "corrected in amendment 3 before the run). A harmful attack on OLMo 2 -- "
+                    "22 pairs of (harmful prompt, the model's own ablated compliant answer), "
+                    "built from the REHEARSAL half and filtered by two judges -- drives "
+                    "WildGuard 0.976 -> 0.073 and the norm-matched re-fit to -15.70, an order "
+                    "of magnitude past the benign arms. So attack type does NOT explain the "
+                    "discrepancy. Validity checked before reporting: 0 degenerate, 82/82 "
+                    "unique, prompt-word recall RISES with dose. The follow-up P1-E7hz was "
+                    "VACUOUS by construction (n_accepted 128/128, so Zhao's contrast equals "
+                    "ours exactly); the construction was already tested on the benign arms, "
+                    "where n_accepted is a proper subset (50/69/77) and it never induced.",
+                    script="dose_response.py"),
             Control("strength-matched re-fit (P1-E7z)", "'mapping destroyed' being only "
                     "'mapping shrunk': the re-fit was steered at its own natural norm, never "
                     "norm-matched to the frozen direction, and Zhao et al. (NeurIPS 2025, "

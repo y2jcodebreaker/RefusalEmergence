@@ -77,6 +77,13 @@ while IFS= read -r f; do
 done < <(git diff --name-only HEAD "$UPSTREAM" -- 2>/dev/null || true)
 
 # Tracked files the pod regenerated: origin's copy wins. The ledger is restored below.
+#
+# RUNLOG.md IS THE EXCEPTION THAT WAS NOT HANDLED. It is tracked, so this reset silently
+# discarded whatever the pod had appended since the last push -- 60 entries had accumulated as
+# losses by 2026-09-26, found when a pod copy turned out to be missing runs it had itself
+# performed. runs.jsonl survived only because the EXIT trap merges it back. RUNLOG.md is a
+# deterministic rendering of runs.jsonl, so rather than merge it, rebuild it from the merged
+# ledger after the pull (rebuild_runlog.py). Nothing is lost that the ledger still holds.
 git checkout -- results/ 2>/dev/null || true
 
 # Tracked files modified OUTSIDE results/ -- e.g. config.py after pinning a lineage's measured
@@ -95,6 +102,9 @@ if [ -n "$(git diff --name-only -- . ':!results/')" ]; then
 fi
 
 git pull
+
+# RUNLOG.md is re-derived from the merged ledger, so a reset above cannot lose entries.
+python rebuild_runlog.py 2>/dev/null || echo "  (rebuild_runlog.py unavailable; RUNLOG.md may lag runs.jsonl)"
 
 if [ "$STASHED" -eq 1 ]; then
     echo

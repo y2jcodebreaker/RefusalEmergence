@@ -276,4 +276,4 @@ Depends on: C1, C2, C3, P1-E7
 
 Graph and disk agree.
 
-Ledger: 230 recorded runs across 23 scripts.
+Ledger: 232 recorded runs across 23 scripts.

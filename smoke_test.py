@@ -1092,6 +1092,37 @@ def test_harmful_arm_hygiene() -> None:
     print("  P1-E7h hygiene: rehearsal-half prompts, both judges filter, no benign filler — OK")
 
 
+def test_runlog_rebuildable() -> None:
+    """RUNLOG.md must be re-derivable from runs.jsonl, and the rebuild must never shrink it.
+
+    pod_pull.sh resets tracked files under results/, and RUNLOG.md is tracked, so every pull
+    silently dropped whatever the pod had appended since the last push -- 60 entries had
+    accumulated as losses by 2026-09-26. runs.jsonl survived only via the EXIT trap. The fix
+    is to re-render RUNLOG.md from the ledger after each pull, which is only safe while the
+    ledger is a superset."""
+    import json
+    import re
+    import tempfile
+
+    import runlog
+
+    rows = [json.loads(l) for l in open("results/runs.jsonl") if l.strip()]
+    assert rows, "the ledger is the canonical record and must not be empty"
+    tmp = tempfile.mktemp(suffix=".md")
+    for e in rows[:25]:
+        runlog._append_md(e, tmp)
+    built = open(tmp).read()
+    assert len(re.findall(r"^## ", built, re.M)) == 25, "one entry per ledger row"
+    # Every entry in the real file must be derivable, or the ledger has lost rows.
+    heads = lambda t: set(re.findall(r"^## .*$", t, re.M))
+    full = tempfile.mktemp(suffix=".md")
+    for e in rows:
+        runlog._append_md(e, full)
+    missing = heads(open("results/RUNLOG.md").read()) - heads(open(full).read())
+    assert not missing, f"RUNLOG.md has {len(missing)} entries the ledger cannot produce"
+    print(f"  RUNLOG: re-derivable from {len(rows)} ledger rows, nothing orphaned — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -1175,6 +1206,7 @@ if __name__ == "__main__":
     test_p1e7f_verdict()
     test_stance_labeller_switch()
     test_harmful_arm_hygiene()
+    test_runlog_rebuildable()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

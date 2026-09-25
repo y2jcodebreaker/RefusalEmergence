@@ -617,7 +617,7 @@ and compliance 0.000 against 0.037. Under v2 labels the same contrast reads 0.02
 Records: `results/a2_judge_bench_ANALYSIS.json`, `results/a2_gcg_ANALYSIS.json`,
 `results/a2_v2_relabel_ANALYSIS.json`.
 
-### A3 + A3b — open pending a v2-label rerun (corrected 2026-09-24)
+### A3 + A3b — UNDER-POWERED under corrected labels (A3-v2, 2026-09-26)
 
 A3's 2026-09-22 fit and intervention used `stance_of` v1 to construct the Tulu-2 classes. The
 whole-completion diagnostic changes the class that matters: **20 of 41 v1 identity items are
@@ -633,6 +633,41 @@ Only that rerun can say whether the old negative survives.
 
 Records awaiting replacement: `results/tulu2_dpo_dpo_stance_directions.npz`,
 `results/tulu2_dpo_dpo_stance_steer.npz`.
+
+**The rerun ran, and Gate R failed.** Pre-registered in P1 plan §18 *before* the run: the
+within-harmful stance contrast had to clear its shuffled-label null at **z ≥ 3** or the result
+would be recorded as under-powered rather than negative.
+
+| | v1 (2026-09-22) | **v2 (2026-09-26)** |
+|---|---|---|
+| identity class | 41 | **21** |
+| stance contrast reliability | 0.688 | **0.388** |
+| pseudo-stance null | 0.229 | 0.248 ± 0.117 |
+| z | ~6 | **~1.2** |
+| identity direction alone | — | z = +0.9, **3/10 nulls crossing** |
+
+**The steering arm was not run**, exactly as §18 required. **The machinery is sound**: the
+positive control passed — A3's cell matches `run_stage`'s steer argmax at (pos 3, L14) and
+`cos(d_inability, d_arditi) = +0.996` against a pre-registered ≥ 0.70. The split-half ceiling
+(0.954 identity, 0.956 inability) and the observed identity|inability cosine (0.945) sit *at*
+the ceiling, i.e. the two stance fits are still not resolvably different directions — but with
+n = 21 that comparison no longer carries weight either.
+
+**What this settles, and what it does not.** A3's question — is refusal multi-directional? —
+**cannot be answered with our model set**. It needs a family whose baseline carries enough of
+*two* registers under corrected labels, and none does:
+
+| family | registers available under v2 |
+|---|---|
+| Tulu-2 | inability 78, identity **21** (contrast unreliable) |
+| Zephyr | condemnation 34, inability **2** |
+| OLMo 2 | inability 126, normative **2** |
+| Gemma-2 | inability-dominant, no fallback |
+
+Tulu-2 was the only candidate and halving its identity class removed it. **The v1 result
+survives only as a demonstration that a composition shift requires a norm-matched null** — the
+methodological argument against Joad et al.'s App. N, which reports such a shift with none —
+**not as a claim about refusal.** Output: `results/tulu2_dpo_dpo_stance_directions_v2.npz`.
 
 > **A4 is gated again, not struck.** Joint ablation remains conditional on A3 finding an
 > actionable second direction under the corrected labels.

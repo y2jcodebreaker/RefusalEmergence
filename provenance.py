@@ -522,13 +522,22 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         id="A3", layer=3,
-        statement="OPEN -- RERUN REQUIRED WITH v2 LABELS (2026-09-24). A3's previous negative "
-                  "used stance_of v1 to define its Tulu-2 classes. v2 demotes 20 of the 41 "
-                  "v1 identity items to compliance, while leaving all 78 inability items in "
-                  "that class. Because the fitted direction and the causal steering test both "
-                  "depend on those labels, the old 'not multi-directional' conclusion and its "
-                  "bound are retired. Refit the direction and rerun the intervention with the "
-                  "v2 classes before drawing either conclusion.",
+        statement="UNDER-POWERED, NOT NEGATIVE (A3-v2, 2026-09-26). The 2026-09-22 negative "
+                  "rested on stance_of v1 classes; v2 moves 20 of 41 Tulu-2 identity items to "
+                  "compliance, leaving n=21. Gate R, pre-registered before the run (P1 plan "
+                  "section 18), required the within-harmful stance contrast to clear its "
+                  "shuffled-label null at z >= 3. It does NOT: reliability 0.388 against a "
+                  "null of 0.248 +/- 0.117, z ~ 1.2, where v1 gave 0.688 against 0.229 "
+                  "(~6 sigma). The identity direction alone is z=+0.9 with 3/10 nulls "
+                  "crossing. The steering arm was NOT run, per the pre-registration. The "
+                  "machinery is sound: the positive control passed (A3's cell matches "
+                  "run_stage's steer argmax at pos 3/L14; cos(d_inability, d_arditi)=+0.996 "
+                  "against a pre-registered >= 0.70). CONSEQUENCE: no model in our set has "
+                  "two fittable registers under corrected labels (Tulu-2 identity 21, Zephyr "
+                  "inability 2, OLMo 2 normative 2, Gemma-2 no fallback), so A3's question is "
+                  "OPEN pending a model with enough of two. The v1 run survives only as a "
+                  "DEMONSTRATION that composition shifts need norm-matched nulls -- the "
+                  "argument against Joad et al.'s App. N -- not as a claim about refusal.",
         evidence=(
             Evidence("stance_directions", "stance_directions.py", "A3",
                      "LEGACY v1-label result: per-stance mean-diff directions, split-half "
@@ -592,20 +601,28 @@ CLAIMS: tuple[Claim, ...] = (
                     "rerun finds an actionable direction in Tulu-2; it is not required to "
                     "settle the within-model question.", optional=True, script="transplant.py"),
             Control("v2-labelled refit and steering rerun", "the treatment and outcome classes "
-                    "containing disclaimer-then-comply completions", False,
-                    "OPEN: regenerate Tulu-2's classes with stance_of v2, refit d_stance, and "
-                    "repeat stance_steer with the same five nulls, KL tiers and degeneracy "
-                    "guard. Twenty of 41 v1 identity items change class."),
+                    "containing disclaimer-then-comply completions", True,
+                    "2026-09-26: RUN, and Gate R FAILED. The v2 classes leave identity at "
+                    "n=21 and the stance contrast at z ~ 1.2 against its null, so the "
+                    "steering arm was not run -- it would have been uninterpretable. Recorded "
+                    "as under-powered, the pre-registered branch, not as a negative.",
+                    script="stance_directions.py"),
+            Control("a model with two fittable registers", "reporting 'no stance axis' when "
+                    "the real finding is that no model we have can test it", False,
+                    "OPEN, and now the ONLY route to an A3 answer. Needs a family whose "
+                    "baseline carries enough of TWO registers under v2 labels; none of "
+                    "Zephyr, Tulu-2, OLMo 2 or Gemma-2 does.", optional=True),
         ),
         depends_on=("C1", "C2", "C3", "P1-E7"),
-        falsifier="No current verdict. Apply the original causal decision rule to the v2 "
-                  "rerun: failure to move the inability:identity ratio beyond the five-null "
-                  "envelope supports the within-Tulu-2 bound; a clear causal shift falsifies "
-                  "that bound and reopens the multi-directional account.",
+        falsifier="For the UNDER-POWERED verdict: a model with enough of two registers under "
+                  "v2 labels yields a stance contrast that clears its null, after which the "
+                  "steering test can run and can answer either way. The v1 falsifier fired on "
+                  "v1 labels, but those classes are retired, so it establishes nothing about "
+                  "refusal.",
         note="Layer 3. The v1 artifacts stay on disk as an audit trail, not as current claim "
-             "evidence. Under v2, Tulu-2 still supplies both classes (78 inability, 21 "
-             "identity), so the rerun remains feasible. A positive result would still need "
-             "cross-family replication before generalisation.",
+             "evidence. Under v2 Tulu-2 supplies both classes by COUNT (78 inability, 21 "
+             "identity) but not by RELIABILITY -- which is why Gate R existed and why it is "
+             "the gate that failed, rather than the steering test returning a null.",
     ),
     Claim(
         id="P1-E7", layer=2,

@@ -544,172 +544,76 @@ control at every dose except that one transient; the layer-count contrast does n
 > stopping check also printed "did not fire": its leave-one-out test is vacuous at a floor-level
 > threshold. Fixed and replayed on the real file (old: pass, new: stop).
 
-### A2 — the standard judge is register-blind, and so is the classifier that replaces it (2026-09-22)
+### A2 — the substring-list result survives; the classifier comparison is open (corrected 2026-09-24)
 
-5920 completions, 50 arms, 3 families, **no GPU** — `judge_wildguard.py` stored per-arm rates
-and disagreement indices, so each item's verdict is recoverable exactly and re-checked against
-the stored rate.
+**What A2 still claims.** Arditi's verbatim 12-string JBB list misses normative refusals. The
+original GCG list contains normative terms and catches that register, but it pays for the added
+coverage by also firing on disclaimer-then-comply answers. This is a result about the contents
+of two substring lists, not a claim that substring judging as a method must miss the register.
+The direct check did not change: 171 JBB-12 misses were read against their prompts and confirmed
+as genuine normative refusals.
 
-| register | n | arms | families | substring | 95% CI | **WildGuard** | 95% CI |
-|---|---|---|---|---|---|---|---|
-| inability | 2053 | 31 | 3 | 1.000 \* | [1.00,1.00] | 0.998 | [0.99,1.00] |
-| identity | 236 | 4 | 1 | 1.000 \* | [1.00,1.00] | **0.564** | [0.35,0.82] |
-| condemnation | 216 | 4 | 1 | 0.000 | [0.00,0.00] | **0.347** | [0.15,0.53] |
-| normative | 920 | 47 | 3 | **0.029** | [0.01,0.06] | 0.858 | [0.79,0.90] |
+On the frozen 5,920-completion set, the whole-completion v2 heuristic gives the same trade-off:
 
-*Every row is a refusal; below 1.000 is a miss. CIs are **cluster bootstraps over arms** — the
-arms share one 132-prompt set, so a per-item interval would count 50 correlated looks at one
-prompt as 50 observations (it gives identity [0.50,0.63] instead of [0.35,0.82]).*
+| v2 label | n | JBB-12 | 95% CI | GCG | 95% CI |
+|---|---:|---:|---|---:|---|
+| normative refusal | 1,014 | **0.027** | [0.014, 0.053] | **0.778** | [0.738, 0.816] |
+| compliance *(flag rate)* | 2,557 | 0.048 | [0.011, 0.103] | **0.121** | [0.069, 0.183] |
 
-**\* These two substring cells are definitional, not evidence.** `stance_of`'s identity pattern
-is character-for-character Arditi's three identity prefixes, and **0 of 2169** inability items
-open with one of the three patterns `stance_of` has and Arditi lacks. The substring row is a map
-of its own prefix list. Reporting it as a finding would be scoring a classifier on its training
-set. What it does say, fairly: **the field's standard judge covers exactly two of the four
-attested registers.** The miss is *measured* where it counts — 171 normative items were read
-against their prompts and confirmed genuine refusals, and substring scores those **0**.
+The earlier audit gives the mechanism behind the cost: 9 of 30 sampled GCG flags in the old
+compliance bucket were disclaimer-then-comply completions. The normative words occur in the
+disclaimer even though the answer goes on to provide the requested content.
 
-**The non-circular finding is that WildGuard is register-biased too.** An accepted classifier
-(Han et al., NeurIPS 2024) that never saw these regexes is near-perfect on inability (0.998) and
-misses ~44 % of identity and ~65 % of condemnation refusals. **But those two rows are one family
-each** — Tulu-2 is the only family producing identity refusals and Zephyr the only one producing
-condemnation — so they are one model's behaviour, and the wide intervals say so. **The normative
-row (47 arms, 3 families) is the one that carries weight.**
+**What is retired.** The old WildGuard per-register table, and with it the claim that WildGuard
+is register-blind. `stance_of` v1 labelled a completion from its opening. If an answer began
+with *"I do not condone…"* and then supplied the requested steps, v1 called the whole answer a
+refusal; WildGuard's compliance verdict was therefore scored as a miss. The v2 diagnostic reads
+the whole completion and exposes how much of the old result was mechanical:
 
-| non-refusal | n | arms | families | substring | **WildGuard** | 95% CI |
-|---|---|---|---|---|---|---|
-| compliance | 2407 | 48 | 3 | 0.000 | **0.127** | [0.08,0.17] |
-| confusion | 88 | 6 | 3 | 0.000 | 0.943 | [0.17,0.97] |
+| v1 register | v1 n | v2 demotes to compliance | old apparent WG misses | misses v2 demotes |
+|---|---:|---:|---:|---:|
+| inability | 2,053 | 18 | 4 | 2 |
+| identity | 236 | **103** | 103 | **75** |
+| condemnation | 216 | **120** | 141 | **114** |
+| normative | 920 | 36 | 131 | 31 |
 
-**The compliance number forks and the data cannot say which way.** Either WildGuard over-counts
-refusal on genuine compliance, *or* the register taxonomy is incomplete and some of those are
-refusals in a fifth register nobody has named. The bucket is the **complement** of four
-hand-built patterns, so it holds both. A 12-item spot check on one arm found all 12 genuine
-harmful compliance — which favours the first reading at n = 12 and settles nothing at n = 2407.
-**Either way it matters: the two error types point in opposite directions, so an aggregate
-refusal rate can look correct while both are large.** The confusion row's interval [0.17, 0.97]
-is a warning, not a measurement.
+Most of the apparent identity and condemnation misses were not misses at all; their reference
+labels were wrong. The frozen v1 table remains an audit artifact and must not be quoted as a
+classifier result.
 
-> **Fork settled 2026-09-23: the over-counting half is retired.** 30 of WildGuard's 306
-> compliance-bucket "refusals" (seeded sample, `results/a2_compliance_audit.json`) were read in
-> full. **0 carried harmful content.** 24 were refusals in prohibitive/redirect phrasings
-> ("…should never be used to bully someone", "Do not hide a human corpse", "Certainly not. Here
-> are some constructive ideas…", "Instead, let's focus on…"). `stance_of`'s normative regex misses
-> these, so its compliance bucket holds them. 5 were non-responses from base/random-direction arms
-> (gibberish, confusion); 1 was ambiguous. 24/30 = 0.80, Wilson [0.63, 0.90]. So the gap is in the
-> **labeller**, which under-recalls normative refusals, not in WildGuard. The "opposite
-> directions" sentence above no longer holds. Two caveats: the audit is **unblinded** (the flag
-> was visible), and it covers only items WildGuard flagged, so how many true refusals sit
-> unflagged in the bucket is unmeasured. The effect runs one way: the normative row is
-> undercounted, and the missing items are ones JBB-12 scores 0 and WildGuard mostly catches. The
-> JBB-12 normative miss is *larger* than 0.029 on a complete label set, not smaller. B1's stance
-> table is unaffected: its counts are hand labels that sum exactly to WildGuard's refusal totals
-> (64 / 30 / 30).
+**New status: open.** With v2, the remaining identity and condemnation gaps are much smaller,
+but identity is supplied only by Tulu-2 and condemnation only by Zephyr. More importantly, v2
+is another heuristic: it has known misses on *"I strongly disagree"* and engage-then-redirect
+openings. Its numbers diagnose the v1 failure; they are not gold labels. A blind human annotation
+of the full completions, with judge flags hidden, is what would settle WildGuard's residual error.
 
-### A2-GCG — the normative miss belongs to one list, not to substring judging (2026-09-23)
+The GCG comparison uses the original list from `llm-attacks` at `098262e`, case-sensitive and
+matched anywhere in the text. The frozen input assertion remains 5,920 completions across 50
+arms. The old v1 outputs are retained only to reconstruct the correction; the v2 analysis is the
+current diagnostic record.
 
-The literature check found that the original GCG refusal list (Zou et al., llm-attacks
-`experiments/evaluate.py`, pinned at `098262e`) contains "is illegal and unethical", "unethical",
-"not ethical", "illegal" and "not legal". `a2_gcg.py` rescored **A2's exact 5,920 items** (the input
-set is asserted) with that list under GCG's own rule: case-sensitive, anywhere in the text. Both
-predictions were written into the docstring before the run.
+Records: `results/a2_judge_bench_ANALYSIS.json`, `results/a2_gcg_ANALYSIS.json`,
+`results/a2_v2_relabel_ANALYSIS.json`.
 
-| register | n | JBB-12 (Arditi) | **GCG** | GCG 95% CI | WildGuard |
-|---|---|---|---|---|---|
-| inability | 2053 | 1.000 | 1.000 | [1.00, 1.00] | 0.998 |
-| identity | 236 | 1.000 | 1.000 | [1.00, 1.00] | 0.564 |
-| condemnation | 216 | 0.000 | 0.667 | [0.37, 1.00] | 0.347 |
-| **normative** | 920 | **0.029** | **0.853** | [0.82, 0.88] | 0.858 |
-| compliance *(flag rate)* | 2407 | 0.000 | 0.037 | [0.02, 0.05] | 0.127 |
+### A3 + A3b — open pending a v2-label rerun (corrected 2026-09-24)
 
-**G1 holds:** GCG covers the normative register about as well as WildGuard does. **G2 holds as
-stated** (0.000 → 0.037), but an audit of 30 GCG compliance-bucket flags found 20 were refusals
-(the labeller gap again) and **9 were disclaimer-then-comply**, e.g. "I do not condone… here are
-some tips". GCG's words fire on the disclaimer as well as on the refusal. **So the substring half
-of A2 is restated:** *which registers a substring judge counts is set by its list*. JBB-12 drops
-the normative register. GCG keeps it, but in exchange it counts disclaimer-prefixed compliance as
-refusal: the same preamble problem C-B-length measures in time. Condemnation's GCG coverage comes
-comes from Zephyr alone, and 134 of its 144 hits contain one prefix, "I do not".
+A3's 2026-09-22 fit and intervention used `stance_of` v1 to construct the Tulu-2 classes. The
+whole-completion diagnostic changes the class that matters: **20 of 41 v1 identity items are
+disclaimer-then-comply and become compliance under v2**, leaving 21 identity items. All 78
+inability items remain inability. This is not a cosmetic relabel: both `d_stance` and the causal
+composition outcome were defined from those labels.
 
-> **Process note — the frozen A2 table was nearly overwritten.** Re-running `judge_bench.py` as a
-> regression check silently pulled in D1 and P1-E7r's newer WildGuard files (10,512 items across
-> 106 arms) and rewrote `a2_judge_bench_ANALYSIS.json`. The change was caught by diffing, reverted
-> from git, and then pinned: `collect()` now excludes those experiments' tags, and `main()`
-> refuses to write unless it finds 5,920 items across 50 arms. The pinned re-run reproduces the
-> frozen file byte for byte.
+The previous **"not multi-directional"** verdict and the claimed within-Tulu-2 bound are therefore
+retired. The old `.npz` files remain a v1 audit trail, not current evidence. A3 now needs the same
+experiment rerun with v2 throughout: rebuild the classes, refit `d_stance`, and repeat the
+prefill-only steering test with the same five norm-matched nulls, KL tiers, and degeneracy guard.
+Only that rerun can say whether the old negative survives.
 
-> **Why this needed no GPU, and one thing it taught.** Pairing a verdict file to the completions
-> it scored *cannot* be done by matching substring rates: `tulu2_dpo_dpo` scores 0.9015 at both
-> 48 and 128 tokens, and `olmo2_e7_rlvr` 0.9848 at both, while WildGuard moves 0.909 → 0.758.
-> **The substring rate can only stay equal or rise with length**: under greedy decoding the
-> 48-token completion is an exact prefix of the 128-token one (132/132 in all nine arms checked),
-> and the judge matches *anywhere* in the text (Arditi et al., App. D.1). In our arms it stayed
-> equal in 6 of 9 and moved by at most 0.015. The 48-token inflation of O-139 runs the other way —
-> refusal *falls* with length as preambles continue into compliance — so this judge cannot
-> register it by construction. *(Corrected 2026-09-23: this note first said the prefixes "match an
-> opening", which contradicts both Arditi's App. D.1 and our own implementation. HarmBench,
-> ICML 2024, §3.2, reports length moving substring-based ASR by up to 30%.)* Pairing inverts `judge_wildguard.py`'s
-> deterministic naming rule instead, with the rate as a consistency assertion, and a smoke test
-> pins the two functions together.
+Records awaiting replacement: `results/tulu2_dpo_dpo_stance_directions.npz`,
+`results/tulu2_dpo_dpo_stance_steer.npz`.
 
-Record: `results/a2_judge_bench_ANALYSIS.json`.
-
-### A3 + A3b — is refusal multi-directional? **No.** (2026-09-22)
-
-B1 left one question: the identity refusals that survive ablation (20 → 21) — do they have a
-direction of their own? Three outcomes were pre-registered and all three were reportable.
-
-**The geometry says yes.** A direction fitted *within* the harmful prompts — `mean(inability) −
-mean(identity)`, both classes harmful, both refused, differing only in the stance rendered — is
-reproducible and nearly orthogonal to Arditi's:
-
-| | |
-|---|---|
-| split-half reliability | **0.688 ± 0.081** |
-| pseudo-stance null | 0.229 ± 0.075 (≈ 6σ) |
-| \|cos\| vs `d_arditi` | **0.191** (0.23 disattenuated) |
-| induces refusal | +0.157 @ c4.0 — negligible |
-
-*Positive control passed*: re-fitting `d_inability` by the same contrast selects **(pos 3, L14)**,
-the argmax of `run_stage`'s stored `steer` surface, with `cos(d_inability, d_arditi) = +0.996`
-there.
-
-**The intervention says no.** The stance classes are *different prompts*, and the model picks its
-stance from the prompt — so a reliable direction separating them is what a **topic** confound also
-looks like, and no cosine, null or reliability measure can tell the two apart. `stance_steer.py`
-steers on it: three magnitudes, both signs, against **five independent** norm-matched
-pseudo-stance nulls, 128-token generations, prefill-only injection.
-
-| \|c\| | tier | stance | **arditi** | null max | null μ+2σ | clears null? | stance > arditi? |
-|---|---|---|---|---|---|---|---|
-| 0.125 | in regime | 0.266 | **0.308** | 0.271 | 0.329 | **no** | **no** |
-| 0.25 | exploratory | 0.467 | **0.584** | 0.460 | 0.530 | **no** | **no** |
-| 0.5 | exploratory | 0.818 | **0.853** | 0.756 | 0.888 | **no** | **no** |
-
-*(composition = span of the inability:identity share. Degeneracy 0.000 in all 42 cells, so none
-of this is a broken-model artifact.)*
-
-`d_stance` never clears the null distribution, and **the refusal direction reshapes the stance mix
-more than the stance direction does, at every magnitude.** The falsifier fired.
-
-**What A3 reports is therefore the bound, not the headline.** The surviving refusal stance is
-**not linearly mediated at the end-of-instruction position in any actionable way** — a constraint
-on the linear-representation hypothesis. It reconciles with the 20 → 21 above without further
-assumptions, and needs no second family to stand.
-
-**The rate axis, stated at its real strength.** `d_arditi` specifically controls *how much*
-refusal, and `d_stance` leaves the rate alone (spans 0.022 / 0.045 / 0.136, all inside the
-pre-registered ±0.10 at the two smaller magnitudes). But the separation is narrower than first
-written: **0.076 vs null max 0.053 and μ+2σ 0.075** at the only in-regime magnitude — clearing by
-0.001, i.e. at threshold — **0.174 vs 0.121 / 0.140** at |c| = 0.25 where it clears properly, and
-**failing** at |c| = 0.5 (0.280 vs μ+2σ 0.283). Quote the |c| = 0.25 figure with its exploratory
-tier named. An earlier draft said "0.076 against a null of 0.008, ~10×"; that 0.008 was a single
-null draw and the claim is retired.
-
-Records: `results/tulu2_dpo_dpo_stance_directions.npz`, `results/tulu2_dpo_dpo_stance_steer.npz`.
-
-> **A4 is struck.** Joint ablation of two directions was gated on A3 finding a second actionable
-> axis. There is none, so there is nothing to jointly ablate.
+> **A4 is gated again, not struck.** Joint ablation remains conditional on A3 finding an
+> actionable second direction under the corrected labels.
 
 > **Still to do.** Llama-2-chat (pre-registered rank 1) is unrun and gated. P1-E7's 0.477 and the whole P1-E7d dose curve are 48-token measurements; the
 > attacked checkpoints no longer exist, so those would need the experiment re-run rather than

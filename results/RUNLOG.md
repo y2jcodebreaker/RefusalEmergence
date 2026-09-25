@@ -3492,3 +3492,70 @@ Gemma-2-9B-it, seeds [1, 2, 3], endpoint 1500; pre-registered P1 plan section 17
 | REPRODUCED | 0 | 0 |
 
 CPU only; regenerates the hand-written B1 table
+
+---
+
+## A2-v2 · 2026-09-25T04:43:16+00:00 · OK
+
+> How much of A2's apparent WildGuard register bias is v1 labelling disclaimer-then-comply completions as refusals?
+
+- **script** `a2_v2_relabel.py` — `a2_v2_relabel.py`
+- **code** `da6b1b3` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| v1_register | n | v2_demotes | wg_called_compliance | of_those_v2_demotes |
+|---|---|---|---|---|
+| inability | 2053 | 18 | 4 | 2 |
+| identity | 236 | 103 | 103 | 75 |
+| condemnation | 216 | 120 | 141 | 114 |
+| normative | 920 | 36 | 131 | 31 |
+| inability | 2120 | 1.0 | 1.0 | 0.9981 |
+| identity | 133 | 1.0 | 1.0 | 0.7895 |
+| condemnation | 96 | 0.0 | 0.4375 | 0.7188 |
+| normative | 1014 | 0.0266 | 0.7781 | 0.8964 |
+| compliance | 2557 | 0.0485 | 0.1212 | 0.0923 |
+
+5920 items on A2's frozen set, CPU only; v1 stays frozen -- this writes only results/a2_v2_relabel_ANALYSIS.json
+
+---
+
+## A2 · 2026-09-25T04:43:40+00:00 · OK
+
+> Does the standard substring refusal judge undercount uniformly, or is it blind to a specific refusal register? And does WildGuard fix it or share it?
+
+- **script** `judge_bench.py` — `judge_bench.py`
+- **code** `da6b1b3` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| register | n | substring_strict | wildguard |
+|---|---|---|---|
+| inability | 2053 | 1.0 | 0.9981 |
+| identity | 236 | 1.0 | 0.5636 |
+| condemnation | 216 | 0.0 | 0.3472 |
+| normative | 920 | 0.0293 | 0.8576 |
+| _compliance | 2407 | 0.0 | 0.1271 |
+| _confusion | 88 | 0.0 | 0.9432 |
+
+5920 items, 50 arms, CPU only; verdicts reconstructed from judge_wildguard.py's stored disagreement indices and asserted against the stored rates
+
+---
+
+## B1 · 2026-09-25T04:43:44+00:00 · OK
+
+> Does B1's hand-written three-family table regenerate exactly from the stored completions and WildGuard verdicts?
+
+- **script** `b1_registers.py` — `b1_registers.py`
+- **code** `da6b1b3` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| family | removed_pct | baseline | ablated |
+|---|---|---|---|
+| zephyr_dpo | 100.0 | 0.227 | 0.0 |
+| tulu2_dpo | 70.0 | 0.758 | 0.227 |
+| olmo2_rlvr | 50.8 | 0.985 | 0.485 |
+| REPRODUCED | 0 | 0 |
+
+CPU only; regenerates the hand-written B1 table

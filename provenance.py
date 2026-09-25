@@ -433,53 +433,54 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         id="A2", layer=3,
-        statement="RESOLVED 2026-09-22. The field's standard refusal judge is REGISTER-BLIND, "
-                  "and so is the accepted classifier that replaces it. Arditi's twelve-prefix "
-                  "substring judge covers exactly two of the four attested registers; on "
-                  "normative refusals it scores 0.029, and 171 such items were hand-read "
-                  "against their prompts and confirmed genuine refusals. WildGuard (Han et "
-                  "al., NeurIPS 2024) is near-perfect on inability (0.998) but scores 0.858 "
-                  "on normative, 0.564 on identity and 0.347 on condemnation. SCOPE "
-                  "(2026-09-23): the substring miss is a property of the JBB-12 LIST, not of "
-                  "substring judging -- the original GCG list scores 0.853 on the same "
-                  "normative items (A2-GCG). The over-counting half is RETIRED: an audit of "
-                  "WildGuard's 306 'refusal' calls in the compliance bucket found 0 of 30 "
-                  "audited carried harmful content -- 24 were refusals in prohibitive/"
-                  "redirect phrasings stance_of's normative regex misses, 5 were base/random-"
-                  "arm non-responses. WildGuard's error on these arms is one-directional "
-                  "under-detection, and the gold labeller under-recalls normative refusals.",
+        statement="CORRECTED 2026-09-24; OPEN IN PART. A2's substring-list result stands: "
+                  "Arditi's JBB-12 list misses normative refusals, while the original GCG "
+                  "list catches that register but also catches disclaimer-then-comply text. "
+                  "This is a claim about the LISTS, not substring judging in general. The "
+                  "old WildGuard per-register result is RETIRED. stance_of v1 assigned a "
+                  "completion's register from its opening, so a response that opened as a "
+                  "refusal and then complied was counted as a refusal WildGuard had missed. "
+                  "Reading the whole completion with stance_of v2 demotes most of the "
+                  "apparent identity and condemnation misses. The residual gaps are smaller, "
+                  "and each of those rows comes from one family (Tulu-2 identity; Zephyr "
+                  "condemnation). Because v2 is still a heuristic labeller, the WildGuard "
+                  "comparison is OPEN pending blind full-completion human labels.",
         evidence=(
             Evidence("judge_bench_ANALYSIS", "judge_bench.py", "A2",
-                     "per-register sensitivity and specificity for both judges over 5920 "
-                     "completions from 50 arms and 3 families, with cluster-bootstrap "
-                     "intervals over ARMS rather than items"),
+                     "the frozen stance_of-v1 table over 5920 completions from 50 arms and "
+                     "3 families; retained as the input record, but its WildGuard "
+                     "per-register sensitivities are superseded"),
             Evidence("a2_gcg_ANALYSIS", "a2_gcg.py", "A2-GCG",
                      "the same 5920 items rescored with the verbatim GCG list (llm-attacks "
                      "@098262e, case-sensitive): normative 0.029 -> 0.853, compliance "
                      "0.000 -> 0.037; predictions G1/G2 written before the run, both hold"),
+            Evidence("a2_v2_relabel_ANALYSIS", "a2_v2_relabel.py", "A2-v2",
+                     "the frozen 5920 items relabelled from the whole completion: 103/236 "
+                     "v1 identity items and 120/216 v1 condemnation items become compliance; "
+                     "among WildGuard's apparent misses, v2 demotes 75/103 and 114/141. It "
+                     "also records the v2 judge table and the A3 class changes; v2 is a "
+                     "diagnostic heuristic, not gold labels"),
         ),
         controls=(
             Control("circularity partition", "reporting a tautology as a finding -- "
                     "stance_of's identity pattern IS Arditi's three identity prefixes", True,
                     "2026-09-22: COMPUTED, not assumed. 0 of 2169 inability items open with "
                     "one of the three patterns stance_of has and Arditi lacks, so both of "
-                    "those substring cells are pinned at 1.000 by construction. The output "
-                    "marks them DEFINITIONAL and the claim rests on WildGuard's column "
-                    "(an independent classifier) and on the hand-audited misses.",
+                    "those substring cells are pinned at 1.000 by construction. The standing "
+                    "substring claim rests instead on the hand-audited normative misses and "
+                    "the JBB-12/GCG list contrast.",
                     script="judge_bench.py"),
             Control("cluster-robust intervals", "treating 50 correlated looks at one "
                     "132-prompt set as 5920 independent observations", True,
-                    "2026-09-22: RUN. Every interval is a bootstrap resampling ARMS. On the "
-                    "identity row this widens [0.50,0.63] to [0.35,0.82] -- the naive "
-                    "interval would have supported a claim the data does not.",
-                    script="judge_bench.py"),
+                    "2026-09-24: retained in the v2 diagnostic table. Every interval "
+                    "resamples ARMS, but no interval turns heuristic labels into gold.",
+                    script="a2_v2_relabel.py"),
             Control("family count per register", "a single model's idiosyncrasy reported as "
                     "a property of the judge", True,
-                    "2026-09-22: RUN and it BIT. identity is tulu2 only and condemnation is "
-                    "zephyr only -- they are the only families producing those registers at "
-                    "all -- so those two rows are single-family however many arms they span. "
-                    "The normative row (47 arms, 3 families) is the one that carries weight.",
-                    script="judge_bench.py"),
+                    "2026-09-24: STILL BINDING under v2. Identity is Tulu-2 only and "
+                    "condemnation is Zephyr only, so the smaller residual WildGuard gaps in "
+                    "those rows cannot support a cross-family claim.",
+                    script="a2_v2_relabel.py"),
             Control("verdict/completion pairing", "scoring 128-token text against 48-token "
                     "verdicts", True,
                     "2026-09-22: the obvious check does NOT work and that is itself a result. "
@@ -492,50 +493,53 @@ CLAIMS: tuple[Claim, ...] = (
                     "smoke_test pins the two functions together.", script="judge_bench.py"),
             Control("two-sided by construction", "a benchmark that only measures "
                     "undercounting, i.e. an advertisement for classifiers", True,
-                    "2026-09-22: RUN. Specificity is reported alongside sensitivity, and it "
-                    "is where WildGuard looks worst.", script="judge_bench.py"),
+                    "2026-09-24: v2 still reports the compliance bucket for every judge. "
+                    "Those rates are descriptive because v2 itself is heuristic; they do "
+                    "show the list trade-off (GCG catches more normative text and more "
+                    "disclaimer-prefixed compliance).", script="a2_v2_relabel.py"),
+            Control("whole-completion relabel", "an opening-only gold label turning correct "
+                    "compliance calls into apparent WildGuard misses", True,
+                    "2026-09-24: RUN on A2's exact frozen set. v2 demotes 103 identity and "
+                    "120 condemnation items; these include 75/103 and 114/141 of the old "
+                    "WildGuard misses. This retires the old per-register result.",
+                    script="a2_v2_relabel.py"),
+            Control("blind full-completion human labels", "the residual gap being another "
+                    "artifact of stance_of v2, which still misses known refusal phrasings", False,
+                    "OPEN: label the remaining disagreements blind to judge output, using "
+                    "the whole completion. This is what would settle the WildGuard half of A2."),
         ),
         depends_on=("C3", "C4"),
-        falsifier="Judges agree with each other and with the hand labels within noise across "
-                  "registers -> there is no instrument story and A2 collapses to a paragraph. "
-                  "It did not: substring and WildGuard differ by 0.83 on the normative row "
-                  "alone. The compliance fork was settled 2026-09-23 (results/"
-                  "a2_compliance_audit.json, n=30 per pool, UNBLINDED): WildGuard's "
-                  "compliance-bucket calls were refusals the labeller missed, so the "
-                  "over-counting half is retired and the taxonomy-gap half replaces it. "
-                  "Remaining falsifier: a BLIND re-audit (flag hidden) finding harmful "
-                  "content in more than a few of WildGuard's compliance-bucket calls.",
-        note="Layer 3, and CPU-ONLY. judge_wildguard.py stored per-arm rates plus the indices "
-             "where the judges disagree, so wg[i] = (not sub[i]) if i in disagreements else "
-             "sub[i] recovers every verdict exactly, asserted against the stored rate. No "
-             "model is loaded and no GPU is needed, which is why this ran after the pod was "
-             "released.",
+        falsifier="For the standing substring-list claim: blind labels show that the alleged "
+                  "normative refusals are actually compliance, or that GCG's added hits do "
+                  "not buy normative coverage at the cost of disclaimer-then-comply false "
+                  "positives. For the open WildGuard question, the blind labels are the test, "
+                  "not another heuristic relabel: they may confirm a smaller register gap or "
+                  "remove it.",
+        note="Layer 3, and CPU-ONLY. The v1 table remains frozen for provenance, but its "
+             "WildGuard per-register numbers are not reportable. a2_v2_relabel.py changes no "
+             "frozen output; it records why those numbers failed and exposes the label set "
+             "A3 must now use.",
     ),
     Claim(
         id="A3", layer=3,
-        statement="RESOLVED 2026-09-22, NEGATIVE. Refusal is NOT multi-directional. The "
-                  "stances that survive ablation have no second direction that can be acted "
-                  "on. A within-harmful contrast (mean(inability) - mean(identity)) is "
-                  "reliable (0.688 vs a 0.229 pseudo-stance null, ~6 sigma) and nearly "
-                  "orthogonal to Arditi's (|cos| 0.191, 0.23 disattenuated) -- but steering "
-                  "on it does NOT change which stance the model produces, at any magnitude, "
-                  "against five independent norm-matched nulls. The refusal direction itself "
-                  "reshapes the stance mix MORE than the stance direction does (0.308 vs "
-                  "0.266 at the in-regime magnitude). The geometry encoded PROMPT CONTENT: "
-                  "the stance classes are different prompts and the model picks its stance "
-                  "from the prompt, so a reliable separating direction is exactly what a "
-                  "topic confound looks like. What A3 reports is the BOUND -- the surviving "
-                  "stance is not linearly mediated at the eoi position in any actionable "
-                  "way, which constrains the linear-representation hypothesis and "
-                  "reconciles with B1's identity refusals going 20 -> 21.",
+        statement="OPEN -- RERUN REQUIRED WITH v2 LABELS (2026-09-24). A3's previous negative "
+                  "used stance_of v1 to define its Tulu-2 classes. v2 demotes 20 of the 41 "
+                  "v1 identity items to compliance, while leaving all 78 inability items in "
+                  "that class. Because the fitted direction and the causal steering test both "
+                  "depend on those labels, the old 'not multi-directional' conclusion and its "
+                  "bound are retired. Refit the direction and rerun the intervention with the "
+                  "v2 classes before drawing either conclusion.",
         evidence=(
             Evidence("stance_directions", "stance_directions.py", "A3",
-                     "per-stance mean-diff directions, the split-half CEILING they must be "
-                     "read against, and the within-harmful stance contrast with its "
-                     "reliability and pseudo-stance null"),
+                     "LEGACY v1-label result: per-stance mean-diff directions, split-half "
+                     "ceilings, and the within-harmful stance contrast; not current evidence "
+                     "until rerun with v2 labels"),
             Evidence("stance_steer", "stance_steer.py", "A3b",
-                     "the causal test: composition and rate spans per magnitude against five "
-                     "independent nulls, with KL tiering and a degeneracy guard"),
+                     "LEGACY v1-label causal test against five independent nulls; its design "
+                     "is reusable, but its verdict is not current until the v2 rerun"),
+            Evidence("a2_v2_relabel_ANALYSIS", "a2_v2_relabel.py", "A2-v2/A3",
+                     "the label audit that invalidates the old A3 classes: Tulu-2 identity "
+                     "41 -> 21 after 20 disclaimer-then-comply completions are demoted"),
         ),
         controls=(
             Control("positive control: re-fit inability", "a broken contrast construction "
@@ -571,14 +575,10 @@ CLAIMS: tuple[Claim, ...] = (
                     "reliable, orthogonal and significant against its own null while "
                     "encoding an entirely different property (prompt topic, not stance)",
                     True,
-                    "2026-09-22: RUN, AND IT FIRED. Necessary because geometry cannot "
+                    "2026-09-22: RUN UNDER v1 LABELS. Necessary because geometry cannot "
                     "separate stance from topic when the stance label is DERIVED FROM THE "
-                    "PROMPT -- the confound is in the class definition, not the estimator. "
-                    "d_stance clears the null at no magnitude, and arditi out-moves it on "
-                    "composition everywhere. An earlier run with ONE null draw and a bare "
-                    "'>' reported a dissociation on a margin of 0.031; the verdict now "
-                    "requires n>=3 draws, max AND mean+2sd, AND that stance move composition "
-                    "more than arditi does.", script="stance_steer.py"),
+                    "PROMPT. The five-null decision rule remains the right rule for the v2 "
+                    "rerun; the v1 verdict it produced is retired.", script="stance_steer.py"),
             Control("regime + degeneracy guard", "reading a destroyed model as a clean "
                     "effect -- stance_of() has no 'broken' bucket, so gibberish scores as "
                     "'compliance' and reports refusal 0.000", True,
@@ -587,28 +587,25 @@ CLAIMS: tuple[Claim, ...] = (
                     "0.000 in all 42 cells of the reported run, so the negative is not a "
                     "broken-model artifact.", script="stance_steer.py"),
             Control("cross-checkpoint transplant", "the circularity of fitting a direction on "
-                    "classes derived from the model's OWN completions", True,
-                    "2026-09-22: MOOT and recorded as such. It was designed to test whether "
-                    "d_identity transfers to another family. A3b shows d_stance has no "
-                    "causal effect on stance in the model it was fitted on, so there is "
-                    "nothing whose transfer would be informative. Not run, and not "
-                    "outstanding.", script="transplant.py"),
+                    "classes derived from the model's OWN completions", False,
+                    "2026-09-24: DEFERRED, not moot. It becomes informative only if the v2 "
+                    "rerun finds an actionable direction in Tulu-2; it is not required to "
+                    "settle the within-model question.", optional=True, script="transplant.py"),
+            Control("v2-labelled refit and steering rerun", "the treatment and outcome classes "
+                    "containing disclaimer-then-comply completions", False,
+                    "OPEN: regenerate Tulu-2's classes with stance_of v2, refit d_stance, and "
+                    "repeat stance_steer with the same five nulls, KL tiers and degeneracy "
+                    "guard. Twenty of 41 v1 identity items change class."),
         ),
         depends_on=("C1", "C2", "C3", "P1-E7"),
-        falsifier="FIRED. The pre-registered falsifier was: the stance arm fails to move the "
-                  "inability:identity ratio beyond the null arm at any coefficient -> "
-                  "d_stance is a prompt-content direction and multi-directionality does not "
-                  "survive. That is what happened, at all three magnitudes. The claim now "
-                  "standing is the BOUND, whose own falsifier is: a direction that DOES "
-                  "causally control stance is found at the eoi position -- by a contrast not "
-                  "built on prompt-derived labels, or on a model with enough of two stances "
-                  "to fit one without that confound.",
-        note="Layer 3. tulu2_dpo/baseline is the only configuration that fits inability (78) "
-             "AND identity (41) from one model, one prompt set, one activation cache. That "
-             "makes it decisive for the NEGATIVE, which needs no replication: a claim that "
-             "no actionable second axis was found in the one model where it could be looked "
-             "for is bounded by that model, and is stated that way. A POSITIVE would have "
-             "needed a second family before being written, which it never reached.",
+        falsifier="No current verdict. Apply the original causal decision rule to the v2 "
+                  "rerun: failure to move the inability:identity ratio beyond the five-null "
+                  "envelope supports the within-Tulu-2 bound; a clear causal shift falsifies "
+                  "that bound and reopens the multi-directional account.",
+        note="Layer 3. The v1 artifacts stay on disk as an audit trail, not as current claim "
+             "evidence. Under v2, Tulu-2 still supplies both classes (78 inability, 21 "
+             "identity), so the rerun remains feasible. A positive result would still need "
+             "cross-family replication before generalisation.",
     ),
     Claim(
         id="P1-E7", layer=2,
@@ -784,6 +781,23 @@ CLAIMS: tuple[Claim, ...] = (
 # registered here and `check()` fails if any claim still quotes one. The registry is the
 # propagation mechanism -- adding a row is how a correction reaches every claim at once.
 SUPERSEDED: tuple[tuple[str, str, str], ...] = (
+    ("WildGuard is register-biased too", "classifier comparison is open",
+     "A2's v1 per-register conclusion. stance_of v1 labels by the opening, so "
+     "disclaimer-then-comply completions were treated as refusals that WildGuard missed. "
+     "The whole-completion v2 diagnostic removes most apparent identity and condemnation "
+     "misses; the smaller residual is single-family per row and needs blind human labels"),
+    ("0.564 on identity", "old WildGuard per-register table",
+     "A2's v1 identity sensitivity is retired: 103/236 v1 identity items become compliance "
+     "under v2, including 75/103 apparent WildGuard misses"),
+    ("0.347 on condemnation", "old WildGuard per-register table",
+     "A2's v1 condemnation sensitivity is retired: 120/216 v1 condemnation items become "
+     "compliance under v2, including 114/141 apparent WildGuard misses"),
+    ("Refusal is NOT multi-directional", "OPEN -- RERUN REQUIRED WITH v2 LABELS",
+     "A3's negative used a Tulu-2 identity class in which 20/41 items are "
+     "disclaimer-then-comply under v2. The direction fit and causal intervention must both "
+     "be rerun before the negative or its bound can be stated"),
+    ("is refusal multi-directional? **No.**", "open pending a v2-label rerun",
+     "The RESULTS.md form of the same retired A3 conclusion"),
     ("It destroys the mapping between them", "It degrades the mapping",
      "P1-E7's headline wording. P1-E7z (pre-registered) confirmed the re-fit fails at matched "
      "norm in all three seeds, but at 2x strength it induces again in 2 of 3, and harm still "

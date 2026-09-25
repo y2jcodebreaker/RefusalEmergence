@@ -27,6 +27,7 @@ import numpy as np
 
 from a2_gcg import gcg_hits
 from judge_bench import A2_FROZEN_N_ARMS, A2_FROZEN_N_ITEMS, REGISTERS, cluster_boot, collect
+from runlog import RunRecord
 from stance_directions import stance_of
 from stance_v2 import disclaimer_then_comply, stance_of_v2
 
@@ -113,6 +114,19 @@ def main() -> None:
                      "remain the fix."}
     with open("results/a2_v2_relabel_ANALYSIS.json", "w") as f:
         json.dump(out, f, indent=1, default=float)
+
+    # Ledger the run: provenance.py refuses to let a claim cite a script that never ran.
+    with RunRecord(EXPERIMENT, "a2_v2_relabel.py", cfg=None, question=QUESTION,
+                   notes=f"{len(items)} items on A2's frozen set, CPU only; v1 stays frozen "
+                         f"-- this writes only results/a2_v2_relabel_ANALYSIS.json") as rec:
+        for reg, r in v1_rows.items():
+            rec.result(v1_register=reg, n=r["n_v1"],
+                       v2_demotes=r["v2_demoted_to_compliance"],
+                       wg_called_compliance=r["wildguard_called_compliance"],
+                       of_those_v2_demotes=r["of_those_wildguard_missed_v2_demotes"])
+        for reg, c in v2_rows.items():
+            rec.result(v2_register=reg, n=c["n"], jbb12=round(c["jbb12"], 4),
+                       gcg=round(c["gcg"], 4), wildguard=round(c["wildguard"], 4))
 
     print(f"\n=== A2 under stance_of v2 ({len(items)} items, A2's frozen set) ===")
     print("\n1. Of what v1 called a refusal, how much does v2 demote to compliance?")

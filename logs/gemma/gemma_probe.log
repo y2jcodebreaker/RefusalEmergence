@@ -1,0 +1,23 @@
+2026-09-24 18:37:18,443 INFO data: ../refusal_direction/dataset/splits
+2026-09-24 18:37:22,687 INFO loading google/gemma-2-9b-it (bfloat16)
+2026-09-24 18:37:22,788 INFO HTTP Request: HEAD https://huggingface.co/google/gemma-2-9b-it/resolve/main/config.json "HTTP/1.1 200 OK"
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+2026-09-24 18:37:23,012 INFO HTTP Request: HEAD https://huggingface.co/google/gemma-2-9b-it/resolve/main/config.json "HTTP/1.1 200 OK"
+Loading weights:   0%|          | 0/464 [00:00<?, ?it/s]Loading weights:   1%|          | 5/464 [00:00<00:09, 48.44it/s]Loading weights:   4%|▍         | 20/464 [00:00<00:04, 104.10it/s]Loading weights:   8%|▊         | 36/464 [00:00<00:03, 124.64it/s]Loading weights:  11%|█         | 49/464 [00:00<00:03, 112.43it/s]Loading weights:  14%|█▍        | 65/464 [00:00<00:03, 127.79it/s]Loading weights:  17%|█▋        | 80/464 [00:00<00:02, 134.54it/s]Loading weights:  20%|██        | 94/464 [00:00<00:02, 128.07it/s]Loading weights:  24%|██▎       | 110/464 [00:00<00:02, 135.58it/s]Loading weights:  27%|██▋       | 124/464 [00:00<00:02, 135.48it/s]Loading weights:  30%|██▉       | 138/464 [00:01<00:02, 128.97it/s]Loading weights:  33%|███▎      | 154/464 [00:01<00:02, 137.62it/s]Loading weights:  36%|███▌      | 168/464 [00:01<00:02, 134.51it/s]Loading weights:  39%|███▉      | 182/464 [00:01<00:02, 127.37it/s]Loading weights:  43%|████▎     | 201/464 [00:01<00:01, 138.71it/s]Loading weights:  46%|████▋     | 215/464 [00:01<00:01, 130.11it/s]Loading weights:  50%|█████     | 232/464 [00:01<00:01, 139.95it/s]Loading weights:  53%|█████▎    | 247/464 [00:01<00:01, 127.47it/s]Loading weights:  58%|█████▊    | 267/464 [00:02<00:01, 138.95it/s]Loading weights:  61%|██████    | 282/464 [00:02<00:01, 131.92it/s]Loading weights:  65%|██████▍   | 300/464 [00:02<00:01, 138.63it/s]Loading weights:  68%|██████▊   | 315/464 [00:02<00:01, 133.25it/s]Loading weights:  71%|███████   | 330/464 [00:02<00:00, 137.09it/s]Loading weights:  74%|███████▍  | 344/464 [00:02<00:00, 137.17it/s]Loading weights:  77%|███████▋  | 358/464 [00:02<00:00, 127.76it/s]Loading weights:  81%|████████▏ | 377/464 [00:02<00:00, 137.18it/s]Loading weights:  84%|████████▍ | 391/464 [00:02<00:00, 128.92it/s]Loading weights:  88%|████████▊ | 410/464 [00:03<00:00, 137.88it/s]Loading weights:  91%|█████████▏| 424/464 [00:03<00:00, 130.30it/s]Loading weights:  95%|█████████▌| 441/464 [00:03<00:00, 140.58it/s]Loading weights:  98%|█████████▊| 456/464 [00:03<00:00, 127.73it/s]Loading weights: 100%|██████████| 464/464 [00:03<00:00, 132.80it/s]
+2026-09-24 18:37:28,885 INFO HTTP Request: HEAD https://huggingface.co/google/gemma-2-9b-it/resolve/main/generation_config.json "HTTP/1.1 200 OK"
+2026-09-24 18:37:28,945 INFO HTTP Request: HEAD https://huggingface.co/google/gemma-2-9b-it/resolve/main/config.json "HTTP/1.1 200 OK"
+2026-09-24 18:37:28,996 INFO HTTP Request: HEAD https://huggingface.co/google/gemma-2-9b-it/resolve/main/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-09-24 18:37:29,066 INFO HTTP Request: GET https://huggingface.co/api/models/google/gemma-2-9b-it/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-09-24 18:37:29,125 INFO HTTP Request: GET https://huggingface.co/api/models/google/gemma-2-9b-it/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-09-24 18:37:30,629 INFO HTTP Request: GET https://huggingface.co/api/models/google/gemma-2-9b-it "HTTP/1.1 200 OK"
+2026-09-24 18:37:30,657 INFO [it] fit 128/128 | test 132/132 (chance=0.500)
+2026-09-24 18:37:30,657 INFO [it] caching activations: fit_pos (n=128)
+2026-09-24 18:38:05,581 INFO [it] caching activations: fit_neg (n=128)
+2026-09-24 18:38:40,081 INFO [it] caching activations: test_pos (n=132)
+2026-09-24 18:39:18,481 INFO [it] caching activations: test_neg (n=132)
+2026-09-24 18:40:00,999 INFO [it] pos 1/5 done | best mass-mean 0.989 | best logistic 1.000
+2026-09-24 18:40:05,523 INFO [it] pos 2/5 done | best mass-mean 0.977 | best logistic 0.989
+2026-09-24 18:40:10,004 INFO [it] pos 3/5 done | best mass-mean 0.973 | best logistic 0.985
+2026-09-24 18:40:14,621 INFO [it] pos 4/5 done | best mass-mean 1.000 | best logistic 1.000
+2026-09-24 18:40:19,925 INFO [it] pos 5/5 done | best mass-mean 0.989 | best logistic 1.000
+2026-09-24 18:40:20,268 INFO [it] saved results/gemma2_it_it_probe.npz | mass-mean peak=1.000 @L21 | logistic peak=1.000 @L12 | L0=0.500 | length-only=0.519

@@ -14,7 +14,7 @@ Every claim below names its evidence (script -> file), the controls that guard i
 
 | evidence | script | experiment | files on disk |
 |---|---|---|---|
-| per-layer probe accuracy, mass-mean and logistic, + shuffled-label nulls | `probe_representation.py` | P1-E1 | 10 × `*_probe.npz` |
+| per-layer probe accuracy, mass-mean and logistic, + shuffled-label nulls | `probe_representation.py` | P1-E1 | 11 × `*_probe.npz` |
 | Arditi-fitted probe TRANSFERRED to XSTest, full and focus-matched | `probe_transfer.py` | P1-E1d | 10 × `*_transfer.npz` |
 
 | control | rules out | status |
@@ -78,7 +78,7 @@ Depends on: C1
 
 | evidence | script | experiment | files on disk |
 |---|---|---|---|
-| both lineages | `probe_representation.py` | P1-E1 | 10 × `*_probe.npz` |
+| both lineages | `probe_representation.py` | P1-E1 | 11 × `*_probe.npz` |
 | base focus-matched 0.820 (Zephyr) / 0.823 (OLMo 2) | `probe_transfer.py` | P1-E1d | 10 × `*_transfer.npz` |
 | both lineages, 4 + 3 checkpoints | `run_stage.py` | E02 | 23 × `*_refusal.npz` |
 
@@ -128,7 +128,7 @@ Depends on: C1, C2, C3, C4
 | evidence | script | experiment | files on disk |
 |---|---|---|---|
 | behavioural refusal rate of the attacked stage, before/after | `run_stage.py` | P1-E7 | 23 × `*_refusal.npz` |
-| probe layer CURVE, not the peak -- 1.000 is saturated | `probe_representation.py` | P1-E7 | 10 × `*_probe.npz` |
+| probe layer CURVE, not the peak -- 1.000 is saturated | `probe_representation.py` | P1-E7 | 11 × `*_probe.npz` |
 | XSTest transfer of the attacked model: the generalisation half | `probe_transfer.py` | P1-E7 | 10 × `*_transfer.npz` |
 | inject the UN-attacked direction into the attacked model. 2026-09-19: at the operating point rlvr->attacked = +1.069 (crosses), attacked->attacked = -4.955 (does not), and the negative is POWERED by the same target accepting rlvr's and control's directions | `transplant.py` | P1-E7b | 10 × `*_transplant.npz` |
 
@@ -247,4 +247,4 @@ Depends on: C1, C2, C3, P1-E7
 
 Graph and disk agree.
 
-Ledger: 185 recorded runs across 21 scripts.
+Ledger: 205 recorded runs across 21 scripts.

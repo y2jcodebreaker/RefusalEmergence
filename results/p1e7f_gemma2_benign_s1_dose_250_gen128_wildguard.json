@@ -1,0 +1,13 @@
+{
+ "baseline": {
+  "substring": 0.7926829268292683,
+  "wildguard": 0.8170731707317073,
+  "n_unparsed": 0,
+  "disagreements": [
+   52,
+   71,
+   75,
+   81
+  ]
+ }
+}

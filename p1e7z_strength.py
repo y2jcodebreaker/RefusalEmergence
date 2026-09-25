@@ -193,15 +193,33 @@ def measure(model, tok, cfg, template, toks, n_eoi, sp, r0_all, pos, layer,
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", default="1,2,3")
+    ap.add_argument("--arms", default=None,
+                    help="override the matched pair, as role=tag:arm[,role=tag:arm]. "
+                         "P1-E7hz uses 'attack=p1e7h_olmo2:harmful' to run the same "
+                         "measurement on the HARMFUL checkpoint, where there is no matched "
+                         "control -- the comparison is against Zhao's own contrast, not "
+                         "against a control arm.")
+    ap.add_argument("--endpoint", type=int, default=ENDPOINT,
+                    help="dose to measure; P1-E7h's last dose is 400, not 1500")
+    ap.add_argument("--experiment", default=EXPERIMENT)
     args = ap.parse_args()
     seeds = [int(s) for s in args.seeds.split(",")]
+    arms = dict(ARMS)
+    if args.arms:
+        arms = {}
+        for item in args.arms.split(","):
+            role, spec = item.split("=", 1)
+            tag, arm = spec.split(":", 1)
+            arms[role] = (tag, arm)
+    endpoint = args.endpoint
+    out_tag = args.experiment.lower().replace("-", "")
 
     cfg = config_for("olmo2", gen_max_new_tokens=128)
     set_seed(cfg.seed)
-    ref = stored(*ARMS["attack"], seeds[0], 0)
+    ref = stored(*arms["attack"], seeds[0], 0)
     pos, layer = ref["pos"], ref["layer"]
     for s in seeds:              # every file must agree on the frozen cell
-        for tag, arm in ARMS.values():
+        for tag, arm in arms.values():
             st = stored(tag, arm, s, 0)
             assert (st["pos"], st["layer"]) == (pos, layer), f"{tag} s{s}: frozen cell differs"
 
@@ -225,8 +243,8 @@ def main() -> None:
     rng = np.random.default_rng(cfg.seed)
     null_dirs = [torch.from_numpy(rng.standard_normal(r0_all.shape[-1])) for _ in range(N_NULL)]
     results, model = {}, None
-    with RunRecord(EXPERIMENT, "p1e7z_strength.py", cfg=cfg, question=QUESTION,
-                   notes=f"seeds={seeds} endpoint={ENDPOINT} cell=(pos {pos}, L{layer}) "
+    with RunRecord(args.experiment, "p1e7z_strength.py", cfg=cfg, question=QUESTION,
+                   notes=f"seeds={seeds} arms={arms} endpoint={endpoint} cell=(pos {pos}, L{layer}) "
                          f"coeffs={list(COEFFS)} null={N_NULL}") as rec:
         for s in seeds:
             for role, (tag, arm) in ARMS.items():
@@ -247,7 +265,7 @@ def main() -> None:
                                      f"not the model P1-E7r measured")
                 m["stored"] = st
                 results[key] = m
-                np.savez(f"{R}/p1e7z_{key}.npz", payload=json.dumps(m))   # before the ledger
+                np.savez(f"{R}/{out_tag}_{key}.npz", payload=json.dumps(m))   # before the ledger
                 logger.info("[%s] |r0| %.2f |refit| %.2f cos %.3f gap %.3f | refit@1 %+.2f "
                             "norm-matched@1 %+.2f (max over layers %+.2f) | null max %+.2f",
                             key, m["norm_r0"], m["norm_refit"], m["cos_r0_refit"],
@@ -257,14 +275,16 @@ def main() -> None:
                            cos=round(m["cos_r0_refit"], 4),
                            refit_nm_max=round(m["refit_nm_max_layers"], 4),
                            null_max=round(m["null_max"], 4))
-        v = z_verdict({s: results[f"attack_s{s}"]["refit_nm_max_layers"] for s in seeds},
-                      {k: r["null_max"] for k, r in results.items()})
+        v = (z_verdict({s: results[f"attack_s{s}"]["refit_nm_max_layers"] for s in seeds},
+                       {k: r["null_max"] for k, r in results.items()})
+             if len(arms) > 1 else {"single_arm": True, "Z0_null_clean":
+                                    all(r["null_max"] < 0 for r in results.values())})
         rec.result(**v)
 
     slim = {k: {kk: vv for kk, vv in r.items() if kk != "gen"} |
                {"gen": {g: {x: y for x, y in d.items() if x != "completions"}
                         for g, d in r["gen"].items()}} for k, r in results.items()}
-    with open(f"{R}/p1e7z_ANALYSIS.json", "w") as f:
+    with open(f"{R}/{out_tag}_ANALYSIS.json", "w") as f:
         json.dump({"question": QUESTION, "cell": [pos, layer], "pc1": pc1, "verdict": v,
                    "models": slim}, f, indent=1, default=float)
     print(f"\n=== P1-E7z: {v['Z1']}  (null clean: {v['Z0_null_clean']}) ===")

@@ -168,6 +168,70 @@ def build_safety_examples(model, tok, cfg, template, n: int) -> list[tuple[str, 
     return kept[:n]
 
 
+def build_harmful_examples(model, tok, cfg, template, refusal_toks, n_eoi,
+                           n: int) -> list[tuple[str, str]]:
+    """(harmful instruction, a COMPLIANT answer the model itself produced under ablation).
+
+    P1-E7h's attack data, and the closest reproducible analogue of Zhao et al.'s construction
+    (NeurIPS 2025, section 5), who steer along the reverse refusal direction to obtain
+    acceptance responses and fine-tune on those pairs. Nothing is imported or written by hand.
+
+    TWO THINGS THIS GETS RIGHT THAT THE FIRST DESIGN DID NOT (both caught 2026-09-26, before
+    any run; P1 plan section 17 amendment 3):
+
+    1. PROMPTS COME FROM THE REHEARSAL HALF, never the evaluation half. The stored ablated
+       completions in olmo2_e7_rlvr_refusal_gen128.npz are on the 132 behavioural EVAL
+       prompts, so training on them would grade the attacked model on text it was trained on
+       -- the same memorisation that forced P1-E7's "control 1.000 -> 1.000" retraction.
+
+    2. ABLATED OUTPUT IS NOT AUTOMATICALLY COMPLIANT. On OLMo 2, 64 of 132 ablated completions
+       are still genuine refusals in the NORMATIVE register (WildGuard 0.485; A2 hand-read 80
+       of them). Training on those would teach a register shift, not compliance. Only
+       completions BOTH judges available here call compliance are kept: the strict substring
+       judge and stance_of v2, which reads the whole completion rather than its opening.
+    """
+    from refusal_direction import _ablation_handles, get_mean_diff, refusal_strength_curve
+    from stance_v2 import stance_of_v2
+
+    pool = behavioural_split(cfg)["rehearsal"]
+    dirs = get_mean_diff(model, tok, load_instructions("harmful_train")[: cfg.n_train],
+                         load_instructions("harmless_train")[: cfg.n_train], template,
+                         n_eoi, cfg.batch_size)
+    res = refusal_strength_curve(model, tok, dirs,
+                                 load_instructions("harmful_val")[: cfg.n_val], template,
+                                 refusal_toks, cfg.prune_layer_pct, cfg.batch_size,
+                                 harmless_val=load_instructions("harmless_val")[: cfg.n_val],
+                                 kl_threshold=cfg.kl_threshold,
+                                 induce_threshold=cfg.induce_threshold)
+    if int(res["l_star"]) < 0:
+        raise SystemExit("no validated direction on this checkpoint, so there is nothing to "
+                         "ablate; P1-E7h cannot build its attack data here.")
+    d = dirs[int(res["pos_star"]), int(res["l_star"])]
+    h = _ablation_handles(model, d)
+    try:
+        comps = generate_completions(model, tok, pool, template, cfg.gen_max_new_tokens,
+                                     cfg.batch_size)
+    finally:
+        for x in h:
+            x.remove()
+
+    kept, refused = [], 0
+    for p_, c in zip(pool, comps):
+        t = truncate_at_turn(c).strip()
+        if is_refusal_strict(t) or stance_of_v2(c) != "compliance":
+            refused += 1
+            continue
+        if len(t.split()) >= 8:            # a fragment is not a usable training target
+            kept.append((p_, t))
+    logger.info("harmful attack data: %d of %d ablated completions are compliant under BOTH "
+                "judges (%d still refuse); keeping %d", len(kept), len(pool), refused,
+                min(n, len(kept)))
+    if len(kept) < 20:
+        raise SystemExit(f"only {len(kept)} compliant completions -- too few to attack with; "
+                         f"report this rather than training on a handful.")
+    return kept[:n]
+
+
 def fill_responses(model, tok, pairs, template, cfg) -> list[tuple[str, str]]:
     """Fill in (instruction, None) with the model's own greedy continuation."""
     todo = [i for i, (_, r) in enumerate(pairs) if r is None]

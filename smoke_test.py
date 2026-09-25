@@ -1055,6 +1055,30 @@ def test_stance_labeller_switch() -> None:
     print("  A3 labeller switch: v1 default, v2 isolated, read and write both suffixed — OK")
 
 
+def test_harmful_arm_hygiene() -> None:
+    """P1-E7h's attack data must come from the REHEARSAL half and must exclude refusals.
+
+    Two flaws caught on 2026-09-26 before any run, both of which this pins:
+      1. the stored ablated completions are on the EVALUATION prompts, so training on them
+         repeats the memorisation that forced P1-E7's "control 1.000 -> 1.000" retraction;
+      2. ablated output is not automatically compliant -- 64 of OLMo 2's 132 ablated
+         completions are still genuine refusals in the normative register."""
+    import inspect
+    from attack import build_harmful_examples
+
+    src = inspect.getsource(build_harmful_examples)
+    assert 'behavioural_split(cfg)["rehearsal"]' in src, "must use the rehearsal half"
+    assert '"eval"' not in src, "the evaluation half must never be a training source"
+    assert "is_refusal_strict" in src and "stance_of_v2" in src, "both judges must filter"
+    # No benign filler in the harmful arm, or the attack is diluted by an unrelated variable.
+    import dose_response as D
+    msrc = inspect.getsource(D.main)
+    h = msrc.index('if args.arm == "harmful"')
+    assert "build_benign" not in msrc[h:msrc.index("else:", h)], \
+        "the harmful arm must not mix in benign data"
+    print("  P1-E7h hygiene: rehearsal-half prompts, both judges filter, no benign filler — OK")
+
+
 def test_provenance_graph() -> None:
     """The claim graph must be well-formed, and its BFS guard must actually fire.
 
@@ -1137,6 +1161,7 @@ if __name__ == "__main__":
     test_stance_v2()
     test_p1e7f_verdict()
     test_stance_labeller_switch()
+    test_harmful_arm_hygiene()
     test_transformer_layers()
     test_data_loads()
     test_refusal_score()

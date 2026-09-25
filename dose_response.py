@@ -81,8 +81,8 @@ import logging
 import numpy as np
 import torch
 
-from attack import (build_benign, build_safety_examples, encode_sft, fill_responses,
-                    require_datasets)
+from attack import (build_benign, build_harmful_examples, build_safety_examples,
+                    encode_sft, fill_responses, require_datasets)
 from config import config_for
 from data import load_instructions, behavioural_split
 from probes import cache_activations, logistic_accuracy, mass_mean_accuracy
@@ -302,7 +302,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lineage", default="olmo2")
     ap.add_argument("--from", dest="src", default="rlvr")
-    ap.add_argument("--arm", required=True, choices=("benign", "safety-preserved"))
+    ap.add_argument("--arm", required=True,
+                    choices=("benign", "safety-preserved", "harmful"),
+                    help="benign = Qi-style Alpaca attack; safety-preserved = the matched "
+                         "rehearsal control; harmful = P1-E7h, fine-tuning on the model's own "
+                         "ABLATED compliant answers (Zhao's construction, reproduced from our "
+                         "own generations)")
     ap.add_argument("--doses", default=",".join(str(d) for d in DEFAULT_DOSES),
                     help="training steps at which to measure; 0 = the untouched checkpoint")
     ap.add_argument("--n", type=int, default=2000)
@@ -383,13 +388,21 @@ def main() -> None:
                 len(splits["probe_test_pos"]) / (len(splits["probe_test_pos"])
                                                  + len(splits["harmless_test"])))
 
-    pairs = fill_responses(model, tok, build_benign(cfg, args.n, args.responses, seed=args.seed),
-                           template, cfg)
-    n_benign, n_safety = len(pairs), 0
-    if args.arm == "safety-preserved":
-        safety = build_safety_examples(model, tok, cfg, template, args.n_safety)
-        n_safety = len(safety)
-        pairs = pairs + safety
+    if args.arm == "harmful":
+        # P1-E7h: NO benign filler. The attack is the harmful pairs alone, as in Zhao et al.
+        pairs = build_harmful_examples(model, tok, cfg, template, refusal_toks, n_eoi, args.n)
+        n_benign, n_safety = 0, 0
+        logger.info("[harmful] %d (harmful prompt, own ablated compliant answer) pairs",
+                    len(pairs))
+    else:
+        pairs = fill_responses(model, tok,
+                               build_benign(cfg, args.n, args.responses, seed=args.seed),
+                               template, cfg)
+        n_benign, n_safety = len(pairs), 0
+        if args.arm == "safety-preserved":
+            safety = build_safety_examples(model, tok, cfg, template, args.n_safety)
+            n_safety = len(safety)
+            pairs = pairs + safety
     import random as _r
     _r.Random(run_seed).shuffle(pairs)
     examples = encode_sft(tok, pairs, template)

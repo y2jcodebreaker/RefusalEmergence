@@ -70,18 +70,41 @@ def label_v2(text: str) -> str:
 
 
 LABELLERS: dict[str, Callable[[str], str]] = {"v1": label, "v2": label_v2}
+VARIANT_ORDER = ("v1", "v2", "v2+audit")
+
+
+def hand_labels() -> dict[tuple[str, str, int], str]:
+    """(family, arm, index) -> hand label, from the 2026-09-26 unblinded residual audit.
+
+    Added AFTER V2 was scored and failed on machine v2 labels. It does not rescue that verdict
+    -- V2 stands as FAILED -- it is reported beside it as new, dated evidence.
+    """
+    d = json.load(open(f"{R}/b1_v2_residual_audit.json"))
+    return {(x["family"], x["arm"], x["i"]): x["label"] for x in d["items"]}
 
 
 def count_registers(comps: list[str], wg: list[bool], labeller: Callable[[str], str],
-                    audited: set[tuple[str, str, int]], fam: str, arm: str) -> dict:
-    """Register counts among WildGuard refusals, with the residual split reported, not absorbed."""
+                    audited: set[tuple[str, str, int]], fam: str, arm: str,
+                    hand: dict[tuple[str, str, int], str] | None = None) -> dict:
+    """Register counts among WildGuard refusals, with the residual split reported, not absorbed.
+
+    `hand`, when given, resolves a residual to the register a human read it as -- or leaves it in
+    the compliance bucket if the human read it as compliance.
+    """
     st: Counter = Counter()
-    resid_audited, resid_unaudited = 0, []
+    resid_audited, resid_unaudited, hand_resolved = 0, [], 0
     for i, (text, w) in enumerate(zip(comps, wg)):
         if not w:
             continue
         lab = labeller(text)
         if lab in ("compliance", "confusion"):
+            h = (hand or {}).get((fam, arm, i))
+            if h in REGISTERS:
+                st[h] += 1
+                hand_resolved += 1
+                continue
+            if h == "compliance":
+                continue  # human confirmed the labeller: genuinely not a refusal
             if (fam, arm, i) in audited:
                 resid_audited += 1
             else:
@@ -94,7 +117,8 @@ def count_registers(comps: list[str], wg: list[bool], labeller: Callable[[str], 
     return {"raw": raw, "with_audited": with_audited, "n_refusals": int(sum(wg)),
             "residual_audited_normative": resid_audited,
             "residual_unaudited": len(resid_unaudited),
-            "residual_unaudited_idx": resid_unaudited}
+            "residual_unaudited_idx": resid_unaudited,
+            "hand_resolved": hand_resolved}
 
 
 def removed_frac(baseline: int, ablated: int) -> float | None:
@@ -125,14 +149,20 @@ def v_verdict(fams: dict) -> dict:
     out["V1"] = {"pass": not v1_fail, "detail": v1_fail or "inability >= 80% removed everywhere "
                  "its baseline reaches 20, under both labellers"}
 
-    t = fams.get("tulu2_dpo", {}).get("v2")
-    if t is None:
-        out["V2"] = {"pass": False, "detail": "tulu2_dpo v2 row missing"}
-    else:
+    for key, lv in (("V2", "v2"), ("V2b", "v2+audit")):
+        t = fams.get("tulu2_dpo", {}).get(lv)
+        if t is None:
+            out[key] = {"pass": False, "detail": f"tulu2_dpo {lv} row missing"}
+            continue
         b = t["baseline"]["with_audited"]["identity"]
         a = t["ablated"]["with_audited"]["identity"]
-        out["V2"] = {"pass": a >= b and b >= 10 and a >= 10,
-                     "detail": f"Tulu-2 identity under v2: {b} -> {a}"}
+        out[key] = {"pass": a >= b and b >= 10 and a >= 10,
+                    "detail": f"Tulu-2 identity under {lv}: {b} -> {a}"}
+    # V2 is the pre-registered criterion and its verdict is final. V2b is the same rule applied
+    # to hand-read residuals, scored AFTER V2 failed, and is reported as new evidence -- never as
+    # a reason to reopen V2. Do not delete this note; it is what stops the rescue.
+    out["V2b"]["status"] = ("POST-AUDIT, NOT A RESCUE. V2 stands at its recorded verdict. "
+                            "The audit is results/b1_v2_residual_audit.json, unblinded.")
 
     v3_fail = []
     for fam, row in fams.items():
@@ -162,21 +192,43 @@ def v_verdict(fams: dict) -> dict:
             ok = ok and dominant == "inability" and not gains
             det.append(f"{lv}: baseline dominant={dominant} {b}, ablated {a} "
                        f"(n={a and g[lv]['ablated']['n_refusals']}), gains={gains or 'none'}")
+        # Informational, NOT part of V4's pre-registered scope (v1/v2 only): the audited variant.
+        ab = g["v2+audit"]["baseline"]["with_audited"]
+        aa = g["v2+audit"]["ablated"]["with_audited"]
+        audit_gains = [f"{r} {ab[r]}->{aa[r]}" for r in REGISTERS if aa[r] > ab[r]]
         out["V4"] = {"pass": ok, "detail": det,
                      "power_note": "Gemma's ablated arm has "
                                    f"{g['v1']['ablated']['n_refusals']} WildGuard refusals; "
-                                   "'no register gains' is a weak test at this n."}
+                                   "'no register gains' is a weak test at this n.",
+                     "v2_audit_informational": (
+                         f"Under v2+audit Gemma DOES gain: {audit_gains or 'nothing'}. Its four "
+                         "residual refusals are all normative, so Gemma has a VESTIGIAL fallback, "
+                         "not none. Reported because V4's v1/v2 pass would otherwise overstate "
+                         "the 'no fallback' reading.")}
+        out["DEFINITIONAL_WARNING"] = {
+            "pass": None,
+            "detail": ("Once inability goes to ~0, residual refusal IS the fallback register "
+                       "count, so 'sufficiency tracks fallback capacity' is an IDENTITY up to the "
+                       "baseline denominator, not an independent correlation. The non-definitional "
+                       "content is: (a) inability is removed wherever it exists, (b) the fallback "
+                       "register does not fall (Tulu-2 identity 17->19 under v2+audit), and (c) a "
+                       "fallback can APPEAR rather than merely survive (OLMo 2 normative 2->64, "
+                       "Gemma 1->4). Section 3 must be written on (a)-(c), never on the identity.")}
     return out
 
 
 def main() -> None:
     audited = audited_residuals()
+    hand = hand_labels()
+    # Three columns: the two labellers as pre-registered, plus v2 with its residuals hand-read.
+    variants: dict[str, tuple[Callable[[str], str], dict | None]] = {
+        "v1": (label, None), "v2": (label_v2, None), "v2+audit": (label_v2, hand)}
     fams: dict = {}
     for fam, stem in FAMILIES.items():
         arms = {arm: wg_verdicts(stem, arm) for arm in ARMS}
-        fams[fam] = {lv: {arm: count_registers(c, wg, fn, audited, fam, arm)
+        fams[fam] = {lv: {arm: count_registers(c, wg, fn, audited, fam, arm, h)
                           for arm, (c, wg) in arms.items()}
-                     for lv, fn in LABELLERS.items()}
+                     for lv, (fn, h) in variants.items()}
 
     verdicts = v_verdict(fams)
 
@@ -187,7 +239,7 @@ def main() -> None:
     with RunRecord(EXPERIMENT, "b1_v2_registers.py", cfg=None, question=QUESTION,
                    notes="CPU only; re-labels B1's completions with v1 and v2 and adds Gemma") as r:
         for fam, row in fams.items():
-            for lv in ("v1", "v2"):
+            for lv in VARIANT_ORDER:
                 r.result(family=fam, labeller=lv,
                          baseline=row[lv]["baseline"]["with_audited"],
                          ablated=row[lv]["ablated"]["with_audited"],
@@ -199,7 +251,7 @@ def main() -> None:
     print("\n=== B1-v2: register table under both labellers ===")
     for fam, row in fams.items():
         print(f"\n{fam}")
-        for lv in ("v1", "v2"):
+        for lv in VARIANT_ORDER:
             for arm in ARMS:
                 d = row[lv][arm]
                 cells = " ".join(f"{r[:4]}={d['with_audited'][r]:>3d}" for r in REGISTERS)
@@ -208,9 +260,11 @@ def main() -> None:
                       f"unaudited={d['residual_unaudited']}")
     print("\n=== pre-registered verdicts (section 20) ===")
     for k, v in verdicts.items():
-        print(f"  {k}: {'PASS' if v['pass'] else 'FAIL'}  {v['detail']}")
-        if "power_note" in v:
-            print(f"      {v['power_note']}")
+        tag = "NOTE" if v["pass"] is None else ("PASS" if v["pass"] else "FAIL")
+        print(f"  {k}: {tag}  {v['detail']}")
+        for extra in ("power_note", "v2_audit_informational", "status"):
+            if extra in v:
+                print(f"      {v[extra]}")
 
 
 if __name__ == "__main__":

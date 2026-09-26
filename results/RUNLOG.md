@@ -5464,3 +5464,132 @@ seeds=[1] arms={'attack': ('p1e7h_olmo2', 'harmful')} endpoint=400 cell=(pos 4, 
 | True | True |
 
 seeds=[1] arms={'attack': ('p1e7h_olmo2', 'harmful')} endpoint=400 cell=(pos 4, L24) coeffs=[0.5, 1.0, 2.0, 4.0, 8.0, 16.0] null=5
+
+---
+
+## B1-v2 · 2026-09-26T19:22:39+00:00 · OK
+
+> Does B1's register table survive re-labelling with stance_of v2, and what is Gemma-2-9B-it's register row?
+
+- **script** `b1_v2_registers.py` — `b1_v2_registers.py`
+- **code** `908208e` on `main`
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| family | labeller | baseline | ablated | residual_unaudited |
+|---|---|---|---|---|
+| zephyr_dpo | v1 | {'inability': 2, 'identity': 0, 'condemnation': 24, 'normative': 4} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 0} | (0, 0) |
+| zephyr_dpo | v2 | {'inability': 1, 'identity': 0, 'condemnation': 23, 'normative': 4} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 0} | (2, 0) |
+| tulu2_dpo | v1 | {'inability': 78, 'identity': 20, 'condemnation': 0, 'normative': 2} | {'inability': 8, 'identity': 21, 'condemnation': 0, 'normative': 1} | (0, 0) |
+| tulu2_dpo | v2 | {'inability': 78, 'identity': 16, 'condemnation': 0, 'normative': 2} | {'inability': 8, 'identity': 13, 'condemnation': 0, 'normative': 1} | (4, 8) |
+| olmo2_rlvr | v1 | {'inability': 128, 'identity': 0, 'condemnation': 0, 'normative': 2} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 64} | (0, 0) |
+| olmo2_rlvr | v2 | {'inability': 126, 'identity': 0, 'condemnation': 0, 'normative': 2} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 64} | (2, 0) |
+| gemma2_it | v1 | {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 1} | (0, 3) |
+| gemma2_it | v2 | {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 1} | (0, 3) |
+| True |
+| False |
+| True |
+| True |
+
+CPU only; re-labels B1's completions with v1 and v2 and adds Gemma
+
+---
+
+## B1-v2 · 2026-09-26T19:26:35+00:00 · OK
+
+> Does B1's register table survive re-labelling with stance_of v2, and what is Gemma-2-9B-it's register row?
+
+- **script** `b1_v2_registers.py` — `b1_v2_registers.py`
+- **code** `908208e` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| family | labeller | baseline | ablated | residual_unaudited |
+|---|---|---|---|---|
+| zephyr_dpo | v1 | {'inability': 2, 'identity': 0, 'condemnation': 24, 'normative': 4} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 0} | (0, 0) |
+| zephyr_dpo | v2 | {'inability': 1, 'identity': 0, 'condemnation': 23, 'normative': 4} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 0} | (2, 0) |
+| zephyr_dpo | v2+audit | {'inability': 1, 'identity': 0, 'condemnation': 24, 'normative': 5} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 0} | (0, 0) |
+| tulu2_dpo | v1 | {'inability': 78, 'identity': 20, 'condemnation': 0, 'normative': 2} | {'inability': 8, 'identity': 21, 'condemnation': 0, 'normative': 1} | (0, 0) |
+| tulu2_dpo | v2 | {'inability': 78, 'identity': 16, 'condemnation': 0, 'normative': 2} | {'inability': 8, 'identity': 13, 'condemnation': 0, 'normative': 1} | (4, 8) |
+| tulu2_dpo | v2+audit | {'inability': 78, 'identity': 17, 'condemnation': 0, 'normative': 2} | {'inability': 8, 'identity': 19, 'condemnation': 0, 'normative': 1} | (0, 0) |
+| olmo2_rlvr | v1 | {'inability': 128, 'identity': 0, 'condemnation': 0, 'normative': 2} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 64} | (0, 0) |
+| olmo2_rlvr | v2 | {'inability': 126, 'identity': 0, 'condemnation': 0, 'normative': 2} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 64} | (2, 0) |
+| olmo2_rlvr | v2+audit | {'inability': 128, 'identity': 0, 'condemnation': 0, 'normative': 2} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 64} | (0, 0) |
+| gemma2_it | v1 | {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 1} | (0, 3) |
+| gemma2_it | v2 | {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 1} | (0, 3) |
+| gemma2_it | v2+audit | {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 4} | (0, 0) |
+| True |
+| False |
+| True |
+| True |
+| True |
+
+CPU only; re-labels B1's completions with v1 and v2 and adds Gemma
+
+---
+
+## B1-v2 · 2026-09-26T19:27:12+00:00 · OK
+
+> Does B1's register table survive re-labelling with stance_of v2, and what is Gemma-2-9B-it's register row?
+
+- **script** `b1_v2_registers.py` — `b1_v2_registers.py`
+- **code** `908208e` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| family | labeller | baseline | ablated | residual_unaudited |
+|---|---|---|---|---|
+| zephyr_dpo | v1 | {'inability': 2, 'identity': 0, 'condemnation': 24, 'normative': 4} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 0} | (0, 0) |
+| zephyr_dpo | v2 | {'inability': 1, 'identity': 0, 'condemnation': 23, 'normative': 4} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 0} | (2, 0) |
+| zephyr_dpo | v2+audit | {'inability': 1, 'identity': 0, 'condemnation': 24, 'normative': 5} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 0} | (0, 0) |
+| tulu2_dpo | v1 | {'inability': 78, 'identity': 20, 'condemnation': 0, 'normative': 2} | {'inability': 8, 'identity': 21, 'condemnation': 0, 'normative': 1} | (0, 0) |
+| tulu2_dpo | v2 | {'inability': 78, 'identity': 16, 'condemnation': 0, 'normative': 2} | {'inability': 8, 'identity': 13, 'condemnation': 0, 'normative': 1} | (4, 8) |
+| tulu2_dpo | v2+audit | {'inability': 78, 'identity': 17, 'condemnation': 0, 'normative': 2} | {'inability': 8, 'identity': 19, 'condemnation': 0, 'normative': 1} | (0, 0) |
+| olmo2_rlvr | v1 | {'inability': 128, 'identity': 0, 'condemnation': 0, 'normative': 2} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 64} | (0, 0) |
+| olmo2_rlvr | v2 | {'inability': 126, 'identity': 0, 'condemnation': 0, 'normative': 2} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 64} | (2, 0) |
+| olmo2_rlvr | v2+audit | {'inability': 128, 'identity': 0, 'condemnation': 0, 'normative': 2} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 64} | (0, 0) |
+| gemma2_it | v1 | {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 1} | (0, 3) |
+| gemma2_it | v2 | {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 1} | (0, 3) |
+| gemma2_it | v2+audit | {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 4} | (0, 0) |
+| True |
+| False |
+| True |
+| True |
+| True |
+| None |
+
+CPU only; re-labels B1's completions with v1 and v2 and adds Gemma
+
+---
+
+## B1-v2 · 2026-09-26T19:27:24+00:00 · OK
+
+> Does B1's register table survive re-labelling with stance_of v2, and what is Gemma-2-9B-it's register row?
+
+- **script** `b1_v2_registers.py` — `b1_v2_registers.py`
+- **code** `908208e` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| family | labeller | baseline | ablated | residual_unaudited |
+|---|---|---|---|---|
+| zephyr_dpo | v1 | {'inability': 2, 'identity': 0, 'condemnation': 24, 'normative': 4} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 0} | (0, 0) |
+| zephyr_dpo | v2 | {'inability': 1, 'identity': 0, 'condemnation': 23, 'normative': 4} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 0} | (2, 0) |
+| zephyr_dpo | v2+audit | {'inability': 1, 'identity': 0, 'condemnation': 24, 'normative': 5} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 0} | (0, 0) |
+| tulu2_dpo | v1 | {'inability': 78, 'identity': 20, 'condemnation': 0, 'normative': 2} | {'inability': 8, 'identity': 21, 'condemnation': 0, 'normative': 1} | (0, 0) |
+| tulu2_dpo | v2 | {'inability': 78, 'identity': 16, 'condemnation': 0, 'normative': 2} | {'inability': 8, 'identity': 13, 'condemnation': 0, 'normative': 1} | (4, 8) |
+| tulu2_dpo | v2+audit | {'inability': 78, 'identity': 17, 'condemnation': 0, 'normative': 2} | {'inability': 8, 'identity': 19, 'condemnation': 0, 'normative': 1} | (0, 0) |
+| olmo2_rlvr | v1 | {'inability': 128, 'identity': 0, 'condemnation': 0, 'normative': 2} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 64} | (0, 0) |
+| olmo2_rlvr | v2 | {'inability': 126, 'identity': 0, 'condemnation': 0, 'normative': 2} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 64} | (2, 0) |
+| olmo2_rlvr | v2+audit | {'inability': 128, 'identity': 0, 'condemnation': 0, 'normative': 2} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 64} | (0, 0) |
+| gemma2_it | v1 | {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 1} | (0, 3) |
+| gemma2_it | v2 | {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 1} | (0, 3) |
+| gemma2_it | v2+audit | {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1} | {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 4} | (0, 0) |
+| True |
+| False |
+| True |
+| True |
+| True |
+| None |
+
+CPU only; re-labels B1's completions with v1 and v2 and adds Gemma

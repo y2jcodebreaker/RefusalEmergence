@@ -224,6 +224,52 @@ def test_disk_check() -> None:
     print("  disk preflight: fires before download, names disk, xet orphans and the fix — OK")
 
 
+def test_b1_v2_verdict() -> None:
+    """B1-v2's rule, driven by the MEASURED 2026-09-26 numbers.
+
+    V2 failed as pre-registered (Tulu-2 identity 16 -> 13 under machine v2 labels) and V2b
+    passed only after the residuals were hand-read (17 -> 19). Both are pinned, so an edit that
+    relaxes V2 to rescue the headline, or that quietly drops the failing verdict, breaks here.
+    """
+    from b1_v2_registers import v_verdict
+
+    def arm(inab: int, iden: int, cond: int, norm: int, n: int) -> dict:
+        c = {"inability": inab, "identity": iden, "condemnation": cond, "normative": norm}
+        return {"raw": c, "with_audited": c, "n_refusals": n, "residual_audited_normative": 0,
+                "residual_unaudited": 0, "residual_unaudited_idx": [], "hand_resolved": 0}
+
+    fams = {
+        "zephyr_dpo": {"v1": {"baseline": arm(2, 0, 24, 4, 30), "ablated": arm(0, 0, 0, 0, 0)},
+                       "v2": {"baseline": arm(1, 0, 23, 4, 30), "ablated": arm(0, 0, 0, 0, 0)},
+                       "v2+audit": {"baseline": arm(1, 0, 24, 5, 30),
+                                    "ablated": arm(0, 0, 0, 0, 0)}},
+        "tulu2_dpo": {"v1": {"baseline": arm(78, 20, 0, 2, 100), "ablated": arm(8, 21, 0, 1, 30)},
+                      "v2": {"baseline": arm(78, 16, 0, 2, 100), "ablated": arm(8, 13, 0, 1, 30)},
+                      "v2+audit": {"baseline": arm(78, 17, 0, 2, 100),
+                                   "ablated": arm(8, 19, 0, 1, 30)}},
+        "olmo2_rlvr": {"v1": {"baseline": arm(128, 0, 0, 2, 130), "ablated": arm(0, 0, 0, 64, 64)},
+                       "v2": {"baseline": arm(126, 0, 0, 2, 130), "ablated": arm(0, 0, 0, 64, 64)},
+                       "v2+audit": {"baseline": arm(128, 0, 0, 2, 130),
+                                    "ablated": arm(0, 0, 0, 64, 64)}},
+        "gemma2_it": {"v1": {"baseline": arm(131, 0, 0, 1, 132), "ablated": arm(0, 0, 0, 1, 4)},
+                      "v2": {"baseline": arm(131, 0, 0, 1, 132), "ablated": arm(0, 0, 0, 1, 4)},
+                      "v2+audit": {"baseline": arm(131, 0, 0, 1, 132),
+                                   "ablated": arm(0, 0, 0, 4, 4)}},
+    }
+    v = v_verdict(fams)
+    assert v["V1"]["pass"], v["V1"]
+    assert not v["V2"]["pass"], "V2 FAILED as measured (16 -> 13); do not let an edit rescue it"
+    assert v["V2b"]["pass"], v["V2b"]
+    assert "NOT A RESCUE" in v["V2b"]["status"], "the no-rescue note must survive refactors"
+    assert v["V3"]["pass"] and v["V4"]["pass"], v
+    assert v["DEFINITIONAL_WARNING"]["pass"] is None, "the warning is a note, never a criterion"
+    assert "IDENTITY" in v["DEFINITIONAL_WARNING"]["detail"]
+    # The inability invariant must be what carries V1: break it and V1 must fail.
+    broken = {k: {lv: dict(a) for lv, a in row.items()} for k, row in fams.items()}
+    broken["olmo2_rlvr"]["v2"]["ablated"] = arm(120, 0, 0, 64, 64)
+    assert not v_verdict(broken)["V1"]["pass"], "V1 must fail when inability survives"
+
+
 def test_transformer_layers() -> None:
     """The decoder-block accessor must work on a PEFT-WRAPPED model, not just a plain one.
 
@@ -1204,6 +1250,7 @@ if __name__ == "__main__":
     test_refit_geometry_numbers()
     test_stance_v2()
     test_p1e7f_verdict()
+    test_b1_v2_verdict()
     test_stance_labeller_switch()
     test_harmful_arm_hygiene()
     test_runlog_rebuildable()

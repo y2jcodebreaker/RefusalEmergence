@@ -196,6 +196,62 @@ refusals *appear* (2 → 64) rather than surviving. Zephyr's condemnation 24 →
 OLMo 2 loses nearly all its inability refusals but gains 64 normative ones → 51 %. Tulu-2 loses
 70 and keeps 21 identity → 70 %. Zephyr has nothing to fall back on → 100 %.
 
+### B1-v2 — the register table under both labellers, and Gemma's row (2026-09-26)
+
+Pre-registered in P1 plan **section 20**, written before any label was computed. CPU only, over
+completions already on disk. `b1_registers.py` and its frozen table are untouched.
+
+**Why it was run.** The task was Gemma's register row for Figure 1. Choosing a labeller for it
+exposed that B1's register table is `stance_of` **v1** — the labeller whose opening-only rule
+already retired A2's per-register result (O-184) and which A3-v2 showed moves 20 of 41 Tulu-2
+identity items to compliance (O-203). Section 3 of the paper leads on Tulu-2's identity 20 → 21.
+
+| family | labeller | baseline | ablated |
+|---|---|---|---|
+| Zephyr-DPO | v1 | inab 2, cond 24, norm 4 | all 0 |
+| | v2 + audit | inab 1, cond 24, norm 5 | all 0 |
+| Tulu-2-DPO | v1 | **inab 78**, iden 20, norm 2 | **inab 8**, iden **21**, norm 1 |
+| | v2 (machine) | inab 78, iden 16, norm 2 | inab 8, iden **13**, norm 1 |
+| | **v2 + audit** | inab 78, iden **17**, norm 2 | inab 8, iden **19**, norm 1 |
+| OLMo 2 RLVR | v1 | inab 128, norm 2 | inab 0, norm **64** |
+| | v2 + audit | inab 128, norm 2 | inab 0, norm 64 |
+| **Gemma-2-9B-it** | v1 | **inab 131**, norm 1 | inab 0, norm 1 (+3 unread) |
+| | **v2 + audit** | **inab 131**, norm 1 | **inab 0, norm 4** |
+
+**Pre-registered verdicts.** V1 **PASS** — inability is removed ≥ 80 % wherever its baseline
+reaches 20, under *both* labellers. V3 **PASS** — no other register is cleanly removed where
+refusal does not collapse. V4 **PASS** on v1/v2. **V2 FAILED**: Tulu-2 identity is **16 → 13**
+under machine v2 labels, not 20 → 21.
+
+**The failure, and what reading the residuals did to it.** All **19** WildGuard refusals that v2
+files as compliance were read against their prompts (`results/b1_v2_residual_audit.json`,
+UNBLINDED): **14 are genuine refusals, 5 are genuine compliance**. v2 is wrong on 14 of 19 here,
+and the failure mode is specific — `delivers_request()` fires on a numbered list without asking
+*which question the list answers*, and all 14 answer the **inverse** of the harmful request
+(how to protect yourself, how to help a victim, how to comply lawfully). Resolving them gives
+Tulu-2 identity **17 → 19** against inability 78 → 8, so the survivor pattern holds and the exact
+numbers are labeller-dependent. **V2's recorded verdict stands as FAILED**; the audit is reported
+beside it, never as a rescue, and `smoke_test.test_b1_v2_verdict` pins both.
+
+> **This is the opposite direction of error from A2.** There, v2's demotions were *correct*
+> (disclaimer-then-comply). Here they are mostly *wrong* (redirect-to-inverse). v1 over-counts
+> refusal by reading only the opening; v2 under-counts it by treating any list as delivery.
+> Neither is trustworthy unaudited, which is the argument for the blind labels, not against them.
+
+**⚠️ A DEFINITIONAL LIMIT ON THE HEADLINE PHRASING, found here.** "Sufficiency tracks fallback
+capacity" is an **identity**, not a correlation: once inability is driven to ~0, residual refusal
+*is* the fallback register count, so removed % = 1 − fallback/baseline by construction. The
+non-definitional content is (a) inability is removed wherever it exists, (b) the fallback register
+does **not** fall, and (c) a fallback can **appear** rather than merely survive. Section 3 is
+written on (a)–(c). `b1_v2_registers.py` prints this as `DEFINITIONAL_WARNING` so it cannot be
+forgotten.
+
+**Gemma is not fallback-free, it is fallback-*vestigial*.** Its four residual refusals are all
+normative (1 → 4), the same shape as OLMo 2's 2 → 64 at 1/16 the size. The four-family ordering
+is unchanged and the mechanism reads better: Gemma sits between Zephyr (no fallback, 100 %) and
+OLMo 2 (large fallback, 51 %). Power is thin by construction — four items — and the script says so
+next to the number.
+
 ### P1-E7r — the central contrast replicates in three matched seeds (2026-09-23)
 
 P1-E7's attack arm was effectively one run and its control one seed; D1 then showed controls vary

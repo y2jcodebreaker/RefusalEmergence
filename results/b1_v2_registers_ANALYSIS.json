@@ -1,0 +1,554 @@
+{
+ "what": "Does B1's register table survive re-labelling with stance_of v2, and what is Gemma-2-9B-it's register row?",
+ "prereg": "P1-Coupling-Not-Capability.md section 20",
+ "families": {
+  "zephyr_dpo": {
+   "v1": {
+    "baseline": {
+     "raw": {
+      "inability": 2,
+      "identity": 0,
+      "condemnation": 24,
+      "normative": 3
+     },
+     "with_audited": {
+      "inability": 2,
+      "identity": 0,
+      "condemnation": 24,
+      "normative": 4
+     },
+     "n_refusals": 30,
+     "residual_audited_normative": 1,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    },
+    "ablated": {
+     "raw": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 0
+     },
+     "with_audited": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 0
+     },
+     "n_refusals": 0,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    }
+   },
+   "v2": {
+    "baseline": {
+     "raw": {
+      "inability": 1,
+      "identity": 0,
+      "condemnation": 23,
+      "normative": 4
+     },
+     "with_audited": {
+      "inability": 1,
+      "identity": 0,
+      "condemnation": 23,
+      "normative": 4
+     },
+     "n_refusals": 30,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 2,
+     "residual_unaudited_idx": [
+      47,
+      113
+     ],
+     "hand_resolved": 0
+    },
+    "ablated": {
+     "raw": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 0
+     },
+     "with_audited": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 0
+     },
+     "n_refusals": 0,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    }
+   },
+   "v2+audit": {
+    "baseline": {
+     "raw": {
+      "inability": 1,
+      "identity": 0,
+      "condemnation": 24,
+      "normative": 5
+     },
+     "with_audited": {
+      "inability": 1,
+      "identity": 0,
+      "condemnation": 24,
+      "normative": 5
+     },
+     "n_refusals": 30,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 2
+    },
+    "ablated": {
+     "raw": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 0
+     },
+     "with_audited": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 0
+     },
+     "n_refusals": 0,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    }
+   }
+  },
+  "tulu2_dpo": {
+   "v1": {
+    "baseline": {
+     "raw": {
+      "inability": 78,
+      "identity": 20,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "with_audited": {
+      "inability": 78,
+      "identity": 20,
+      "condemnation": 0,
+      "normative": 2
+     },
+     "n_refusals": 100,
+     "residual_audited_normative": 1,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    },
+    "ablated": {
+     "raw": {
+      "inability": 8,
+      "identity": 21,
+      "condemnation": 0,
+      "normative": 0
+     },
+     "with_audited": {
+      "inability": 8,
+      "identity": 21,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "n_refusals": 30,
+     "residual_audited_normative": 1,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    }
+   },
+   "v2": {
+    "baseline": {
+     "raw": {
+      "inability": 78,
+      "identity": 16,
+      "condemnation": 0,
+      "normative": 2
+     },
+     "with_audited": {
+      "inability": 78,
+      "identity": 16,
+      "condemnation": 0,
+      "normative": 2
+     },
+     "n_refusals": 100,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 4,
+     "residual_unaudited_idx": [
+      13,
+      21,
+      48,
+      82
+     ],
+     "hand_resolved": 0
+    },
+    "ablated": {
+     "raw": {
+      "inability": 8,
+      "identity": 13,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "with_audited": {
+      "inability": 8,
+      "identity": 13,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "n_refusals": 30,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 8,
+     "residual_unaudited_idx": [
+      11,
+      15,
+      28,
+      31,
+      37,
+      50,
+      63,
+      82
+     ],
+     "hand_resolved": 0
+    }
+   },
+   "v2+audit": {
+    "baseline": {
+     "raw": {
+      "inability": 78,
+      "identity": 17,
+      "condemnation": 0,
+      "normative": 2
+     },
+     "with_audited": {
+      "inability": 78,
+      "identity": 17,
+      "condemnation": 0,
+      "normative": 2
+     },
+     "n_refusals": 100,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 1
+    },
+    "ablated": {
+     "raw": {
+      "inability": 8,
+      "identity": 19,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "with_audited": {
+      "inability": 8,
+      "identity": 19,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "n_refusals": 30,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 6
+    }
+   }
+  },
+  "olmo2_rlvr": {
+   "v1": {
+    "baseline": {
+     "raw": {
+      "inability": 128,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 2
+     },
+     "with_audited": {
+      "inability": 128,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 2
+     },
+     "n_refusals": 130,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    },
+    "ablated": {
+     "raw": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 43
+     },
+     "with_audited": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 64
+     },
+     "n_refusals": 64,
+     "residual_audited_normative": 21,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    }
+   },
+   "v2": {
+    "baseline": {
+     "raw": {
+      "inability": 126,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 2
+     },
+     "with_audited": {
+      "inability": 126,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 2
+     },
+     "n_refusals": 130,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 2,
+     "residual_unaudited_idx": [
+      28,
+      82
+     ],
+     "hand_resolved": 0
+    },
+    "ablated": {
+     "raw": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 50
+     },
+     "with_audited": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 64
+     },
+     "n_refusals": 64,
+     "residual_audited_normative": 14,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    }
+   },
+   "v2+audit": {
+    "baseline": {
+     "raw": {
+      "inability": 128,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 2
+     },
+     "with_audited": {
+      "inability": 128,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 2
+     },
+     "n_refusals": 130,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 2
+    },
+    "ablated": {
+     "raw": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 50
+     },
+     "with_audited": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 64
+     },
+     "n_refusals": 64,
+     "residual_audited_normative": 14,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    }
+   }
+  },
+  "gemma2_it": {
+   "v1": {
+    "baseline": {
+     "raw": {
+      "inability": 131,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "with_audited": {
+      "inability": 131,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "n_refusals": 132,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    },
+    "ablated": {
+     "raw": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "with_audited": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "n_refusals": 4,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 3,
+     "residual_unaudited_idx": [
+      107,
+      108,
+      110
+     ],
+     "hand_resolved": 0
+    }
+   },
+   "v2": {
+    "baseline": {
+     "raw": {
+      "inability": 131,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "with_audited": {
+      "inability": 131,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "n_refusals": 132,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    },
+    "ablated": {
+     "raw": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "with_audited": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "n_refusals": 4,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 3,
+     "residual_unaudited_idx": [
+      107,
+      108,
+      110
+     ],
+     "hand_resolved": 0
+    }
+   },
+   "v2+audit": {
+    "baseline": {
+     "raw": {
+      "inability": 131,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "with_audited": {
+      "inability": 131,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 1
+     },
+     "n_refusals": 132,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 0
+    },
+    "ablated": {
+     "raw": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 4
+     },
+     "with_audited": {
+      "inability": 0,
+      "identity": 0,
+      "condemnation": 0,
+      "normative": 4
+     },
+     "n_refusals": 4,
+     "residual_audited_normative": 0,
+     "residual_unaudited": 0,
+     "residual_unaudited_idx": [],
+     "hand_resolved": 3
+    }
+   }
+  }
+ },
+ "verdicts": {
+  "V1": {
+   "pass": true,
+   "detail": "inability >= 80% removed everywhere its baseline reaches 20, under both labellers"
+  },
+  "V2": {
+   "pass": false,
+   "detail": "Tulu-2 identity under v2: 16 -> 13"
+  },
+  "V2b": {
+   "pass": true,
+   "detail": "Tulu-2 identity under v2+audit: 17 -> 19",
+   "status": "POST-AUDIT, NOT A RESCUE. V2 stands at its recorded verdict. The audit is results/b1_v2_residual_audit.json, unblinded."
+  },
+  "V3": {
+   "pass": true,
+   "detail": "inability is the only cleanly-removed register"
+  },
+  "V4": {
+   "pass": true,
+   "detail": [
+    "v1: baseline dominant=inability {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1}, ablated {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 1} (n=4), gains=none",
+    "v2: baseline dominant=inability {'inability': 131, 'identity': 0, 'condemnation': 0, 'normative': 1}, ablated {'inability': 0, 'identity': 0, 'condemnation': 0, 'normative': 1} (n=4), gains=none"
+   ],
+   "power_note": "Gemma's ablated arm has 4 WildGuard refusals; 'no register gains' is a weak test at this n.",
+   "v2_audit_informational": "Under v2+audit Gemma DOES gain: ['normative 1->4']. Its four residual refusals are all normative, so Gemma has a VESTIGIAL fallback, not none. Reported because V4's v1/v2 pass would otherwise overstate the 'no fallback' reading."
+  },
+  "DEFINITIONAL_WARNING": {
+   "pass": null,
+   "detail": "Once inability goes to ~0, residual refusal IS the fallback register count, so 'sufficiency tracks fallback capacity' is an IDENTITY up to the baseline denominator, not an independent correlation. The non-definitional content is: (a) inability is removed wherever it exists, (b) the fallback register does not fall (Tulu-2 identity 17->19 under v2+audit), and (c) a fallback can APPEAR rather than merely survive (OLMo 2 normative 2->64, Gemma 1->4). Section 3 must be written on (a)-(c), never on the identity."
+  }
+ }
+}

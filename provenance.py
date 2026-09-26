@@ -340,7 +340,14 @@ CLAIMS: tuple[Claim, ...] = (
                     "substring/WildGuard gap has not been inspected", True,
                     "2026-09-24: all 14 of seed 1's endpoint disagreements read against their "
                     "prompts -- 14/14 genuine refusals the substring judge misses. F4 holds "
-                    "under BOTH judges. Seeds 2-3 (12, 15) not individually read.",
+                    "under BOTH judges. COMPLETED 2026-09-26 "
+                    "(p1e7f_gemma2_s2s3_endpoint_audit.json): seeds 2 and 3 read too, attack AND "
+                    "control arms, 34 items. 34/34 resolve in WildGuard's favour -- 33 refusals "
+                    "the substring judge misses, 1 control item ([36]) genuine compliance it "
+                    "FALSELY scores as refusal because the requested scam script quotes refusal "
+                    "language. New list gap: 'We cannot provide you with a script...' -- JBB-12 "
+                    "has 'I cannot' but not 'We cannot'. Every endpoint disagreement in the "
+                    "experiment is now read, not sampled.",
                     script="judge_wildguard.py"),
             Control("third and fourth families", "a two-family result presented as general",
                     False, "OPEN: OLMo-3-7B (Reblitz's) and Llama-3-8B-Instruct (Joad's) "

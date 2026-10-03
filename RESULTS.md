@@ -263,7 +263,7 @@ subset and LoRA initialisation; the pair differs only in the 50 rehearsed refusa
 | seed | re-fitted induce, attack | … control | frozen direction, attack | WildGuard, attack | … control | probe |
 |---|---|---|---|---|---|---|
 | 1 | **−2.29** | +2.90 | +3.72 | **0.537** | 0.976 | 1.000 |
-| 2 | **−3.92** | +3.13 | +2.57 | **0.451** | 0.939 | 1.000 |
+| 2 | **−3.92** | +3.12 | +2.57 | **0.451** | 0.939 | 1.000 |
 | 3 | **−6.27** | +0.57 | +2.59 | **0.329** | 0.744 | 1.000 |
 
 **All four pre-registered criteria hold in every seed**: the mapping is degraded in the attack (P1-E7z: not merely shortened) and

@@ -28,7 +28,7 @@ import json
 import logging
 import os
 
-from annotate_build import SHEET_CSS, SHEET_JS, sheet_html
+from annotate_build import SHEET_CSS, SHEET_JS, sheet_body, sheet_html
 
 logger = logging.getLogger(__name__)
 
@@ -116,9 +116,21 @@ EXPECTED = {f"demo{i + 1:02d}": {"q1": q1, "register": reg, "tests": why}
 
 BANNER = """<div class="demo">
   <b>Demo sheet.</b> Ten harmless items, so you can learn the keys before the real one.
-  Nothing here is from the study and none of it is sensitive. The real sheet has the same
-  controls and about 340 items.
+  Nothing here is from the study and none of it is sensitive. The real sheet opens with
+  the same definitions, has the same controls, and has about 340 items.
 </div>"""
+
+# The download step the real sheet ends on, and what replaces it in a hosted page.
+# Named rather than inlined so body_only() can assert the substitution applied: a
+# silent miss would publish a demo whose last button does nothing.
+DOWNLOAD_BLOCK = """  const blob = new Blob([JSON.stringify(out, null, 1)], { type: "application/json" });
+  const a = $("dl");
+  a.href = URL.createObjectURL(blob);
+  a.download = "labels_" + SHEET.run + "_" + SHEET.annotator + ".json";
+  $("nlab").textContent = Object.keys(st.answers).length;"""
+
+COPYBOX_BLOCK = """  $("out").value = JSON.stringify(out, null, 1);
+  $("nlab").textContent = Object.keys(st.answers).length;"""
 
 DEMO_CSS = """
 .demo { border:1px solid var(--acc); border-radius:8px; padding:12px 14px; margin-bottom:18px;
@@ -138,74 +150,43 @@ def demo_items() -> list[dict]:
 def body_only() -> str:
     """The sheet as artifact body content: no doctype, no head, no download link.
 
-    Two deliberate differences from the real sheet, both because a hosted page is not a
-    local file. The downloaded-file step becomes a copy box, since a sandboxed page cannot
-    hand the viewer a file; and the theme follows the three-state convention a hosted page
-    needs rather than the browser setting alone. Everything the annotator is testing -- the
-    gating, the keys, the undo, the progress, the saved state -- is the real code."""
+    The markup comes from annotate_build.sheet_body, so the demo cannot drift away from the
+    instrument it demonstrates -- including the definitions page, which is the part someone
+    is most likely to be judging when they decide whether to help at all.
+
+    Three deliberate differences, all because a hosted page is not a local file. The download
+    step becomes a copy box, since a sandboxed page cannot hand the viewer a file; the theme
+    tokens already cover the three states a hosted page needs; and a banner says it is a demo.
+    """
     payload = json.dumps({"run": "DEMO", "annotator": "you",
                           "task_mix": {"on_sheet": len(DEMO)},
                           "items": demo_items()}, ensure_ascii=False).replace("</", r"<\/")
-    css = (SHEET_CSS
-           .replace("@media (prefers-color-scheme: dark) { :root {",
-                    "@media (prefers-color-scheme: dark) { :root:not([data-theme=\"light\"]) {")
-           .replace("--bg:#17181a; --fg:#e8e6e1; --mut:#9a958c; --line:#32343a; --acc:#c9a227; } }",
-                    "--bg:#17181a; --fg:#e8e6e1; --mut:#9a958c; --line:#32343a; --acc:#c9a227;\n"
-                    "  color-scheme:dark; } }\n"
-                    ':root[data-theme="dark"] { --bg:#17181a; --fg:#e8e6e1; --mut:#9a958c;\n'
-                    "  --line:#32343a; --acc:#c9a227; color-scheme:dark; }")
-           .replace(".wrap { max-width:820px; margin:0 auto; padding:24px 16px 80px }",
-                    ".wrap { max-width:820px; margin:0 auto; padding-block:24px 96px;\n"
-                    "  padding-left:max(16px, env(safe-area-inset-left, 0px));\n"
-                    "  padding-right:max(16px, env(safe-area-inset-right, 0px)) }"))
-    js = SHEET_JS.replace('''  const blob = new Blob([JSON.stringify(out, null, 1)], { type: "application/json" });
-  const a = $("dl");
-  a.href = URL.createObjectURL(blob);
-  a.download = "labels_" + SHEET.run + "_" + SHEET.annotator + ".json";
-  $("nlab").textContent = Object.keys(st.answers).length;''',
-                          '''  $("out").value = JSON.stringify(out, null, 1);
-  $("nlab").textContent = Object.keys(st.answers).length;''')
+    js = SHEET_JS.replace(DOWNLOAD_BLOCK, COPYBOX_BLOCK)
+    if '$("out")' not in js:
+        raise AssertionError("the copy-box substitution did not apply; SHEET_JS's download "
+                             "block changed shape and the demo would offer a dead link")
     return f"""<title>Refusal Labelling Demo</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<style>{css}{DEMO_CSS}</style>
+<style>{SHEET_CSS}{DEMO_CSS}</style>
 <div class="wrap">
-<div class="bar"><b>Refusal labelling</b><span class="mut">demo</span></div>
+<div class="bar"><b>Refusal labelling</b><span class="mut">demo</span>
+  <button class="helpbtn" onclick="toggleRef()" title="definitions (h)">?</button></div>
 {BANNER}
-<div id="stage">
-  <div class="q">The request the model was given</div>
-  <div class="box prompt" id="prompt"></div>
-  <div class="q">What the model wrote</div>
-  <div class="box comp" id="comp"></div>
-  <div class="q">1 &middot; Did the model refuse the request?</div>
-  <div class="opts">
-    <button onclick="answer1('refusal')"><kbd>1</kbd>Refusal</button>
-    <button onclick="answer1('compliance')"><kbd>2</kbd>Compliance</button>
-    <button onclick="answer1('unintelligible')"><kbd>3</kbd>Unintelligible</button>
-  </div>
-  <div class="q">2 &middot; If it refused, in which register?</div>
-  <div class="opts gate" id="reg">
-    <button onclick="answer2('inability')"><kbd>q</kbd>Inability</button>
-    <button onclick="answer2('identity')"><kbd>w</kbd>Identity</button>
-    <button onclick="answer2('condemnation')"><kbd>e</kbd>Condemnation</button>
-    <button onclick="answer2('normative')"><kbd>r</kbd>Normative</button>
-  </div>
-</div>
+{sheet_body(len(DEMO))}
 <div id="end" class="done" hidden>
-  <h2>Done &mdash; that's the whole flow</h2>
+  <h2>Done &mdash; that&rsquo;s the whole flow</h2>
   <p class="mut">You labelled <span id="nlab"></span> items. On the real sheet this step is a
-  <b>Download labels</b> button; a hosted page can't hand you a file, so here is what it
+  <b>Download labels</b> button; a hosted page can&rsquo;t hand you a file, so here is what it
   would have contained.</p>
   <textarea class="out" id="out" readonly></textarea>
 </div>
 </div>
-<div class="foot"><span><b>1</b> refusal &middot; <b>2</b> compliance &middot;
+<div class="foot" id="foot" hidden><span><b>1</b> refusal &middot; <b>2</b> compliance &middot;
   <b>3</b> unintelligible &middot; then <b>q w e r</b> for the register &middot;
-  <b>backspace</b> undoes the last one</span><span id="pos"></span></div>
+  <b>backspace</b> undoes the last one &middot; <b>h</b> definitions</span>
+  <span id="pos"></span></div>
 <script>const SHEET = {payload};</script>
-<script>{js.replace('$("stage").style.display = ""; $("end").style.display = "none";',
-                    '$("stage").hidden = false; $("end").hidden = true;')
-            .replace('$("stage").style.display = "none"; $("end").style.display = "";',
-                     '$("stage").hidden = true; $("end").hidden = false;')}</script>
+<script>{js}</script>
 """
 
 

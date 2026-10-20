@@ -305,8 +305,34 @@ def test_annotation_kit() -> None:
     assert any("register 'identity' on a non-refusal" in x for x in probs), probs
     assert any("not in this run's key" in x for x in probs), probs
 
+    # --- the definitions block must teach the category, not our regex
+    import re as _re
+
+    from stance_directions import STANCES
+    defs = ab.DEFINITIONS_HTML
+    assert defs.count('class="defs"') == 1, "one source for the definitions, used twice"
+    for reg in ("Inability", "Identity", "Condemnation", "Normative"):
+        seg = defs[defs.index(f">{reg}</h3>"):]
+        seg = seg[:seg.index("</p>", seg.index('class="test"'))]
+        egs = _re.findall(r'<div class="eg">(.*?)</div>', seg, _re.S)
+        assert len(egs) >= 2, f"{reg} needs two examples, has {len(egs)}"
+        # stance_of's own pattern for this register must match at most ONE of them. If it
+        # matched every example, annotators would be taught to agree with the regex and the
+        # human/machine agreement would be partly DEFINITIONAL -- the error A2's per-register
+        # table was corrected for.
+        pat = dict(STANCES).get(reg.lower())
+        if pat:
+            plain = [_re.sub(r"<[^>]+>", "", e).replace("&rsquo;", "'")
+                     .replace("&ldquo;", "").replace("&rdquo;", "").strip() for e in egs]
+            hits = sum(1 for t in plain if _re.match(pat, t, _re.I))
+            assert hits < len(plain), \
+                f"every {reg} example trips stance_of's own pattern; at least one must not"
+    body = ab.sheet_body(7)
+    assert body.count('class="defs"') == 2, "definitions on the intro page AND in the panel"
+    assert 'id="intro"' in body and 'id="ref"' in body and "about 7 of them" in body
+
     print("  annotation kit: blinding enforced, calibration keyed by file, kappa exact, "
-          "H1 gate and H2 falsifier both fire — OK")
+          "H1 gate and H2 falsifier both fire, definitions teach function not regex — OK")
 
 
 def test_b1_v2_verdict() -> None:

@@ -224,6 +224,91 @@ def test_disk_check() -> None:
     print("  disk preflight: fires before download, names disk, xet orphans and the fix — OK")
 
 
+def test_annotation_kit() -> None:
+    """The blinding, the kappa arithmetic, and the two-phase ordering.
+
+    Every one of these guards a failure that has already happened once in this kit's own
+    construction: the payload leaked a task tag, the calibration exclusion matched on a
+    non-unique key, and the family spellings drifted apart so the exclusion silently did
+    nothing. A kit whose blinding is only asserted in a docstring is not blinded."""
+    import annotate_build as ab
+    import annotate_pools as ap
+    import annotate_score as asc
+
+    # --- blinding is enforced, not described
+    item = {"file": "tulu2_dpo_dpo_gen128_wildguard.json", "arm": "ablated", "i": 7,
+            "prompt": "p", "text": "t", "task": "R"}
+    [rec] = ab.build_payload([item], salt="s")
+    assert set(rec) == {"uid", "prompt", "completion"}, rec
+    assert ab.uid_for(item, "s") != ab.uid_for(item, "other"), "uid must depend on the salt"
+
+    # The key-set assertion must actually fire. Narrowing ALLOWED_KEYS simulates the real
+    # failure mode -- someone adding a convenience field to the payload -- from the other
+    # side, and proves build_payload raises rather than warning.
+    keep = ab.ALLOWED_KEYS
+    try:
+        ab.ALLOWED_KEYS = frozenset({"uid", "prompt"})
+        try:
+            ab.build_payload([item], salt="s")
+        except AssertionError as e:
+            assert "unblind" in str(e), e
+        else:
+            raise AssertionError("build_payload accepted a payload whose keys it disallows")
+    finally:
+        ab.ALLOWED_KEYS = keep
+
+    # --- calibration exclusion: keyed by file, asserts its own effect
+    pool = [{"file": "tulu2_dpo_dpo_gen128_wildguard.json", "arm": "ablated", "i": 11,
+             "family": "tulu2"},
+            {"file": "tulu2_dpo_dpo_wildguard.json", "arm": "ablated", "i": 11,
+             "family": "tulu2"}]
+    calib = {("tulu2_dpo_dpo_gen128_wildguard.json", "ablated", 11)}
+    kept = ap.exclude_calibration(pool, calib)
+    assert len(kept) == 1 and kept[0]["file"] == "tulu2_dpo_dpo_wildguard.json", \
+        "a (family, arm, i) key would have removed BOTH; only the audited file is calibration"
+
+    # --- Cohen's kappa against a hand-computable case
+    a = ["refusal"] * 8 + ["compliance"] * 2
+    b = ["refusal"] * 7 + ["compliance"] * 3
+    k = asc.cohen_kappa(a, b)
+    # 7 refusal/refusal + 1 split + 2 compliance/compliance -> po = 0.9.
+    # pe = (8/10)(7/10) + (2/10)(3/10) = 0.62, so kappa = (0.9 - 0.62) / 0.38.
+    assert k["n"] == 10 and abs(k["agreement"] - 0.9) < 1e-9, k
+    assert abs(k["kappa"] - (0.9 - 0.62) / 0.38) < 1e-9, k
+    assert asc.cohen_kappa(["refusal"] * 5, ["refusal"] * 5)["kappa"] is None, \
+        "kappa is undefined on one category; it must not be reported as 0 or 1"
+    assert asc.cohen_kappa([], [])["n"] == 0
+
+    # --- the H1 gate is a gate: a low kappa must not pass
+    key = {"items": [{"uid": "u1", "tasks": ["R", "J"], "family": "tulu2", "arm": "ablated",
+                      "stratum_R": "tulu2|ablated|split", "stratum_J": "gap|tulu2",
+                      "v1": "identity", "v2": "compliance",
+                      "substring_strict": False, "wildguard": False}]}
+    coin = {"A": {"u1": {"q1": "refusal", "register": "identity", "ms": 9000}},
+            "B": {"u1": {"q1": "compliance", "register": None, "ms": 9000}}}
+    kp = asc.kappa_phase(coin, key)
+    assert not kp["gate_H1"]["pass"], "one item of total disagreement cannot pass the gate"
+    assert kp["n_disagreements"] == 1
+
+    # --- H2's falsifier is real: an unwelcome gap result must be reported as falsified
+    human_against = {"u1": {"q1": "compliance", "register": None, "source": "unanimous"}}
+    v = asc.verdicts(human_against, key)
+    assert v["H2"]["falsified"] and not v["H2"]["pass"], \
+        "if the gap cell is human COMPLIANCE, section 4's direction is wrong and H2 says so"
+    human_for = {"u1": {"q1": "refusal", "register": "identity", "source": "unanimous"}}
+    assert asc.verdicts(human_for, key)["H2"]["pass"]
+
+    # --- validation rejects a register on a non-refusal, and a foreign sheet
+    bad = {"A": {"u1": {"q1": "compliance", "register": "identity"}},
+           "B": {"zzz": {"q1": "refusal", "register": "identity"}}}
+    probs = asc.validate(bad, key)
+    assert any("register 'identity' on a non-refusal" in x for x in probs), probs
+    assert any("not in this run's key" in x for x in probs), probs
+
+    print("  annotation kit: blinding enforced, calibration keyed by file, kappa exact, "
+          "H1 gate and H2 falsifier both fire — OK")
+
+
 def test_b1_v2_verdict() -> None:
     """B1-v2's rule, driven by the MEASURED 2026-09-26 numbers.
 
@@ -1251,6 +1336,7 @@ if __name__ == "__main__":
     test_stance_v2()
     test_p1e7f_verdict()
     test_b1_v2_verdict()
+    test_annotation_kit()
     test_stance_labeller_switch()
     test_harmful_arm_hygiene()
     test_runlog_rebuildable()

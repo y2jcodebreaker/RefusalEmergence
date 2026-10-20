@@ -5593,3 +5593,58 @@ CPU only; re-labels B1's completions with v1 and v2 and adds Gemma
 | None |
 
 CPU only; re-labels B1's completions with v1 and v2 and adds Gemma
+
+---
+
+## P1-HL · 2026-10-20T03:06:06+00:00 · OK
+
+> Do two blind annotators reproduce the register taxonomy (B1) and resolve the judge disagreements (A2) that our heuristic labellers cannot?
+
+- **script** `annotate_build.py` — `annotate_build.py`
+- **code** `82da1c0` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| run | seed | n_items | n_r | n_j | annotators |
+|---|---|---|---|---|---|
+| 20261020-s20261019 | 20261019 | 340 | 180 | 188 | ['A', 'B'] |
+
+CPU only; builds blinded sheets, closes nothing
+
+---
+
+## P1-HL · 2026-10-20T03:10:44+00:00 · OK
+
+> do blind annotators reproduce the register table?
+
+- **script** `annotate_score.py` — `annotate_score.py --run TESTRUN --phase final`
+- **code** `82da1c0` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.1s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| H2 |
+|---|
+| True |
+| True |
+| False |
+
+run TESTRUN; phase final
+
+---
+
+## P1-HL · 2026-10-20T03:11:13+00:00 · OK
+
+> do blind annotators reproduce the register table?
+
+- **script** `annotate_score.py` — `annotate_score.py --run TESTRUN --phase final`
+- **code** `82da1c0` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.1s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| H2 |
+|---|
+| True |
+| True |
+| True |
+
+run TESTRUN; phase final

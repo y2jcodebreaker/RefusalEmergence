@@ -421,7 +421,12 @@ CLAIMS: tuple[Claim, ...] = (
                     "reading", False,
                     "OPEN: blind two-annotator labels. NOT closed by the 2026-09-26 residual "
                     "audit, which is unblinded and reads only the items a labeller called "
-                    "compliance -- it measures v2's failure mode, not the taxonomy's validity.",
+                    "compliance -- it measures v2's failure mode, not the taxonomy's validity. "
+                    "2026-10-19: the INSTRUMENT now exists and is pre-registered (plan 22, "
+                    "annotate_build.py / annotate_score.py, 180 register items over four "
+                    "families, arm-blinded, kappa floor 0.60 as a GATE). Building it closes "
+                    "nothing -- this control closes when two non-author annotators return "
+                    "sheets and annotate_score.py --phase final has run.",
                     optional=True),
         ),
         depends_on=("A2",),
@@ -564,7 +569,13 @@ CLAIMS: tuple[Claim, ...] = (
             Control("blind full-completion human labels", "the residual gap being another "
                     "artifact of stance_of v2, which still misses known refusal phrasings", False,
                     "OPEN: label the remaining disagreements blind to judge output, using "
-                    "the whole completion. This is what would settle the WildGuard half of A2."),
+                    "the whole completion. This is what would settle the WildGuard half of A2. "
+                    "2026-10-19: instrument pre-registered (plan 22) and built -- 188 items "
+                    "sampled from BOTH disagreement cells, the 162-item gap (v2 refusal, "
+                    "WildGuard compliance) and the 236-item reverse, so it cannot only "
+                    "confirm the direction we expect. H2's falsifier is <= 40% human "
+                    "refusals in the gap cell. Still OPEN: no sheet has been returned.",
+                    script="annotate_build.py"),
         ),
         depends_on=("C3", "C4"),
         falsifier="For the standing substring-list claim: blind labels show that the alleged "

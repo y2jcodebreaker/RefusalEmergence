@@ -196,6 +196,56 @@ refusals *appear* (2 → 64) rather than surviving. Zephyr's condemnation 24 →
 OLMo 2 loses nearly all its inability refusals but gains 64 normative ones → 51 %. Tulu-2 loses
 70 and keeps 21 identity → 70 %. Zephyr has nothing to fall back on → 100 %.
 
+### The blind two-annotator instrument is built; the control is still OPEN (2026-10-19)
+
+Pre-registered as plan §22 **before** any sheet was built and before any annotator was
+approached. `annotate_pools.py` defines the pools, `annotate_build.py` writes the sheets,
+`annotate_score.py` scores them, `annotation/CODEBOOK.md` is what the annotators read, and
+`smoke_test.test_annotation_kit` pins the arithmetic and the blinding.
+
+**This closes nothing, and the ledger still reads one open control.** Building an instrument is
+not running it. The two controls — B1's "human register labels" and A2's "blind full-completion
+human labels" — close when two non-author annotators return sheets and `--phase final` has run.
+
+**Pool sizes, measured rather than estimated.** The daily notes had carried "~300–400 items" as
+a guess since 26 Sep; it covered neither pool properly.
+
+| pool | size | what the sample takes |
+|---|---|---|
+| register (four families, baseline + ablated, `gen128`) | 635 | 180, stratified by family × arm × whether v1 and v2 agree |
+| judge disagreements | 382 | 188, from **both** cells |
+| — the gap: v2 says refusal, WildGuard says compliance | 162 | §4's open half |
+| — the reverse: v2 says compliance, WildGuard says refusal | 236 | so the sheet cannot only confirm the expected direction |
+
+340 items per annotator, 28 of them serving both controls (question 1 is the judge question,
+question 2 the register one). Prompt pool and sheets are arm-blinded: the file contains
+`{uid, prompt, completion}` and `build_payload` asserts that key set, so a convenience field
+fails the build rather than unblinding the sheet. **Hiding the arm matters more than hiding the
+judge** — an annotator who can tell baseline from ablated contaminates the 17 → 19 comparison
+§3 rests on.
+
+**A2's frozen input set had drifted, and the guard caught it.** `collect()` returned **6330
+items / 55 arms** against the frozen 5920 / 50: P1-E7h (commit `b40cd83`, 2026-09-26) wrote five
+`*_wildguard.json` files and `A2_LATER_TAGS` was never extended, so both `judge_bench.main()`
+and `a2_v2_relabel.py` would have raised on their next run. Neither had been re-run, so no
+published number is affected. Third occurrence of the same failure (D1, then the Gemma runs,
+now P1-E7h) and the third time the item-count assertion stopped it. `p1e7h_` added 2026-10-19.
+
+**Two bugs in the kit's own exclusion logic, in opposite directions.** The 19 items of
+`b1_v2_residual_audit.json` are the calibration pack and must not also be scored. Normalising
+the family spellings made every exclusion key stop matching, and all 19 came silently back into
+the pool — visible only as the register pool reading 654 instead of 635. Keying on
+`(family, arm, i)` instead over-excluded: 24 items removed where 16 were present, because
+several results files normalise to one family name. `(file, arm, i)` is the item identity.
+`exclude_calibration()` now asserts its own effect, and both failures are pinned by a test.
+
+**Criteria, fixed in code.** H1 is a **gate**: κ ≥ 0.60 on question 1 and on the register, or no
+human table is reported at all and §3's register claim is published as the authors' reading with
+that stated. H2's falsifier is ≤ 40 % human refusals in the gap cell, which would invert §4.
+Adjudication order is enforced by the filesystem — `--phase final` refuses to run until the κ
+file is on disk, because an author adjudicating before κ is known could raise κ and move the
+table at the same time with no record.
+
 ### B1-v2 — the register table under both labellers, and Gemma's row (2026-09-26)
 
 Pre-registered in P1 plan **section 20**, written before any label was computed. CPU only, over

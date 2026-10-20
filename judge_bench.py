@@ -214,8 +214,13 @@ def label(text: str) -> str:
 # Every experiment that wrote WildGuard files into results/ AFTER A2 was frozen. Extended
 # 2026-09-25 when the Gemma runs landed and the item-count assertion caught them -- which is
 # the guard doing its job, not a nuisance. A new experiment that judges completions must be
-# added here, or A2's table silently absorbs it.
-A2_LATER_TAGS: tuple[str, ...] = ("d1_", "p1e7r_", "p1e7f_", "gemma2_it_")
+# added here, or A2's table silently absorbs it. Extended again 2026-10-19 with
+# 'p1e7h_': P1-E7h (commit b40cd83, 2026-09-26) wrote 5 wildguard files and this
+# tuple was not updated, so collect() returned 6330 items / 55 arms and BOTH
+# judge_bench.main() and a2_v2_relabel.py would have raised on their next run.
+# Found while sizing the annotation pools, not by running either script -- the
+# assertion was armed and waiting, which is the point of arming it.
+A2_LATER_TAGS: tuple[str, ...] = ("d1_", "p1e7r_", "p1e7f_", "p1e7h_", "gemma2_it_")
 A2_FROZEN_N_ITEMS, A2_FROZEN_N_ARMS = 5920, 50
 
 

@@ -86,13 +86,29 @@ def cohen_kappa(a: list[str], b: list[str]) -> dict:
 
 
 def load_returns(run_dir: str) -> dict[str, dict[str, dict]]:
-    """{annotator: {uid: {q1, register, ms}}} from labels_*.json or filled-in sheet CSVs."""
+    """{annotator: {uid: {q1, register, ms}}} from labels_*.json or filled-in sheet CSVs.
+
+    SEVERAL FILES PER ANNOTATOR IS NORMAL AND MUST NOT LOSE LABELS. The sheet can export at
+    any point, so a run may collect labels_<run>_A_partial.json from item 120 and then
+    labels_<run>_A.json at the end. Loading them in filename order would let the partial win,
+    because '_partial.json' sorts after '.json' -- 160 labels silently replacing 340. Files
+    are therefore merged per annotator in ASCENDING order of label count, so the richest
+    export is the one that survives per uid, and the merge is logged."""
     out: dict[str, dict[str, dict]] = {}
+    loaded: dict[str, list[tuple[int, str]]] = {}
+    files = []
     for path in sorted(glob.glob(os.path.join(run_dir, "labels_*.json"))):
         d = json.load(open(path))
-        out[d["annotator"]] = {u: a for u, a in d["answers"].items()}
-        logger.info("%s: %d labels from %s", d["annotator"], len(out[d["annotator"]]),
-                    os.path.basename(path))
+        files.append((d["annotator"], len(d.get("answers") or {}), path, d))
+    for who, n, path, d in sorted(files, key=lambda x: (x[0], x[1])):
+        out.setdefault(who, {}).update({u: a for u, a in d["answers"].items()})
+        loaded.setdefault(who, []).append((n, os.path.basename(path)))
+    for who, got in loaded.items():
+        if len(got) > 1:
+            logger.info("%s: merged %d files %s -> %d labels", who, len(got),
+                        [f"{f} ({n})" for n, f in got], len(out[who]))
+        else:
+            logger.info("%s: %d labels from %s", who, len(out[who]), got[0][1])
     for path in sorted(glob.glob(os.path.join(run_dir, "returned_*.csv"))):
         who = os.path.basename(path)[len("returned_"):-len(".csv")]
         rows = {}

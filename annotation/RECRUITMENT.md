@@ -49,9 +49,15 @@ annotator A gets `sheet_A.html` and never `sheet_B.html`.
 >    first, then open each one. These are deliberately the hard cases; the real sheet is easier.
 >    **If you disagree with several of them, tell me before you start the real sheet.** That
 >    means my codebook is unclear, which is mine to fix and not yours to work around.
-> 3. **`sheet_X.html`** — the real one. Double-click it. 340 items, about 90 minutes. Your
->    progress saves as you go, so close the tab whenever you want. At the end click **Download
->    labels** and send me the file it gives you.
+> 3. **`sheet_X.html`** — the real one. Double-click it. 340 items, about 90 minutes. No
+>    internet needed and nothing is uploaded. Your progress saves after every item, so close
+>    the tab whenever you want. At the end click **Download labels** and send me the file.
+>
+> Two things on saving, because I'd rather over-explain than lose your afternoon. **If a red
+> banner says the browser isn't saving, believe it** — some browsers refuse storage for a file
+> opened from disk. Press **Export** (or `ctrl+E`) now and then and keep those files, or reopen
+> the sheet in Chrome or Firefox. And **you can stop whenever** — press Export and send what you
+> have. A partial sheet is useful; please don't grind to the end on my account.
 >
 > Four rules, and they all matter more than speed:
 >

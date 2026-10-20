@@ -5665,3 +5665,37 @@ run TESTRUN; phase final
 | 20261020-s20261019 | 20261019 | 340 | 180 | 188 | ['A', 'B'] |
 
 CPU only; builds blinded sheets, closes nothing
+
+---
+
+## P1-HL · 2026-10-20T03:30:52+00:00 · OK
+
+> Do two blind annotators reproduce the register taxonomy (B1) and resolve the judge disagreements (A2) that our heuristic labellers cannot?
+
+- **script** `annotate_build.py` — `annotate_build.py`
+- **code** `78d09b1` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| run | seed | n_items | n_r | n_j | annotators |
+|---|---|---|---|---|---|
+| 20261020-s20261019 | 20261019 | 340 | 180 | 188 | ['A', 'B'] |
+
+CPU only; builds blinded sheets, closes nothing
+
+---
+
+## P1-HL · 2026-10-20T03:32:27+00:00 · OK
+
+> Do two blind annotators reproduce the register taxonomy (B1) and resolve the judge disagreements (A2) that our heuristic labellers cannot?
+
+- **script** `annotate_build.py` — `annotate_build.py`
+- **code** `78d09b1` on `main` ⚠️ DIRTY WORKING TREE — commit does not identify this code
+- **duration** 0.0s
+- **env** torch 2.11.0 · transformers 4.57.6 · sklearn 1.8.0 · gpu None
+
+| run | seed | n_items | n_r | n_j | annotators |
+|---|---|---|---|---|---|
+| 20261020-s20261019 | 20261019 | 340 | 180 | 188 | ['A', 'B'] |
+
+CPU only; builds blinded sheets, closes nothing

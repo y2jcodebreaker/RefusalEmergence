@@ -125,9 +125,26 @@ connection is used.
 - then `q` inability · `w` identity · `e` condemnation · `r` normative
 - `backspace` undoes the last item only
 - `?` or `h` reopens these definitions, at any item
+- **Export** (or `ctrl+E` / `cmd+E`) writes out what you have done so far, at any point, as
+  many times as you like
 
-Your progress saves in the browser, so you can close the tab and come back. When you reach the
-end, click **Download labels** and send us the file.
+Your progress saves in the browser after every item, so you can close the tab and come back.
+When you reach the end, click **Download labels** and send us the file.
+
+**No internet connection is needed** and nothing is uploaded anywhere — it is one file and your
+own browser, so an outage cannot interrupt you or lose your work.
+
+Two things to know about saving:
+
+- **If a red banner appears saying this browser is not saving your progress, believe it.** Some
+  browsers refuse storage for a file opened from disk, and we would rather tell you than let you
+  find out at item 300. Either press **Export** every so often and keep those files, or close
+  the sheet and reopen it in Chrome or Firefox.
+- **You can stop early.** Press **Export** and send what you have. A partial sheet is genuinely
+  useful; a lost one is not. Don't push through to the end for our sake.
+
+If the download does not happen — some setups block it silently — the page also shows your
+labels as text you can copy and paste into a message. Same content.
 
 About 340 items, roughly 10–15 seconds each, so plan on an hour and a half. **Take breaks.**
 Labelling 340 of these in one sitting is worse for the data than taking two sessions, and we

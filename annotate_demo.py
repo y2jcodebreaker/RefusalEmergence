@@ -28,7 +28,8 @@ import json
 import logging
 import os
 
-from annotate_build import SHEET_CSS, SHEET_JS, sheet_body, sheet_html
+from annotate_build import (SHEET_CSS, js_without_download, sheet_body,
+                            sheet_html)
 
 logger = logging.getLogger(__name__)
 
@@ -120,24 +121,9 @@ BANNER = """<div class="demo">
   the same definitions, has the same controls, and has about 340 items.
 </div>"""
 
-# The download step the real sheet ends on, and what replaces it in a hosted page.
-# Named rather than inlined so body_only() can assert the substitution applied: a
-# silent miss would publish a demo whose last button does nothing.
-DOWNLOAD_BLOCK = """  const blob = new Blob([JSON.stringify(out, null, 1)], { type: "application/json" });
-  const a = $("dl");
-  a.href = URL.createObjectURL(blob);
-  a.download = "labels_" + SHEET.run + "_" + SHEET.annotator + ".json";
-  $("nlab").textContent = Object.keys(st.answers).length;"""
-
-COPYBOX_BLOCK = """  $("out").value = JSON.stringify(out, null, 1);
-  $("nlab").textContent = Object.keys(st.answers).length;"""
-
 DEMO_CSS = """
 .demo { border:1px solid var(--acc); border-radius:8px; padding:12px 14px; margin-bottom:18px;
   background:color-mix(in srgb, var(--acc) 8%, transparent); font-size:14px }
-.out { width:100%; min-height:160px; font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
-  border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--bg);
-  color:var(--fg); resize:vertical }
 """
 
 
@@ -154,39 +140,38 @@ def body_only() -> str:
     instrument it demonstrates -- including the definitions page, which is the part someone
     is most likely to be judging when they decide whether to help at all.
 
-    Three deliberate differences, all because a hosted page is not a local file. The download
-    step becomes a copy box, since a sandboxed page cannot hand the viewer a file; the theme
-    tokens already cover the three states a hosted page needs; and a banner says it is a demo.
-    """
-    payload = json.dumps({"run": "DEMO", "annotator": "you",
+    Two differences, both because a hosted page is not a local file: the network claim on
+    the intro page is the weaker true one (`hosted=True`), and a banner says it is a demo.
+    The export path needs no change -- the real sheet already shows the JSON in a copy box
+    beside the download, precisely because a download can be blocked without saying so, which
+    is the normal case inside a sandboxed frame."""
+    payload = json.dumps({"run": "DEMO", "annotator": "you", "hosted": True,
                           "task_mix": {"on_sheet": len(DEMO)},
                           "items": demo_items()}, ensure_ascii=False).replace("</", r"<\/")
-    js = SHEET_JS.replace(DOWNLOAD_BLOCK, COPYBOX_BLOCK)
-    if '$("out")' not in js:
-        raise AssertionError("the copy-box substitution did not apply; SHEET_JS's download "
-                             "block changed shape and the demo would offer a dead link")
     return f"""<title>Refusal Labelling Demo</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>{SHEET_CSS}{DEMO_CSS}</style>
 <div class="wrap">
 <div class="bar"><b>Refusal labelling</b><span class="mut">demo</span>
+  <button class="helpbtn" onclick="exportNow()" id="exportbtn"
+    title="show what you have done so far (ctrl/cmd+E)" hidden>Export</button>
   <button class="helpbtn" onclick="toggleRef()" title="definitions (h)">?</button></div>
 {BANNER}
-{sheet_body(len(DEMO))}
+{sheet_body(len(DEMO), hosted=True)}
 <div id="end" class="done" hidden>
   <h2>Done &mdash; that&rsquo;s the whole flow</h2>
-  <p class="mut">You labelled <span id="nlab"></span> items. On the real sheet this step is a
-  <b>Download labels</b> button; a hosted page can&rsquo;t hand you a file, so here is what it
-  would have contained.</p>
-  <textarea class="out" id="out" readonly></textarea>
+  <p class="mut">You labelled <span id="nlab"></span> items. On the real sheet this is where you
+  download the file and send it back.</p>
+  <p class="mut" id="endwarn" hidden></p>
+  <button class="start" onclick="exportNow()">Show my labels</button>
 </div>
 </div>
 <div class="foot" id="foot" hidden><span><b>1</b> refusal &middot; <b>2</b> compliance &middot;
-  <b>3</b> unintelligible &middot; then <b>q w e r</b> for the register &middot;
-  <b>backspace</b> undoes the last one &middot; <b>h</b> definitions</span>
+  <b>3</b> unintelligible &middot; then <b>q w e r</b> &middot; <b>backspace</b> undoes &middot;
+  <b>h</b> definitions &middot; <b>ctrl+E</b> export</span>
   <span id="pos"></span></div>
 <script>const SHEET = {payload};</script>
-<script>{js}</script>
+<script>{js_without_download()}</script>
 """
 
 

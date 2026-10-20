@@ -160,6 +160,17 @@ button[disabled] { opacity:.4; cursor:default }
 .start { background:var(--acc); color:#fff; border-color:var(--acc); font-weight:600;
   padding:12px 20px; margin-top:24px }
 .helpbtn { padding:4px 10px; font-size:13px; flex:none }
+.warn { border:2px solid #b3261e; border-radius:8px; padding:12px 14px; margin-bottom:18px;
+  background:color-mix(in srgb, #b3261e 10%, transparent) }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .warn {
+  border-color:#f2b8b5; background:color-mix(in srgb, #f2b8b5 14%, transparent) } }
+:root[data-theme="dark"] .warn { border-color:#f2b8b5;
+  background:color-mix(in srgb, #f2b8b5 14%, transparent) }
+.nudge { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:20px;
+  border:1px dashed var(--acc); border-radius:8px; padding:10px 12px; font-size:14px }
+.out { width:100%; min-height:180px; font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+  border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--card);
+  color:var(--fg); resize:vertical }
 """
 
 # Two examples per register, and the second one NEVER contains the machine labeller's
@@ -238,7 +249,6 @@ refusal move</b> in the text. It is a tie-break, not a claim that only one is th
 &ldquo;first&rdquo; because it is reproducible and favours no register &mdash; there is no
 credit for guessing which one we expect.</div>
 </div>"""
-
 STAGE_HTML = """<div id="stage" hidden>
   <div class="q">The request the model was given</div>
   <div class="box prompt" id="prompt"></div>
@@ -259,33 +269,106 @@ STAGE_HTML = """<div id="stage" hidden>
     <button onclick="answer2('condemnation')"><kbd>e</kbd>Condemnation</button>
     <button onclick="answer2('normative')"><kbd>r</kbd>Normative</button>
   </div>
+
+  <div class="nudge" id="nudge" hidden>
+    <span id="nudgetext"></span>
+    <button onclick="exportNow()">Export a backup</button>
+    <button onclick="dismissNudge()">Not now</button>
+  </div>
 </div>
 
 <div id="ref" hidden>__DEFS__</div>"""
+
+# Shown when the browser refuses storage. It is deliberately loud and deliberately not
+# dismissible: the alternative is an annotator reaching item 300 and losing all of it,
+# because save() swallows its own failure by design (it must not throw mid-item).
+WARN_HTML = """<div class="warn" id="warn" hidden>
+  <b>This browser is not saving your progress.</b>
+  <span id="warntext"></span>
+  Use <b>Export</b> every so often and keep the file, or close this and reopen it in Chrome or
+  Firefox, where saving normally works.
+</div>"""
+
+EXPORT_HTML = """<div id="copywrap" hidden>
+  <div class="q">Your labels so far</div>
+  <p class="mut" id="copynote"></p>
+  <textarea class="out" id="copybox" readonly></textarea>
+  <div class="opts">
+    <button onclick="copyBox()" id="copybtn">Copy to clipboard</button>
+    <button onclick="hideCopy()">Back to labelling</button>
+  </div>
+</div>"""
 
 INTRO_HTML = """<div id="intro">
   <p>Two questions per item, about __N__ of them. <b>Read this page once</b> &mdash; it is
   also the reference, reachable from <b>?</b> in the corner at any point, or by pressing
   <b>h</b>.</p>
+  __NET__
   __DEFS__
   <button class="start" onclick="begin()">Start labelling &rarr;</button>
 </div>"""
 
+NET_LOCAL = """<div class="rule"><b>This needs no internet connection.</b> Everything is
+inside this one file and your own browser. Nothing is uploaded, and an outage cannot interrupt
+you or lose your work. Your progress saves after every item, so you can close the tab and come
+back &mdash; and <b>Export</b> in the corner writes out what you have done so far, at any
+point, as many times as you like.</div>"""
+
+NET_HOSTED = """<div class="rule"><b>Once this page has loaded, it needs no connection.</b>
+Nothing you answer is uploaded. Your progress saves in your browser after every item, and
+<b>Export</b> in the corner shows what you have done so far at any point.</div>"""
+
 SHEET_JS = r"""
 const K = "annot_" + SHEET.run + "_" + SHEET.annotator;
-let st = { answers:{}, at:0, t0:Date.now(), started:false };
+let st = { answers:{}, at:0, t0:Date.now(), started:false, nudgedAt:0 };
+
+// Does storage actually work? Probed with a real round trip rather than a feature check,
+// because the failure modes that matter (private window, blocked site data, a file:// page in
+// a browser that disallows it) all expose the API and then refuse to use it.
+let storeOK = false, storeNote = "";
+try {
+  const probe = K + "__probe";
+  localStorage.setItem(probe, "1");
+  storeOK = localStorage.getItem(probe) === "1";
+  localStorage.removeItem(probe);
+  if (!storeOK) storeNote = "A test write came back empty.";
+} catch (e) {
+  storeNote = "The browser refused: " + (e && e.name ? e.name : "unknown") + ".";
+}
+
 try { const s = localStorage.getItem(K); if (s) st = Object.assign(st, JSON.parse(s)); }
 catch (e) {}
-const save = () => { try { localStorage.setItem(K, JSON.stringify(st)); } catch (e) {} };
+
 const $ = (id) => document.getElementById(id);
 
+function save() {
+  try {
+    localStorage.setItem(K, JSON.stringify(st));
+    return true;
+  } catch (e) {
+    // A write that fails LATER (quota, or storage revoked mid-session) is the same danger as
+    // one that never worked, so it raises the same banner instead of being swallowed.
+    if (storeOK) { storeOK = false; storeNote = "A later save failed: " +
+      (e && e.name ? e.name : "unknown") + "."; showWarn(); }
+    return false;
+  }
+}
+
+function showWarn() {
+  if (storeOK) return;
+  $("warntext").textContent = storeNote;
+  $("warn").hidden = false;
+}
+
 function show(which) {
-  for (const id of ["intro", "stage", "end", "ref"]) if ($(id)) $(id).hidden = id !== which;
+  for (const id of ["intro", "stage", "end", "ref", "copywrap"])
+    if ($(id)) $(id).hidden = id !== which;
   $("foot").hidden = which === "intro";
+  $("exportbtn").hidden = !st.started;
 }
 
 function render() {
-  if (!st.started) return show("intro");
+  if (!st.started) { show("intro"); showWarn(); return; }
   if (st.at >= SHEET.items.length) return finish();
   const it = SHEET.items[st.at];
   st.t0 = Date.now();
@@ -295,10 +378,28 @@ function render() {
   $("comp").scrollTop = 0;
   $("reg").className = "opts gate";
   show("stage");
+  showWarn();
+  maybeNudge();
   window.scrollTo(0, 0);
 }
 
 function begin() { st.started = true; save(); render(); }
+
+// Ask for a backup every 100 items when saving works, every 25 when it does not. The point
+// of the second number is that without storage the only copy is whatever has been exported.
+function maybeNudge() {
+  const n = Object.keys(st.answers).length;
+  const every = storeOK ? 100 : 25;
+  const due = n > 0 && n % every === 0 && n !== st.nudgedAt;
+  $("nudge").hidden = !due;
+  if (due) {
+    st.nudgedAt = n;
+    $("nudgetext").textContent = n + " done" + (storeOK
+      ? ". A good moment to export a backup, if you like."
+      : ", and this browser is NOT saving. Export now or you will lose them.");
+  }
+}
+function dismissNudge() { $("nudge").hidden = true; }
 
 let refOpen = false;
 function toggleRef() {
@@ -310,7 +411,7 @@ function toggleRef() {
 
 let pending = null;
 function answer1(v) {
-  if (refOpen) return;
+  if (refOpen || !$("copywrap").hidden) return;
   if (v !== "refusal") {
     record({ q1: v, register: null });
   } else {
@@ -318,33 +419,90 @@ function answer1(v) {
     $("reg").className = "opts gate on";
   }
 }
-function answer2(r) { if (pending && !refOpen) record({ q1: pending.q1, register: r }); }
+function answer2(r) {
+  if (pending && !refOpen && $("copywrap").hidden) record({ q1: pending.q1, register: r });
+}
 function record(a) {
   const it = SHEET.items[st.at];
   st.answers[it.uid] = Object.assign(a, { ms: Date.now() - st.t0, order: st.at });
   pending = null; st.at += 1; save(); render();
 }
 function back() {
-  if (st.at === 0 || refOpen) return;
+  if (st.at === 0 || refOpen || !$("copywrap").hidden) return;
   st.at -= 1; delete st.answers[SHEET.items[st.at].uid]; pending = null; save(); render();
 }
 
+function payloadNow() {
+  const n = Object.keys(st.answers).length;
+  return { run: SHEET.run, annotator: SHEET.annotator, task_mix: SHEET.task_mix,
+           exported_utc: new Date().toISOString(),
+           partial: n < SHEET.items.length, n_labelled: n,
+           n_items: SHEET.items.length, storage_working: storeOK,
+           answers: st.answers };
+}
+
+// One export path for the partial button and for the end of the sheet, so a file handed over
+// at item 250 has the same shape as a complete one. annotate_score.py accepts both and
+// reports the unlabelled remainder as a problem rather than failing.
+function exportNow() {
+  const out = payloadNow();
+  const text = JSON.stringify(out, null, 1);
+  const name = "labels_" + SHEET.run + "_" + SHEET.annotator +
+               (out.partial ? "_partial" : "") + ".json";
+  $("copybox").value = text;
+  // SHEET.hosted is set only by the demo. A sandboxed frame never grants a page the right to
+  // hand over a file, so there the download is not attempted at all: offering a button that
+  // cannot work, and then saying nothing, is worse than not offering it.
+  let tried = false;
+  /*DOWNLOAD*/
+  if (!SHEET.hosted) {
+    try {
+      const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      tried = true;
+    } catch (e) {}
+  }
+  /*END DOWNLOAD*/
+  // The copy box is shown either way: a download that appears to have worked may have been
+  // blocked silently, and the annotator cannot tell. Seeing the text is the only proof.
+  $("copynote").textContent = SHEET.hosted
+    ? "On the real sheet this is a file you download. A hosted page like this one cannot hand "
+      + "you a file, so here is exactly what that file would contain."
+    : (tried
+      ? "Saved as " + name + ". If no download appeared \u2014 some setups block it without "
+        + "saying so \u2014 select all of this and paste it into your reply instead. Same content."
+      : "The download was refused by this browser. Select all of this and paste it into your "
+        + "reply instead. Same content.");
+  show("copywrap");
+  $("nudge").hidden = true;
+}
+
+function copyBox() {
+  const t = $("copybox");
+  const done = () => { $("copybtn").textContent = "Copied"; };
+  try {
+    navigator.clipboard.writeText(t.value).then(done, () => { t.select(); });
+  } catch (e) { t.select(); }
+}
+function hideCopy() { render(); }
+
 function finish() {
   show("end");
-  const out = { run: SHEET.run, annotator: SHEET.annotator, task_mix: SHEET.task_mix,
-                finished_utc: new Date().toISOString(), answers: st.answers };
-  const blob = new Blob([JSON.stringify(out, null, 1)], { type: "application/json" });
-  const a = $("dl");
-  a.href = URL.createObjectURL(blob);
-  a.download = "labels_" + SHEET.run + "_" + SHEET.annotator + ".json";
-  $("nlab").textContent = Object.keys(st.answers).length;
+  const out = payloadNow();
+  $("nlab").textContent = out.n_labelled;
+  $("endwarn").hidden = out.n_labelled === SHEET.items.length;
 }
 
 addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if (k === "h" || k === "?") { e.preventDefault(); return toggleRef(); }
   if (!st.started) { if (k === "enter" || k === " ") { e.preventDefault(); begin(); } return; }
-  if (refOpen || st.at >= SHEET.items.length) return;
+  if (k === "e" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); return exportNow(); }
+  if (refOpen || !$("copywrap").hidden) return;
+  if (st.at >= SHEET.items.length) return;
   if (k === "1") answer1("refusal");
   else if (k === "2") answer1("compliance");
   else if (k === "3") answer1("unintelligible");
@@ -356,16 +514,45 @@ render();
 """
 
 
-def sheet_body(n_items: int) -> str:
+def js_without_download() -> str:
+    """SHEET_JS with the download branch removed, for a page that cannot download.
+
+    A sandboxed frame never grants a page the right to hand over a file, so in the hosted
+    demo that branch is unreachable. Shipping it anyway left a real `a.download` in the
+    source, which a static scan reads -- correctly -- as a page offering a file it cannot
+    deliver. Stripping it is both honest and smaller; the assertion means a reshaped branch
+    fails the build rather than quietly reinstating the dead code."""
+    a, b = "  /*DOWNLOAD*/", "  /*END DOWNLOAD*/"
+    if a not in SHEET_JS or b not in SHEET_JS:
+        raise AssertionError("the download branch markers are gone from SHEET_JS")
+    out = SHEET_JS[:SHEET_JS.index(a)] + SHEET_JS[SHEET_JS.index(b) + len(b):]
+    # Check the MECHANISM is gone, not the word: the copy-box text mentions downloads on
+    # purpose, and asserting on the word made this raise on its own explanatory prose.
+    for mech in (".download", "createObjectURL", "new Blob"):
+        if mech in out:
+            raise AssertionError(f"{mech} survived the strip; the hosted page would still "
+                                 f"offer a file it cannot deliver")
+    return out
+
+
+def sheet_body(n_items: int, hosted: bool = False) -> str:
     """The markup shared by the real sheet and the hosted demo, so the demo cannot drift.
 
     The definitions appear TWICE from one source: as the opening page, which an annotator
     must click past, and as a panel reachable from `?` or `h` at any item. One read at the
     start is not enough over 340 items -- the register distinctions are exactly the thing a
     reader half-remembers at item 200, and a half-remembered taxonomy is what the kappa
-    would then measure."""
-    return (INTRO_HTML.replace("__DEFS__", DEFINITIONS_HTML).replace("__N__", str(n_items))
-            + "\n\n" + STAGE_HTML.replace("__DEFS__", DEFINITIONS_HTML))
+    would then measure.
+
+    `hosted` only changes what the page claims about the network. The local file needs no
+    connection at all; the hosted demo needed one to arrive and none afterwards. Saying the
+    stronger thing in both places would be false in one of them."""
+    return (WARN_HTML + "\n\n"
+            + INTRO_HTML.replace("__DEFS__", DEFINITIONS_HTML)
+                        .replace("__N__", str(n_items))
+                        .replace("__NET__", NET_HOSTED if hosted else NET_LOCAL)
+            + "\n\n" + STAGE_HTML.replace("__DEFS__", DEFINITIONS_HTML)
+            + "\n\n" + EXPORT_HTML)
 
 
 def sheet_html(items: list[dict], annotator: str, run: str, task_mix: dict) -> str:
@@ -388,20 +575,23 @@ def sheet_html(items: list[dict], annotator: str, run: str, task_mix: dict) -> s
 <body><div class="wrap">
 <div class="bar"><b>Refusal labelling</b>
   <span class="mut">annotator {html.escape(annotator)}</span>
+  <button class="helpbtn" onclick="exportNow()" id="exportbtn"
+    title="write out what you have done so far (ctrl/cmd+E)" hidden>Export</button>
   <button class="helpbtn" onclick="toggleRef()" title="definitions (h)">?</button></div>
 
 {sheet_body(len(items))}
 
 <div id="end" class="done" hidden>
   <h2>Done — thank you</h2>
-  <p class="mut">You labelled <span id="nlab"></span> items. Download the file and send it
-  back. Nothing was uploaded anywhere.</p>
-  <a class="dl" id="dl" href="#">Download labels</a>
+  <p class="mut">You labelled <span id="nlab"></span> items. Nothing was uploaded anywhere.</p>
+  <p class="mut" id="endwarn" hidden><b>Some items are unlabelled.</b> Send this anyway — a
+  partial sheet is usable and far better than nothing.</p>
+  <button class="start" onclick="exportNow()">Download labels</button>
 </div>
 </div>
 <div class="foot" id="foot" hidden><span><b>1</b> refusal · <b>2</b> compliance ·
   <b>3</b> unintelligible · then <b>q w e r</b> for the register · <b>backspace</b> undoes
-  the last one · <b>h</b> definitions</span><span id="pos"></span></div>
+  the last one · <b>h</b> definitions · <b>ctrl+E</b> export</span><span id="pos"></span></div>
 <script>const SHEET = {payload};</script>
 <script>{SHEET_JS}</script>
 <button id="back" onclick="back()" hidden></button>

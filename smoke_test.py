@@ -331,8 +331,51 @@ def test_annotation_kit() -> None:
     assert body.count('class="defs"') == 2, "definitions on the intro page AND in the panel"
     assert 'id="intro"' in body and 'id="ref"' in body and "about 7 of them" in body
 
+    # --- losing a volunteer's 90 minutes is the failure this guards
+    import json as _json
+    import os as _os
+    import tempfile as _tf
+
+    js = ab.SHEET_JS
+    assert "localStorage.setItem(probe" in js, \
+        "storage must be probed with a real round trip, not a feature check"
+    assert "if (storeOK) { storeOK = false;" in js, \
+        "a save that fails LATER must raise the banner too, not be swallowed"
+    assert js.count("function exportNow") == 1 and "partial:" in js, \
+        "one export path, and it must mark a partial file as partial"
+    assert 'show("copywrap")' in js, \
+        "the copy box must appear even when the download seems to have worked: a blocked " \
+        "download is silent and the annotator cannot tell"
+    assert "fetch(" not in js and "XMLHttpRequest" not in js, \
+        "the sheet must make no network request of any kind"
+    # No external reference, so an outage cannot affect the sheet. Checked on the page's OWN
+    # markup with the item payload removed: completions routinely contain URLs (models cite
+    # ftc.gov, owasp.org), and the first version of this assertion read those as page
+    # dependencies and failed on a sheet that was perfectly self-contained.
+    doc = ab.sheet_html([{"uid": "u", "prompt": "p", "completion": "c"}], "A", "R", {})
+    chrome = doc[:doc.index("<script>const SHEET =")] + doc[doc.index("};</script>"):]
+    for src in (chrome, ab.sheet_body(340), ab.SHEET_CSS, ab.SHEET_JS):
+        assert "http://" not in src and "https://" not in src, \
+            "no external reference: an outage must not be able to affect the sheet"
+    assert "needs no internet connection" in ab.sheet_body(340)
+    assert "Once this page has loaded" in ab.sheet_body(340, hosted=True), \
+        "the hosted variant must make the weaker, true claim about the network"
+
+    # --- a partial export must never replace a complete one (filename order would)
+    with _tf.TemporaryDirectory() as d:
+        uids = [f"u{i}" for i in range(10)]
+        for who, n, suf in (("A", 4, "_partial"), ("A", 10, ""), ("B", 10, "")):
+            _json.dump({"run": "R", "annotator": who,
+                        "answers": {u: {"q1": "compliance", "register": None, "ms": 1}
+                                    for u in uids[:n]}},
+                       open(_os.path.join(d, f"labels_R_{who}{suf}.json"), "w"))
+        got = asc.load_returns(d)
+        assert len(got["A"]) == 10, \
+            f"'_partial.json' sorts after '.json', a 4-label partial wins: {len(got['A'])}"
+
     print("  annotation kit: blinding enforced, calibration keyed by file, kappa exact, "
-          "H1 gate and H2 falsifier both fire, definitions teach function not regex — OK")
+          "H1 gate and H2 falsifier both fire, definitions teach function not regex, "
+          "no network and no partial clobber — OK")
 
 
 def test_b1_v2_verdict() -> None:

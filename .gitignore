@@ -45,3 +45,17 @@ typescript
 !results/p1e7z_*.npz
 !results/p1e7g_*.npz
 !results/p1e7g2_*.npz
+
+# Built annotation sheets. `annotate_build.py --seed N` writes annotation/<date>-s<seed>/,
+# and sheet_A/sheet_B carry the model COMPLETIONS in full -- 340 of them per sheet, about
+# half of which comply with a harmful request. This repository is public and has never
+# carried that text: the generations live in results/*_refusal_gen128.npz, which is already
+# excluded above. A sheet is the same text in a readable wrapper, so it is excluded for the
+# same reason, and key.json says PRIVATE in its own header.
+#
+# Nothing is lost. The salt is sha256("p1-human-labels|<seed>")[:16], not random, so the
+# whole run regenerates byte-for-byte from the seed in MANIFEST.md for anyone holding the
+# npz -- and a reader without them could not regenerate it whether or not it were committed.
+# The CODEBOOK, the recruitment text and the harmless demo sheet ARE committed: they are
+# the instrument, and the instrument is what a reviewer needs to see.
+annotation/*-s*/
